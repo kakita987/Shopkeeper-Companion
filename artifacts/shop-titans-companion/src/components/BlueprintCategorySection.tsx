@@ -1,5 +1,5 @@
 import React from 'react';
-import { BlueprintCategory } from '../types/blueprints';
+import { BlueprintCategory, Blueprint } from '../types/blueprints';
 import { BlueprintRow } from './BlueprintRow';
 import { ChevronRight } from 'lucide-react';
 
@@ -9,15 +9,25 @@ interface BlueprintCategorySectionProps {
   isOpen: boolean;
   /** Called when the user taps the category header. */
   onToggle: () => void;
+  /**
+   * Called when the user taps a blueprint row to open the detail panel.
+   * Optional — defaults to a no-op (e.g. in the Saved Views tab).
+   */
+  onSelectBlueprint?: (blueprint: Blueprint) => void;
 }
 
 /**
- * A single category row within a group (e.g. Swords inside Weapons).
+ * A single category row within a group (e.g. Sword inside Weapons).
  *
  * Open/closed state is fully controlled by the parent (BlueprintGroupSection),
  * which ensures only one category is open at a time within the group.
  */
-export function BlueprintCategorySection({ category, isOpen, onToggle }: BlueprintCategorySectionProps) {
+export function BlueprintCategorySection({
+  category,
+  isOpen,
+  onToggle,
+  onSelectBlueprint,
+}: BlueprintCategorySectionProps) {
   return (
     <div className="border-b border-border last:border-b-0">
       {/* Category header row */}
@@ -50,7 +60,11 @@ export function BlueprintCategorySection({ category, isOpen, onToggle }: Bluepri
       >
         <div className="overflow-hidden">
           {category.blueprints.map((blueprint) => (
-            <BlueprintRow key={blueprint.id} blueprint={blueprint} />
+            <BlueprintRow
+              key={blueprint.id}
+              blueprint={blueprint}
+              onSelect={() => onSelectBlueprint?.(blueprint)}
+            />
           ))}
         </div>
       </div>
