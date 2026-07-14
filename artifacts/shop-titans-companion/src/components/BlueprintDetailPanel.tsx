@@ -1,7 +1,7 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { Blueprint, BlueprintDetail } from '../types/blueprints';
 import { blueprintDetailMap } from '../data/blueprintDetails';
-import { X, CheckCircle2, Lock } from 'lucide-react';
+import { X, CheckCircle2, Lock, ChevronDown, GripVertical } from 'lucide-react';
 
 // ── Shared selection type ─────────────────────────────────────────────────────
 
@@ -70,90 +70,183 @@ function FullRow({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ── Section wrapper ───────────────────────────────────────────────────────────
+// ── Section content renderers (no wrapper — parent handles the shell) ─────────
 
-/**
- * A titled card section inside the panel.
- * Only render this if you have content to show — it will never render empty.
- */
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="mb-5">
-      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">
-        {title}
-      </h3>
-      <div className="rounded-2xl bg-white/40 dark:bg-white/5 border border-white/50 dark:border-white/10 divide-y divide-white/30 dark:divide-white/10 overflow-hidden">
-        {children}
-      </div>
-    </div>
-  );
-}
-
-// ── Detail sections ───────────────────────────────────────────────────────────
-
-/** Unlock requirements — shown only when at least one field is present. */
-function UnlockSection({ detail }: { detail: BlueprintDetail }) {
+/** Returns the rows for the Unlock section, or null if there's nothing to show. */
+function unlockContent(detail: BlueprintDetail): React.ReactNode | null {
   const rows: React.ReactNode[] = [];
   if (detail.unlockPrerequisite)
-    rows.push(<DetailRow key="prereq" label="Prerequisite" value={detail.unlockPrerequisite} />);
+    rows.push(<DetailRow key="prereq"   label="Prerequisite"    value={detail.unlockPrerequisite} />);
   if (detail.researchScrolls)
-    rows.push(<DetailRow key="scrolls" label="Research Scrolls" value={detail.researchScrolls} />);
+    rows.push(<DetailRow key="scrolls"  label="Research Scrolls" value={detail.researchScrolls} />);
   if (detail.antiqueTokens)
-    rows.push(<DetailRow key="tokens" label="Antique Tokens" value={detail.antiqueTokens.toLocaleString()} />);
-  if (rows.length === 0) return null;
-  return <Section title="Unlock">{rows}</Section>;
+    rows.push(<DetailRow key="tokens"   label="Antique Tokens"  value={detail.antiqueTokens.toLocaleString()} />);
+  return rows.length > 0 ? <>{rows}</> : null;
 }
 
-/** Value, crafting time, and components — always shown when detail data exists. */
-function CraftingSection({ detail }: { detail: BlueprintDetail }) {
+/** Returns the rows for the Crafting section (always has content when detail exists). */
+function craftingContent(detail: BlueprintDetail): React.ReactNode {
   return (
-    <Section title="Crafting">
+    <>
       <DetailRow label="Value"         value={`${formatGold(detail.value)} 🪙`} />
       <DetailRow label="Crafting Time" value={formatTime(detail.craftingTimeSeconds)} />
       {detail.components.map((c) => (
         <DetailRow key={c.name} label={c.name} value={`× ${c.quantity}`} />
       ))}
-    </Section>
+    </>
   );
 }
 
-/** Numeric combat stats + elemental affinity — hidden if both are absent. */
-function StatsSection({ detail }: { detail: BlueprintDetail }) {
+/** Returns the rows for the Stats section, or null if there are no stats or affinity. */
+function statsContent(detail: BlueprintDetail): React.ReactNode | null {
   const entries = Object.entries(detail.stats);
   if (entries.length === 0 && !detail.elementalAffinity) return null;
   return (
-    <Section title="Stats">
+    <>
       {entries.map(([stat, val]) => (
         <DetailRow key={stat} label={stat} value={val} />
       ))}
       {detail.elementalAffinity && (
         <DetailRow label="Elemental Affinity" value={detail.elementalAffinity} />
       )}
-    </Section>
+    </>
   );
 }
 
-/** Craft-count milestones — hidden if the array is absent or empty. */
-function CraftingUpgradesSection({ detail }: { detail: BlueprintDetail }) {
+/** Returns the rows for Crafting Upgrades, or null if the list is absent or empty. */
+function craftingUpgradesContent(detail: BlueprintDetail): React.ReactNode | null {
   if (!detail.craftingUpgrades?.length) return null;
   return (
-    <Section title="Crafting Upgrades">
+    <>
       {detail.craftingUpgrades.map((u) => (
         <ListRow key={u.crafts} label={`${u.crafts} crafts`} value={u.description} />
       ))}
-    </Section>
+    </>
   );
 }
 
-/** Ascension perks — hidden if the array is absent or empty. */
-function AscensionSection({ detail }: { detail: BlueprintDetail }) {
+/** Returns the rows for Ascension, or null if the list is absent or empty. */
+function ascensionContent(detail: BlueprintDetail): React.ReactNode | null {
   if (!detail.ascension?.length) return null;
   return (
-    <Section title="Ascension">
+    <>
       {detail.ascension.map((perk, i) => (
         <FullRow key={i}>{perk}</FullRow>
       ))}
-    </Section>
+    </>
+  );
+}
+
+// ── Section definition table ──────────────────────────────────────────────────
+
+interface SectionDef {
+  key: string;
+  title: string;
+  /** Returns content nodes or null when this section has nothing to show. */
+  renderContent: (detail: BlueprintDetail) => React.ReactNode | null;
+}
+
+const SECTION_DEFS: SectionDef[] = [
+  { key: 'unlock',   title: 'Unlock',           renderContent: unlockContent           },
+  { key: 'crafting', title: 'Crafting',          renderContent: craftingContent         },
+  { key: 'stats',    title: 'Stats',             renderContent: statsContent            },
+  { key: 'upgrades', title: 'Crafting Upgrades', renderContent: craftingUpgradesContent },
+  { key: 'ascension',title: 'Ascension',         renderContent: ascensionContent        },
+];
+
+const DEFAULT_ORDER = SECTION_DEFS.map((s) => s.key);
+const STORAGE_KEY   = 'bp-section-order';
+
+function loadOrder(): string[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as string[];
+      // Guard against stale storage after sections are added/removed.
+      if (parsed.length === DEFAULT_ORDER.length && parsed.every((k) => DEFAULT_ORDER.includes(k))) {
+        return parsed;
+      }
+    }
+  } catch { /* ignore */ }
+  return DEFAULT_ORDER;
+}
+
+// ── Collapsible + draggable Section shell ─────────────────────────────────────
+
+interface SectionShellProps {
+  title: string;
+  isCollapsed: boolean;
+  onToggle: () => void;
+  /** When true a drag handle is rendered and the shell becomes draggable. */
+  reorderMode: boolean;
+  /** Pointer-down handler on the drag handle (initiates drag). */
+  onHandlePointerDown?: (e: React.PointerEvent<HTMLButtonElement>) => void;
+  /** Visual hint that this section is the current drop target. */
+  isDropTarget: boolean;
+  children: React.ReactNode;
+}
+
+function SectionShell({
+  title, isCollapsed, onToggle, reorderMode, onHandlePointerDown, isDropTarget, children,
+}: SectionShellProps) {
+  return (
+    <div
+      className={[
+        'mb-3 transition-opacity duration-150',
+        isDropTarget ? 'opacity-50' : 'opacity-100',
+      ].join(' ')}
+    >
+      {/* ── Section heading (tap to collapse / expand) ── */}
+      <div className="flex items-center gap-1 mb-2">
+
+        {/* Drag handle — only visible in reorder mode */}
+        <button
+          aria-label={`Drag to reorder ${title}`}
+          onPointerDown={onHandlePointerDown}
+          className={[
+            'flex items-center justify-center w-6 h-6 rounded-md',
+            'text-muted-foreground/60 hover:text-muted-foreground',
+            'transition-all duration-200 touch-none select-none',
+            reorderMode
+              ? 'opacity-100 cursor-grab active:cursor-grabbing'
+              : 'opacity-0 pointer-events-none w-0 overflow-hidden',
+          ].join(' ')}
+          tabIndex={reorderMode ? 0 : -1}
+        >
+          <GripVertical className="w-4 h-4" />
+        </button>
+
+        {/* Heading button */}
+        <button
+          onClick={onToggle}
+          className="flex-1 flex items-center justify-between group"
+          aria-expanded={!isCollapsed}
+        >
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            {title}
+          </h3>
+          <ChevronDown
+            className={[
+              'w-3.5 h-3.5 text-muted-foreground/60 transition-transform duration-200',
+              isCollapsed ? 'rotate-0' : '-rotate-180',
+            ].join(' ')}
+          />
+        </button>
+      </div>
+
+      {/* ── Collapsible content ── */}
+      <div
+        className={[
+          'overflow-hidden transition-all duration-200',
+          isCollapsed ? 'max-h-0' : 'max-h-[2000px]',
+        ].join(' ')}
+        aria-hidden={isCollapsed}
+      >
+        <div className="rounded-2xl bg-white/40 dark:bg-white/5 border border-white/50 dark:border-white/10 divide-y divide-white/30 dark:divide-white/10 overflow-hidden mb-2">
+          {children}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -167,17 +260,15 @@ interface BlueprintDetailPanelProps {
 /**
  * Liquid Glass bottom-sheet detail panel for a selected blueprint.
  *
- * Looks up structured detail data by blueprint id from blueprintDetailMap.
- * Sections are rendered only when their data is present — empty sections
- * are never shown. When no detail record exists yet, only the header
- * (name, tier, breadcrumb, unlock status) is displayed.
- *
- * The panel stays in the DOM at all times so the exit animation plays
- * cleanly. A ref retains the last selection during the slide-out.
+ * Features:
+ * - Section headings are tappable toggles (collapse/expand).
+ * - When ALL visible sections are collapsed, drag handles appear and the
+ *   user can drag sections into their preferred order.
+ * - Section order is persisted to localStorage.
+ * - Collapsed state resets (all expanded) each time a new blueprint opens.
  */
 export function BlueprintDetailPanel({ selection, onClose }: BlueprintDetailPanelProps) {
-  // Retain the last non-null selection so content stays visible while
-  // the panel slides back down after the user dismisses it.
+  // Retain the last non-null selection so content stays visible during slide-out.
   const lastRef = useRef<BlueprintSelection | null>(null);
   if (selection) lastRef.current = selection;
   const content = selection ?? lastRef.current;
@@ -186,6 +277,103 @@ export function BlueprintDetailPanel({ selection, onClose }: BlueprintDetailPane
 
   // Look up the structured detail record, if one exists for this blueprint.
   const detail = content ? (blueprintDetailMap[content.blueprint.id] ?? null) : null;
+
+  // ── Section order (persisted) ─────────────────────────────────────────────
+  const [sectionOrder, setSectionOrder] = useState<string[]>(loadOrder);
+
+  const saveOrder = useCallback((order: string[]) => {
+    setSectionOrder(order);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(order)); } catch { /* ignore */ }
+  }, []);
+
+  // ── Collapsed state (resets when a new blueprint is opened) ───────────────
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  const prevBlueprintId = useRef<string | null>(null);
+  useEffect(() => {
+    if (selection && selection.blueprint.id !== prevBlueprintId.current) {
+      prevBlueprintId.current = selection.blueprint.id;
+      setCollapsed(new Set()); // expand everything for the new blueprint
+    }
+  }, [selection]);
+
+  function toggleSection(key: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }
+
+  // ── Drag-to-reorder (pointer events, works on touch + mouse) ─────────────
+  const [draggingKey, setDraggingKey]   = useState<string | null>(null);
+  const [dropTargetKey, setDropTargetKey] = useState<string | null>(null);
+  const sectionNodeMap = useRef<Map<string, HTMLElement>>(new Map());
+
+  /** Called by each SectionShell to register its root DOM node. */
+  function registerRef(key: string, node: HTMLElement | null) {
+    if (node) sectionNodeMap.current.set(key, node);
+    else       sectionNodeMap.current.delete(key);
+  }
+
+  function handleHandlePointerDown(key: string, e: React.PointerEvent<HTMLButtonElement>) {
+    // Only activate in reorder mode (checked by caller, but guard here too).
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setDraggingKey(key);
+  }
+
+  function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!draggingKey) return;
+    // Walk registered section nodes to find which one the pointer is over.
+    for (const [key, node] of sectionNodeMap.current) {
+      if (key === draggingKey) continue;
+      const rect = node.getBoundingClientRect();
+      if (
+        e.clientY >= rect.top  && e.clientY <= rect.bottom &&
+        e.clientX >= rect.left && e.clientX <= rect.right
+      ) {
+        setDropTargetKey(key);
+        return;
+      }
+    }
+    setDropTargetKey(null);
+  }
+
+  function handlePointerUp() {
+    if (draggingKey && dropTargetKey) {
+      const next      = [...sectionOrder];
+      const fromIndex = next.indexOf(draggingKey);
+      const toIndex   = next.indexOf(dropTargetKey);
+      if (fromIndex !== -1 && toIndex !== -1) {
+        next.splice(fromIndex, 1);
+        next.splice(toIndex, 0, draggingKey);
+        saveOrder(next);
+      }
+    }
+    setDraggingKey(null);
+    setDropTargetKey(null);
+  }
+
+  // ── Derive the visible section list for this blueprint ────────────────────
+  // A section is "visible" only if its content renderer returns something.
+  const defMap = Object.fromEntries(SECTION_DEFS.map((d) => [d.key, d]));
+
+  const visibleSections: Array<{ key: string; title: string; content: React.ReactNode }> =
+    detail
+      ? sectionOrder.flatMap((key) => {
+          const def = defMap[key];
+          if (!def) return [];
+          const content = def.renderContent(detail);
+          if (content === null) return [];
+          return [{ key, title: def.title, content }];
+        })
+      : [];
+
+  // Reorder mode activates only when every visible section is collapsed.
+  const reorderMode =
+    visibleSections.length > 1 &&
+    visibleSections.every((s) => collapsed.has(s.key));
 
   return (
     <>
@@ -224,7 +412,12 @@ export function BlueprintDetailPanel({ selection, onClose }: BlueprintDetailPane
         </div>
 
         {/* ── Scrollable content ──────────────────────────────────────── */}
-        <div className="relative z-20 flex-1 overflow-y-auto">
+        <div
+          className="relative z-20 flex-1 overflow-y-auto"
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+        >
           {content && (
             <div className="px-5 pt-3 pb-12">
 
@@ -267,15 +460,37 @@ export function BlueprintDetailPanel({ selection, onClose }: BlueprintDetailPane
                 )}
               </div>
 
-              {/* ── Data sections (only shown when detail record exists) ─ */}
-              {detail && (
-                <>
-                  <UnlockSection          detail={detail} />
-                  <CraftingSection        detail={detail} />
-                  <StatsSection           detail={detail} />
-                  <CraftingUpgradesSection detail={detail} />
-                  <AscensionSection       detail={detail} />
-                </>
+              {/* ── Data sections ────────────────────────────────────── */}
+              {detail && visibleSections.length > 0 && (
+                <div>
+                  {/* Reorder hint — fades in when all sections are collapsed */}
+                  <p
+                    className={[
+                      'text-xs text-center text-muted-foreground/60 mb-3',
+                      'transition-all duration-200',
+                      reorderMode ? 'opacity-100 max-h-8' : 'opacity-0 max-h-0 overflow-hidden',
+                    ].join(' ')}
+                    aria-live="polite"
+                  >
+                    Drag to reorder sections
+                  </p>
+
+                  {visibleSections.map(({ key, title, content: rows }) => (
+                    // Wrapper div carries the ref so pointer-move hit-testing works.
+                    <div key={key} ref={(node) => registerRef(key, node)}>
+                      <SectionShell
+                        title={title}
+                        isCollapsed={collapsed.has(key)}
+                        onToggle={() => toggleSection(key)}
+                        reorderMode={reorderMode}
+                        onHandlePointerDown={(e) => handleHandlePointerDown(key, e)}
+                        isDropTarget={dropTargetKey === key}
+                      >
+                        {rows}
+                      </SectionShell>
+                    </div>
+                  ))}
+                </div>
               )}
 
             </div>
