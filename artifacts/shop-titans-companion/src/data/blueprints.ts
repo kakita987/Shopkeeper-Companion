@@ -23,11 +23,16 @@ export const blueprintData: BlueprintGroup[] = [
         id: CategoryId.Sword,
         name: 'Sword',
         blueprints: [
-          { id: 'iron-sword',   name: 'Iron Sword',   tier: 1, unlocked: true  },
-          { id: 'steel-sword',  name: 'Steel Sword',  tier: 2, unlocked: true  },
-          { id: 'elven-sword',  name: 'Elven Sword',  tier: 3, unlocked: true  },
-          { id: 'flamberge',    name: 'Flamberge',    tier: 4, unlocked: false },
-          { id: 'excalibur',    name: 'Excalibur',    tier: 5, unlocked: false },
+          // ── Placeholder blueprints with full detail data ──
+          { id: 'squire-sword', name: 'Squire Sword',  tier: 1, unlocked: true  },
+          { id: 'gladius',      name: 'Gladius',       tier: 3, unlocked: true  },
+          { id: 'heros-sword',  name: "Hero's Sword",  tier: 5, unlocked: false },
+          // ── Additional placeholders (detail data not yet added) ──
+          { id: 'iron-sword',   name: 'Iron Sword',    tier: 1, unlocked: true  },
+          { id: 'steel-sword',  name: 'Steel Sword',   tier: 2, unlocked: true  },
+          { id: 'elven-sword',  name: 'Elven Sword',   tier: 3, unlocked: true  },
+          { id: 'flamberge',    name: 'Flamberge',     tier: 4, unlocked: false },
+          { id: 'excalibur',    name: 'Excalibur',     tier: 5, unlocked: false },
         ],
       },
       {
