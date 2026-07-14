@@ -46,14 +46,14 @@ export function AppLayout({ children }: AppLayoutProps) {
             </Link>
           </div>
 
-          {/* Tab bar — underline style */}
+          {/* Tab bar — each tab takes an equal share of the full width */}
           <div className="flex">
             {TABS.map((tab) => {
               const isActive = location === tab.href;
               return (
-                <Link key={tab.href} href={tab.href}>
+                <Link key={tab.href} href={tab.href} className="flex-1">
                   <button
-                    className={`px-1 mr-5 pb-2.5 text-sm font-medium border-b-2 transition-colors focus:outline-none ${
+                    className={`w-full py-2.5 text-sm font-medium border-b-2 transition-colors focus:outline-none ${
                       isActive
                         ? 'border-foreground text-foreground'
                         : 'border-transparent text-muted-foreground hover:text-foreground'
