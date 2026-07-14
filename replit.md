@@ -1,6 +1,6 @@
-# [Project name]
+# Shopkeeper Companion
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+A blueprint reference and tracking tool for Shop Titans players.
 
 ## Run & Operate
 
