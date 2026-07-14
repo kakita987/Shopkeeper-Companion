@@ -99,8 +99,8 @@ export function BlueprintDetailPanel({ selection, onClose }: BlueprintDetailPane
         aria-modal="true"
         aria-label={content?.blueprint.name ?? 'Blueprint detail'}
         className={[
-          // Position & size
-          'fixed bottom-0 inset-x-0 z-40 max-h-[70vh]',
+          // Position & size — tall enough to partially overlap the tab bar
+          'fixed bottom-0 inset-x-0 z-40 max-h-[85vh]',
           // Shape
           'rounded-t-3xl overflow-hidden',
           // Liquid Glass — layered translucency + strong backdrop blur
@@ -145,15 +145,15 @@ export function BlueprintDetailPanel({ selection, onClose }: BlueprintDetailPane
                 </button>
               </div>
 
-              {/* Blueprint name */}
-              <h2 className="text-2xl font-bold text-foreground tracking-tight leading-tight mb-1.5">
-                {content.blueprint.name}
-              </h2>
-
-              {/* Tier badge */}
-              <span className={`inline-flex items-center text-sm font-semibold px-2.5 py-0.5 rounded-lg mb-4 ${tierColor(content.blueprint.tier)}`}>
-                Tier {content.blueprint.tier}
-              </span>
+              {/* Blueprint name + tier badge on one line */}
+              <div className="flex items-center gap-3 mb-4">
+                <h2 className="flex-1 text-2xl font-bold text-foreground tracking-tight leading-tight">
+                  {content.blueprint.name}
+                </h2>
+                <span className={`shrink-0 inline-flex items-center text-sm font-semibold px-2.5 py-0.5 rounded-lg ${tierColor(content.blueprint.tier)}`}>
+                  Tier {content.blueprint.tier}
+                </span>
+              </div>
 
               {/* Unlock status */}
               <div className="flex items-center gap-2 mb-6">
