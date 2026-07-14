@@ -99,8 +99,8 @@ export function BlueprintDetailPanel({ selection, onClose }: BlueprintDetailPane
         aria-modal="true"
         aria-label={content?.blueprint.name ?? 'Blueprint detail'}
         className={[
-          // Position & size — tall enough to partially overlap the tab bar
-          'fixed bottom-0 inset-x-0 z-40 max-h-[85vh]',
+          // Position & size — covers the tab bar; only the app title peeks above
+          'fixed bottom-0 inset-x-0 z-40 max-h-[calc(100vh-52px)]',
           // Shape
           'rounded-t-3xl overflow-hidden',
           // Liquid Glass — layered translucency + strong backdrop blur
