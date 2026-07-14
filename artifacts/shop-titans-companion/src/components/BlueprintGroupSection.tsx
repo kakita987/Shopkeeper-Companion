@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BlueprintGroup } from '../types/blueprints';
 import { BlueprintCategorySection } from './BlueprintCategorySection';
-import { ChevronRight, Sword, Shield, Gem } from 'lucide-react';
+import { ChevronRight, Sword, Shield, Gem, Sparkles } from 'lucide-react';
 
 interface BlueprintGroupSectionProps {
   group: BlueprintGroup;
@@ -12,10 +12,12 @@ interface BlueprintGroupSectionProps {
 }
 
 // Maps the icon name stored in data to the actual lucide-react component.
+// Add new entries here whenever a new group icon is introduced in blueprints.ts.
 const IconMap: Record<string, React.ElementType> = {
   Sword,
   Shield,
   Gem,
+  Sparkles,
 };
 
 /**
