@@ -1,0 +1,81 @@
+import { defineConfig } from 'vite'
+
+export default defineConfig({
+  plugins: [
+    {
+      name: 'spreadsheet-proxy',
+      configureServer(server) {
+        server.middlewares.use('/api/resolve', async (req, res, next) => {
+          if (req.method !== 'GET') {
+            next()
+            return
+          }
+
+          const requestUrl = new URL(req.url || '/', 'http://localhost')
+          const targetUrl = requestUrl.searchParams.get('url')
+
+          if (!targetUrl) {
+            res.statusCode = 400
+            res.end('Missing url query parameter.')
+            return
+          }
+
+          try {
+            const response = await fetch(targetUrl, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0',
+              },
+              redirect: 'manual',
+            })
+
+            const finalUrl = response.headers.get('location') || response.url
+            res.statusCode = 200
+            res.setHeader('content-type', 'text/plain; charset=utf-8')
+            res.end(finalUrl || targetUrl)
+          } catch (error) {
+            res.statusCode = 500
+            res.end(error instanceof Error ? error.message : 'Unable to resolve spreadsheet URL.')
+          }
+        })
+
+        server.middlewares.use('/api/spreadsheet', async (req, res, next) => {
+          if (req.method !== 'GET') {
+            next()
+            return
+          }
+
+          const requestUrl = new URL(req.url || '/', 'http://localhost')
+          const sheetUrl = requestUrl.searchParams.get('url')
+
+          if (!sheetUrl) {
+            res.statusCode = 400
+            res.end('Missing url query parameter.')
+            return
+          }
+
+          try {
+            const response = await fetch(sheetUrl, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0',
+              },
+            })
+
+            res.statusCode = response.status
+            response.headers.forEach((value, key) => {
+              if (key === 'content-length') {
+                return
+              }
+              res.setHeader(key, value)
+            })
+
+            const body = await response.text()
+            res.end(body)
+          } catch (error) {
+            res.statusCode = 500
+            res.end(error instanceof Error ? error.message : 'Unable to proxy spreadsheet request.')
+          }
+        })
+      },
+    },
+  ],
+})
