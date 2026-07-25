@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shopkeeper Companion</title>
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <div>
+          <h1>🏰 Shopkeeper Companion</h1>
+          <p>Blueprint Database & Crafting Tracker</p>
+        </div>
+        <button id="settings-toggle" type="button" aria-expanded="false" aria-controls="settings-panel" class="settings-button" title="Open settings">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><use href="/icons.svg#settings-icon"></use></svg>
+          <span>Settings</span>
+        </button>
+      </header>
+
+      <section id="settings-panel" class="settings-panel" hidden>
+        <div class="settings-panel-content" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+          <div class="settings-header">
+            <div>
+              <h2 id="settings-title">Settings</h2>
+              <p>Choose your theme for the app.</p>
+            </div>
+            <button id="settings-close" type="button" class="settings-close" aria-label="Close settings">×</button>
+          </div>
+
+          <div class="field">
+            <label for="theme-select">Site theme</label>
+            <select id="theme-select">
+              <option value="dark">Night Theme</option>
+              <option value="light">Clean Light</option>
+              <option value="parchment">Cozy Parchment</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <!-- Search & Filter Controls -->
+      <section class="controls">
+        <input type="text" id="search-input" placeholder="Search blueprints (e.g. Sword, Armor)..." />
+        <select id="tier-filter">
+          <option value="all">All Tiers</option>
+          <option value="1">Tier 1</option>
+          <option value="2">Tier 2</option>
+        </select>
+      </section>
+
+      <!-- Blueprint Cards Container -->
+      <main id="blueprint-grid" class="grid"></main>
+    </div>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
