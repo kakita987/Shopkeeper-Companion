@@ -38,7 +38,8 @@ const DEFAULT_SAVED_VIEW_CRITERIA = {
   dependency: 'any',
   ownership: 'any',
   inventory: 'any',
-  collection: 'any',
+  mastered: 'any',
+  collectionBook: [],
 }
 const STARTER_VIEW_PRESETS = [
   {
@@ -377,14 +378,17 @@ function renderGoogleAuthUi(state) {
   googleAuthContainer.innerHTML = '<div class="google-signin-slot" data-auth-signin-slot></div>'
   const signInSlot = googleAuthContainer.querySelector('[data-auth-signin-slot]')
   const renderedGoogleButton = googleAuth.renderSignInButton(signInSlot)
+  const authMessage = state.error ? `<p class="settings-copy sync-caption sync-error">${escapeHtml(state.error)}</p>` : ''
 
   if (!renderedGoogleButton) {
-    const isDisabled = state.isAuthenticating
-    googleAuthContainer.innerHTML = `<button type="button" class="auth-button" data-auth-action="sign-in" ${isDisabled ? 'disabled' : ''}>Sign in with Google</button>`
+    const isDisabled = state.isAuthenticating || state.clientIdMissing
+    googleAuthContainer.innerHTML = `<button type="button" class="auth-button" data-auth-action="sign-in" ${isDisabled ? 'disabled' : ''}>Sign in with Google</button>${authMessage}`
     const signInButton = googleAuthContainer.querySelector('[data-auth-action="sign-in"]')
     signInButton?.addEventListener('click', async () => {
       await googleAuth.signIn()
     })
+  } else if (authMessage) {
+    googleAuthContainer.insertAdjacentHTML('beforeend', authMessage)
   }
 }
 
@@ -604,7 +608,8 @@ function buildSavedViewsRows() {
     view.criteria?.dependency || 'any',
     view.criteria?.ownership || 'any',
     view.criteria?.inventory || 'any',
-    view.criteria?.collection || 'any',
+    view.criteria?.mastered || 'any',
+    JSON.stringify(view.criteria?.collectionBook || []),
   ]))
 }
 
@@ -625,11 +630,26 @@ function parseSavedViewsRows(rows = []) {
           dependency: cleanText(row?.[2]) || 'any',
           ownership: cleanText(row?.[3]) || 'any',
           inventory: cleanText(row?.[4]) || 'any',
-          collection: cleanText(row?.[5]) || 'any',
+          mastered: cleanText(row?.[5]) || 'any',
+          collectionBook: parseCollectionBookCriteria(row?.[6]),
         },
       }
     })
     .filter(Boolean)
+}
+
+function parseCollectionBookCriteria(value) {
+  const raw = cleanText(value)
+  if (!raw) {
+    return []
+  }
+
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch (error) {
+    return raw.split(',').map((entry) => cleanText(entry.toLowerCase())).filter(Boolean)
+  }
 }
 
 function buildTrackedUpgradeRows() {
@@ -1148,7 +1168,6 @@ function renderSavedViews(items = []) {
                 ${renderSelectOptions([
                   ['any', 'Any'],
                   ['parent', 'Dependent'],
-                  ['child', 'Needed'],
                   ['none', 'No dependency relation'],
                 ], savedViewCriteria.dependency)}
               </select>
@@ -1156,9 +1175,9 @@ function renderSavedViews(items = []) {
             <label class="saved-view-filter">
               <span>Ownership</span>
               <select data-saved-filter="ownership">
-                ${renderSelectOptions([
                   ['any', 'Any'],
                   ['owned', 'Owned'],
+                  ['any', 'Either'],
                   ['not-owned', 'Not owned'],
                 ], savedViewCriteria.ownership)}
               </select>
@@ -1166,22 +1185,28 @@ function renderSavedViews(items = []) {
             <label class="saved-view-filter">
               <span>Inventory</span>
               <select data-saved-filter="inventory">
-                ${renderSelectOptions([
-                  ['any', 'Any'],
-                  ['has', 'Inventory > 0'],
+                  ['any', 'Any Status'],
+                  ['has', 'Has Inventory'],
+                  ['none', 'Out of Stock'],
                   ['none', 'Inventory = 0'],
                 ], savedViewCriteria.inventory)}
               </select>
-            </label>
-            <label class="saved-view-filter">
-              <span>Collection</span>
-              <select data-saved-filter="collection">
+            <label class="saved-view-filter saved-view-filter-mastered">
+              <span>Mastered</span>
+              <select data-saved-filter="mastered">
                 ${renderSelectOptions([
-                  ['any', 'Any'],
-                  ['complete', 'Complete'],
-                  ['incomplete', 'Incomplete'],
-                ], savedViewCriteria.collection)}
+                  ['any', 'Any Status'],
+                  ['mastered', 'Mastered'],
+                  ['not-mastered', 'Not Mastered'],
+                ], savedViewCriteria.mastered)}
               </select>
+            </label>
+            <fieldset class="saved-view-filter saved-view-filter-multiselect">
+              <legend>Collection Book</legend>
+              <div class="collection-book-options">
+                ${renderCollectionBookFilterOptions(savedViewCriteria.collectionBook)}
+              </div>
+            </fieldset>
             </label>
           </div>
           <form class="saved-view-save-row" data-save-view-form>
@@ -1313,6 +1338,31 @@ function bindSavedViewControls(items = []) {
     })
   })
 
+  savedViewsContentEl.querySelectorAll('[data-saved-filter-book]').forEach((checkbox) => {
+    checkbox.addEventListener('change', (event) => {
+      const target = event.currentTarget
+      const quality = target.dataset.savedFilterBook
+      if (!quality) {
+        return
+      }
+
+      const nextCollectionBook = new Set(savedViewCriteria.collectionBook || [])
+      if (target.checked) {
+        nextCollectionBook.add(quality)
+      } else {
+        nextCollectionBook.delete(quality)
+      }
+
+      savedViewCriteria = {
+        ...savedViewCriteria,
+        collectionBook: [...nextCollectionBook],
+      }
+
+      activeSavedViewPreset = 'custom'
+      renderSavedViews(items)
+    })
+  })
+
   const saveViewForm = savedViewsContentEl.querySelector('[data-save-view-form]')
   if (saveViewForm) {
     saveViewForm.addEventListener('submit', (event) => {
@@ -1348,10 +1398,10 @@ function applyStarterViewPreset(presetId, items = []) {
   }
 
   activeSavedViewPreset = `starter:${preset.id}`
-  savedViewCriteria = {
+  savedViewCriteria = normalizeSavedViewCriteria({
     ...DEFAULT_SAVED_VIEW_CRITERIA,
     ...preset.criteria,
-  }
+  })
 
   renderSavedViews(items)
 }
@@ -1363,10 +1413,10 @@ function applySavedFilterView(viewId, items = []) {
   }
 
   activeSavedViewPreset = `saved:${view.id}`
-  savedViewCriteria = {
+  savedViewCriteria = normalizeSavedViewCriteria({
     ...DEFAULT_SAVED_VIEW_CRITERIA,
     ...(view.criteria || {}),
-  }
+  })
 
   renderSavedViews(items)
 }
@@ -1404,6 +1454,38 @@ function renderSelectOptions(options = [], selectedValue = 'any') {
   }).join('')
 }
 
+function renderCollectionBookFilterOptions(selectedValues = []) {
+  const normalizedSelected = new Set(Array.isArray(selectedValues) ? selectedValues.map((value) => String(value).toLowerCase()) : [])
+  const options = ['superior', 'flawless', 'epic', 'legendary']
+
+  return options.map((quality) => {
+    const label = formatQualityLabel(quality)
+    const isChecked = normalizedSelected.has(quality)
+    return `
+      <label class="collection-book-option">
+        <input type="checkbox" data-saved-filter-book="${escapeHtml(quality)}" ${isChecked ? 'checked' : ''} />
+        <span>${escapeHtml(label)}</span>
+      </label>
+    `
+  }).join('')
+}
+
+function normalizeSavedViewCriteria(criteria = {}) {
+  const collectionBook = Array.isArray(criteria.collectionBook)
+    ? criteria.collectionBook
+    : typeof criteria.collection === 'string' && criteria.collection !== 'any'
+      ? [criteria.collection]
+      : []
+
+  return {
+    dependency: ['any', 'parent', 'child'].includes(criteria.dependency) ? criteria.dependency : 'any',
+    ownership: ['owned', 'not-owned', 'any'].includes(criteria.ownership) ? criteria.ownership : 'any',
+    inventory: ['any', 'has', 'none'].includes(criteria.inventory) ? criteria.inventory : 'any',
+    mastered: ['any', 'mastered', 'not-mastered'].includes(criteria.mastered) ? criteria.mastered : 'any',
+    collectionBook: collectionBook.filter((value) => ['superior', 'flawless', 'epic', 'legendary'].includes(String(value).toLowerCase())),
+  }
+}
+
 function buildDependencyIndex(items = []) {
   const dependentsByComponent = new Map()
 
@@ -1430,43 +1512,48 @@ function buildDependencyIndex(items = []) {
 }
 
 function filterBlueprintItems(items = [], criteria = {}, dependencyIndex) {
+  const normalizedCriteria = normalizeSavedViewCriteria(criteria)
+
   return items.filter((item) => {
     const summary = buildBlueprintSummary(item, dependencyIndex)
 
-    if (criteria.dependency === 'parent' && !summary.isParentDependency) {
+    if (normalizedCriteria.dependency === 'parent' && !summary.isParentDependency) {
       return false
     }
 
-    if (criteria.dependency === 'child' && !summary.isChildDependency) {
+    if (normalizedCriteria.dependency === 'child' && !summary.isChildDependency) {
       return false
     }
 
-    if (criteria.dependency === 'none' && (summary.isParentDependency || summary.isChildDependency)) {
+    if (normalizedCriteria.ownership === 'owned' && !summary.isOwned) {
       return false
     }
 
-    if (criteria.ownership === 'owned' && !summary.isOwned) {
+    if (normalizedCriteria.ownership === 'not-owned' && summary.isOwned) {
       return false
     }
 
-    if (criteria.ownership === 'not-owned' && summary.isOwned) {
+    if (normalizedCriteria.inventory === 'has' && !summary.hasInventory) {
       return false
     }
 
-    if (criteria.inventory === 'has' && !summary.hasInventory) {
+    if (normalizedCriteria.inventory === 'none' && summary.hasInventory) {
       return false
     }
 
-    if (criteria.inventory === 'none' && summary.hasInventory) {
+    if (normalizedCriteria.mastered === 'mastered' && !summary.isMastered) {
       return false
     }
 
-    if (criteria.collection === 'complete' && !summary.isCollectionComplete) {
+    if (normalizedCriteria.mastered === 'not-mastered' && summary.isMastered) {
       return false
     }
 
-    if (criteria.collection === 'incomplete' && summary.isCollectionComplete) {
-      return false
+    if (normalizedCriteria.collectionBook.length) {
+      const collectionMatches = normalizedCriteria.collectionBook.some((quality) => summary.collectionBookQualities.includes(quality))
+      if (!collectionMatches) {
+        return false
+      }
     }
 
     return true
@@ -1475,6 +1562,7 @@ function filterBlueprintItems(items = [], criteria = {}, dependencyIndex) {
 
 function buildBlueprintSummary(item, dependencyIndex) {
   const progress = getBlueprintProgressState(item.name)
+  const craftingMilestones = Array.isArray(item?.structuredData?.upgrades?.crafting) ? item.structuredData.upgrades.crafting : []
   const blueprintState = {
     own: Boolean(progress.owned),
     master: Boolean(progress.master),
@@ -1488,9 +1576,14 @@ function buildBlueprintSummary(item, dependencyIndex) {
   const dependentNames = dependentSet ? [...dependentSet] : []
   const totalInventory = calculateTotalInventory(blueprintState)
   const collectionStatus = getCollectionBookStatus(blueprintState)
+  const isMastered = Boolean(progress.owned) && craftingMilestones.length >= 5 && getBlueprintMilestoneKeys(item.name, craftingMilestones.slice(0, 5)).every((key) => isTrackedUpgrade(key))
+  const collectionBookQualities = Object.entries(progress.collectionBook || {})
+    .filter(([, checked]) => Boolean(checked))
+    .map(([quality]) => quality)
 
   return {
     isOwned: Boolean(progress.owned),
+    isMastered,
     isParentDependency: hasCraftingComponents(item),
     isChildDependency: dependentNames.length > 0,
     dependentNames,
@@ -1498,6 +1591,7 @@ function buildBlueprintSummary(item, dependencyIndex) {
     totalInventory,
     isCollectionComplete: collectionStatus === '✅ Complete',
     collectionStatus,
+    collectionBookQualities,
   }
 }
 
@@ -1538,10 +1632,7 @@ function loadSavedFilterViews() {
         return {
           id,
           name,
-          criteria: {
-            ...DEFAULT_SAVED_VIEW_CRITERIA,
-            ...(entry.criteria || {}),
-          },
+          criteria: normalizeSavedViewCriteria(entry.criteria || {}),
         }
       })
       .filter(Boolean)
@@ -1563,6 +1654,7 @@ function ensureSavedFilterViewsLoaded() {
 function saveSavedFilterViews() {
   localStorage.setItem(SAVED_FILTER_VIEWS_STORAGE_KEY, JSON.stringify(savedFilterViews))
   scheduleGoogleSyncWrite()
+  refreshSavedViewsResults()
 }
 
 function saveCurrentFilterAsView(name) {
@@ -1570,9 +1662,7 @@ function saveCurrentFilterAsView(name) {
   const existing = savedFilterViews.find((entry) => entry.name.toLowerCase() === normalizedName)
 
   if (existing) {
-    existing.criteria = {
-      ...savedViewCriteria,
-    }
+    existing.criteria = normalizeSavedViewCriteria(savedViewCriteria)
     saveSavedFilterViews()
     return existing
   }
@@ -1580,9 +1670,7 @@ function saveCurrentFilterAsView(name) {
   const nextView = {
     id: `view-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     name,
-    criteria: {
-      ...savedViewCriteria,
-    },
+    criteria: normalizeSavedViewCriteria(savedViewCriteria),
   }
 
   savedFilterViews = [nextView, ...savedFilterViews]
@@ -1600,6 +1688,12 @@ function deleteSavedFilterView(viewId) {
     activeSavedViewPreset = 'custom'
   }
   saveSavedFilterViews()
+}
+
+function refreshSavedViewsResults() {
+  if (Array.isArray(allBlueprintItems) && allBlueprintItems.length) {
+    renderSavedViews(allBlueprintItems)
+  }
 }
 
 function loadTrackedUpgradeKeys() {
@@ -1625,6 +1719,7 @@ function loadBlueprintProgressMap() {
 function saveTrackedUpgradeKeys() {
   localStorage.setItem(TRACKED_UPGRADES_STORAGE_KEY, JSON.stringify([...trackedUpgradeKeys]))
   scheduleGoogleSyncWrite()
+  refreshSavedViewsResults()
 }
 
 function toggleTrackedUpgrade(key) {
@@ -1661,6 +1756,7 @@ function saveBlueprintProgressState(blueprintName, updates) {
 
   localStorage.setItem(BLUEPRINT_PROGRESS_STORAGE_KEY, JSON.stringify(blueprintProgressByName))
   scheduleGoogleSyncWrite()
+  refreshSavedViewsResults()
 }
 
 function persistBlueprintOwnership(blueprintName, owned) {

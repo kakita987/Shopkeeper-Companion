@@ -68,7 +68,7 @@ export function useGoogleAuth({ clientId }) {
       updateState({
         isLoading: false,
         isReady: false,
-        error: null,
+        error: 'Google sign-in is not configured for this deployment.',
       })
       return
     }
@@ -134,6 +134,9 @@ export function useGoogleAuth({ clientId }) {
 
   async function signIn() {
     if (state.clientIdMissing || state.isAuthenticating) {
+      if (state.clientIdMissing) {
+        updateState({ error: 'Google sign-in is not configured for this deployment.' })
+      }
       return null
     }
 

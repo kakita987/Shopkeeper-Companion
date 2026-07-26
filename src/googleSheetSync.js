@@ -11,7 +11,7 @@ const README_ROWS = [
   [''],
   ['Tabs'],
   ['1) Settings: key/value preferences (theme, font).'],
-  ['2) SavedViews: your filter presets used in the Saved Views page.'],
+  ['2) SavedViews: your filter presets used in the Saved Views page, including collection-book and mastered filters.'],
   ['3) TrackedUpgrades: one upgradeKey per tracked upgrade.'],
   ['4) BlueprintProgress: per-blueprint user-owned data, including quality inventory and collection book checks.'],
   [''],
@@ -33,7 +33,7 @@ export const SYNC_SCHEMA = {
   },
   savedViews: {
     title: 'SavedViews',
-    headers: ['id', 'name', 'dependency', 'ownership', 'inventory', 'collection'],
+    headers: ['id', 'name', 'dependency', 'ownership', 'inventory', 'mastered', 'collectionBook'],
   },
   trackedUpgrades: {
     title: 'TrackedUpgrades',
