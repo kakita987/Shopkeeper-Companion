@@ -1,5 +1,6 @@
 const GOOGLE_IDENTITY_SCRIPT = 'https://accounts.google.com/gsi/client'
 const SHEETS_SCOPE = 'https://www.googleapis.com/auth/drive.file'
+const MISSING_CLIENT_ID_MESSAGE = 'Google sign-in is not configured for this deployment. Set VITE_GOOGLE_CLIENT_ID in your production environment.'
 
 let gisScriptPromise = null
 
@@ -68,7 +69,7 @@ export function useGoogleAuth({ clientId }) {
       updateState({
         isLoading: false,
         isReady: false,
-        error: 'Google sign-in is not configured for this deployment.',
+        error: MISSING_CLIENT_ID_MESSAGE,
       })
       return
     }
@@ -135,7 +136,7 @@ export function useGoogleAuth({ clientId }) {
   async function signIn() {
     if (state.clientIdMissing || state.isAuthenticating) {
       if (state.clientIdMissing) {
-        updateState({ error: 'Google sign-in is not configured for this deployment.' })
+        updateState({ error: MISSING_CLIENT_ID_MESSAGE })
       }
       return null
     }
