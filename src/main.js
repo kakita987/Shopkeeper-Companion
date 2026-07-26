@@ -1,5 +1,6 @@
 import './style.css'
 import { useGoogleAuth } from './useGoogleAuth.js'
+import { ensureUserSyncSpreadsheet, readSyncTables, writeSyncTables } from './googleSheetSync.js'
 import { createIcons, Axe, BadgeAlert, BadgeHelp, BadgeInfo, BowArrow, CakeSlice, Candy, CandyCane, CircleDashed, Clover, Coffee, Crosshair, Diamond, Drumstick, FlaskConical, FlaskRound, Footprints, Gem, Hand, HandMetal, HardHat, HatGlasses, Leaf, MoonStar, Music2, Package, PackageOpen, PartyPopper, PillBottle, Pizza, Salad, ScrollText, Shield, Shirt, Sandwich, Sparkles, Swords, Sword, Target, UtensilsCrossed, Wand, WandSparkles, Apple, Fish, SunMedium, Cherry, Cookie } from 'lucide'
 
 const DEFAULT_SPREADSHEET_URL = 'https://playshoptitans.com/spreadsheet'
@@ -30,9 +31,40 @@ const CATEGORY_TYPE_LOOKUP = new Map(
 const app = document.querySelector('#app')
 const RESOURCE_LABELS = ['Iron', 'Wood', 'Steel', 'Leather', 'Herbs', 'Oils', 'Fabric', 'Gems', 'Mana', 'Essence']
 const QUALITY_LABELS = ['Normal', 'Superior', 'Flawless', 'Epic', 'Legendary']
+const INVENTORY_QUALITY_KEYS = ['normal', 'superior', 'flawless', 'epic', 'legendary']
+const COLLECTION_BOOK_QUALITY_ORDER = ['legendary', 'epic', 'flawless', 'superior']
+const DEFAULT_SAVED_VIEW_CRITERIA = {
+  dependency: 'any',
+  ownership: 'any',
+  inventory: 'any',
+  collection: 'any',
+}
+const STARTER_VIEW_PRESETS = [
+  {
+    id: 'parent-dependencies',
+    label: 'Dependent',
+    criteria: {
+      ...DEFAULT_SAVED_VIEW_CRITERIA,
+      dependency: 'parent',
+    },
+  },
+  {
+    id: 'child-dependencies',
+    label: 'Needed',
+    criteria: {
+      ...DEFAULT_SAVED_VIEW_CRITERIA,
+      dependency: 'child',
+    },
+  },
+]
 const TRACKED_UPGRADES_STORAGE_KEY = 'shopkeeper-tracked-upgrades'
 const BLUEPRINT_PROGRESS_STORAGE_KEY = 'shopkeeper-blueprint-progress'
+const SAVED_FILTER_VIEWS_STORAGE_KEY = 'shopkeeper-saved-filter-views'
 const FONT_PREFERENCE_STORAGE_KEY = 'shopkeeper-font-preference'
+const THEME_PREFERENCE_STORAGE_KEY = 'shopkeeper-theme'
+const BLUEPRINT_CACHE_STORAGE_KEY = 'shopkeeper-blueprint-cache-v1'
+const GOOGLE_SYNC_SPREADSHEET_ID_STORAGE_KEY = 'shopkeeper-google-sync-spreadsheet-id'
+const GOOGLE_SYNC_WRITE_DEBOUNCE_MS = 900
 
 const LUCIDE_ICONS = {
   Axe,
@@ -110,13 +142,7 @@ app.innerHTML = `
       </section>
 
       <section class="panel preview-panel is-hidden" data-view-panel="saved-views">
-        <div class="preview-header">
-          <div>
-            <h2>Saved Views</h2>
-            <p class="status">Saved filters will appear here soon.</p>
-          </div>
-        </div>
-        <div class="empty-state">No saved views yet.</div>
+        <div id="saved-views-content" class="saved-views-content"></div>
       </section>
     </div>
 
@@ -155,17 +181,23 @@ app.innerHTML = `
 
         <section class="settings-section">
           <h3>Google Sync Sign-In</h3>
-          <p class="settings-copy">Signing in with Google OAuth creates a personal Google Sheet in your Drive for Shopkeeper Companion sync data.</p>
-          <p class="settings-copy">If you make bulk edits in that sheet, those updates will be reflected in the app during sync.</p>
+          <p class="settings-copy">Sign in to sync your companion data automatically while you use the app.</p>
+          <p class="settings-copy">Your data sheet is created in Google Drive for backup and optional advanced editing.</p>
           <div id="google-auth" class="google-auth"></div>
+          <details class="attribution-details advanced-sync-details">
+            <summary>Advanced: Bulk Edit in Google Sheets</summary>
+            <p class="settings-copy">The app is the primary experience. If you want spreadsheet-style bulk edits, open Google Drive and find the file named <strong>Shopkeeper Companion User Data</strong>.</p>
+            <p class="settings-copy">Edit values in the data tabs, then use <strong>Sync Now</strong> in this Settings panel to load those changes back into the app.</p>
+            <p class="settings-copy">Keep data-tab headers unchanged so sync can parse rows correctly.</p>
+          </details>
         </section>
 
         <section class="settings-section">
           <h3>Blueprint Sync</h3>
-          <p class="settings-copy">Refresh the blueprint preview from the latest spreadsheet data.</p>
+          <p class="settings-copy">Download the latest blueprints when you choose, then browse locally.</p>
 
           <form id="import-form" class="import-form compact-form">
-            <button type="submit">Update Blueprints</button>
+            <button type="submit">Download Blueprints</button>
           </form>
         </section>
 
@@ -193,12 +225,32 @@ const themeInputs = document.querySelectorAll('input[name="theme"]')
 const fontSelect = document.querySelector('#font-select')
 const statusEl = document.querySelector('#status')
 const previewEl = document.querySelector('#preview')
+const savedViewsContentEl = document.querySelector('#saved-views-content')
 const blueprintOverlay = document.querySelector('#blueprint-overlay')
 const blueprintOverlayContent = document.querySelector('#blueprint-overlay-content')
 const googleAuthContainer = document.querySelector('#google-auth')
 const topTabs = Array.from(document.querySelectorAll('.top-tab'))
 const viewPanels = Array.from(document.querySelectorAll('[data-view-panel]'))
 let trackedUpgradeKeys = loadTrackedUpgradeKeys()
+let blueprintProgressByName = loadBlueprintProgressMap()
+let allBlueprintItems = []
+let savedFilterViews = []
+let hasLoadedSavedFilterViews = false
+let savedViewCriteria = {
+  ...DEFAULT_SAVED_VIEW_CRITERIA,
+}
+let activeSavedViewPreset = 'custom'
+let pendingGoogleSyncWriteTimer = null
+let pendingGoogleSyncInitPromise = null
+let isApplyingRemoteSyncState = false
+const googleSyncState = {
+  spreadsheetId: localStorage.getItem(GOOGLE_SYNC_SPREADSHEET_ID_STORAGE_KEY) || '',
+  spreadsheetUrl: '',
+  isReady: false,
+  isSyncing: false,
+  error: '',
+  lastSyncedAt: '',
+}
 const googleAuth = useGoogleAuth({ clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID })
 
 function openSettings() {
@@ -271,7 +323,7 @@ form.addEventListener('submit', async (event) => {
   await importBlueprintData()
 })
 
-void importBlueprintData()
+initializeBlueprintDataFromCache()
 
 function initializeGoogleAuthUi() {
   if (!googleAuthContainer) {
@@ -279,8 +331,11 @@ function initializeGoogleAuthUi() {
   }
 
   renderGoogleAuthUi(googleAuth.getState())
+  void handleGoogleAuthStateChange(googleAuth.getState())
+
   googleAuth.subscribe((state) => {
     renderGoogleAuthUi(state)
+    void handleGoogleAuthStateChange(state)
   })
 }
 
@@ -292,9 +347,25 @@ function renderGoogleAuthUi(state) {
   const signOutDisabled = state.isLoading || state.isAuthenticating || !state.isAuthenticated
 
   if (state.isAuthenticated) {
+    const syncLabel = googleSyncState.lastSyncedAt
+      ? `Last sync: ${new Date(googleSyncState.lastSyncedAt).toLocaleString()}`
+      : 'Connected. Ready to sync.'
+    const syncDisabled = googleSyncState.isSyncing || !googleSyncState.isReady
+
     googleAuthContainer.innerHTML = `
-      <button type="button" class="auth-button auth-button-secondary" data-auth-action="sign-out" ${signOutDisabled ? 'disabled' : ''}>Sign Out</button>
+      <div class="auth-controls">
+        <button type="button" class="auth-button" data-auth-action="sync-now" ${syncDisabled ? 'disabled' : ''}>${googleSyncState.isSyncing ? 'Syncing…' : 'Sync Now'}</button>
+        <button type="button" class="auth-button auth-button-secondary" data-auth-action="sign-out" ${signOutDisabled ? 'disabled' : ''}>Sign Out</button>
+      </div>
+      <p class="settings-copy sync-caption">${escapeHtml(syncLabel)}</p>
+      ${googleSyncState.error ? `<p class="settings-copy sync-caption sync-error">${escapeHtml(googleSyncState.error)}</p>` : ''}
     `
+
+    const syncNowButton = googleAuthContainer.querySelector('[data-auth-action="sync-now"]')
+    syncNowButton?.addEventListener('click', async () => {
+      await syncFromGoogleSheet()
+    })
+
     const signOutButton = googleAuthContainer.querySelector('[data-auth-action="sign-out"]')
     signOutButton?.addEventListener('click', async () => {
       await googleAuth.signOut()
@@ -316,6 +387,324 @@ function renderGoogleAuthUi(state) {
   }
 }
 
+async function handleGoogleAuthStateChange(state) {
+  if (!state?.isAuthenticated || !state?.accessToken) {
+    googleSyncState.isReady = false
+    googleSyncState.error = ''
+    googleSyncState.isSyncing = false
+    pendingGoogleSyncInitPromise = null
+    renderGoogleAuthUi(state)
+    return
+  }
+
+  if (!googleSyncState.isReady && !googleSyncState.isSyncing) {
+    await initializeGoogleSync(state.accessToken)
+  }
+}
+
+async function initializeGoogleSync(accessToken) {
+  if (pendingGoogleSyncInitPromise) {
+    await pendingGoogleSyncInitPromise
+    return
+  }
+
+  pendingGoogleSyncInitPromise = (async () => {
+    try {
+      googleSyncState.isSyncing = true
+      googleSyncState.error = ''
+      renderGoogleAuthUi(googleAuth.getState())
+
+      const ensured = await ensureUserSyncSpreadsheet(accessToken, googleSyncState.spreadsheetId)
+      googleSyncState.spreadsheetId = ensured.spreadsheetId
+      googleSyncState.spreadsheetUrl = ensured.spreadsheetUrl
+      localStorage.setItem(GOOGLE_SYNC_SPREADSHEET_ID_STORAGE_KEY, ensured.spreadsheetId)
+
+      const remote = await readSyncTables(accessToken, ensured.spreadsheetId)
+      if (hasRemoteSyncData(remote)) {
+        applyRemoteSyncState(remote)
+      } else if (hasLocalUserData()) {
+        await pushLocalStateToGoogleSheet(accessToken)
+      }
+
+      googleSyncState.isReady = true
+      googleSyncState.lastSyncedAt = new Date().toISOString()
+      renderGoogleAuthUi(googleAuth.getState())
+    } catch (error) {
+      googleSyncState.error = error?.message || 'Unable to initialize Google Sheet sync.'
+      googleSyncState.isReady = false
+      console.error(error)
+      renderGoogleAuthUi(googleAuth.getState())
+    } finally {
+      googleSyncState.isSyncing = false
+      renderGoogleAuthUi(googleAuth.getState())
+    }
+  })()
+
+  try {
+    await pendingGoogleSyncInitPromise
+  } finally {
+    pendingGoogleSyncInitPromise = null
+  }
+}
+
+async function syncFromGoogleSheet() {
+  const authState = googleAuth.getState()
+  if (!authState?.isAuthenticated || !authState?.accessToken) {
+    return
+  }
+
+  try {
+    await initializeGoogleSync(authState.accessToken)
+    googleSyncState.isSyncing = true
+    googleSyncState.error = ''
+    renderGoogleAuthUi(authState)
+
+    const remote = await readSyncTables(authState.accessToken, googleSyncState.spreadsheetId)
+    applyRemoteSyncState(remote)
+    googleSyncState.lastSyncedAt = new Date().toISOString()
+    renderGoogleAuthUi(googleAuth.getState())
+    updateStatus('Synced user data from Google Sheet.', 'info')
+  } catch (error) {
+    googleSyncState.error = error?.message || 'Unable to sync from Google Sheet.'
+    renderGoogleAuthUi(googleAuth.getState())
+    console.error(error)
+  } finally {
+    googleSyncState.isSyncing = false
+    renderGoogleAuthUi(googleAuth.getState())
+  }
+}
+
+function hasRemoteSyncData(remote) {
+  if (!remote || typeof remote !== 'object') {
+    return false
+  }
+
+  return ['settings', 'savedViews', 'trackedUpgrades', 'blueprintProgress']
+    .some((key) => Array.isArray(remote[key]) && remote[key].length > 0)
+}
+
+function hasLocalUserData() {
+  return (
+    Boolean(savedFilterViews.length) ||
+    Boolean(trackedUpgradeKeys.size) ||
+    Boolean(Object.keys(blueprintProgressByName).length) ||
+    Boolean(localStorage.getItem(FONT_PREFERENCE_STORAGE_KEY)) ||
+    Boolean(localStorage.getItem(THEME_PREFERENCE_STORAGE_KEY))
+  )
+}
+
+function applyRemoteSyncState(remoteTables) {
+  isApplyingRemoteSyncState = true
+
+  try {
+    const settings = parseSettingsRows(remoteTables.settings)
+    const nextTheme = settings.theme
+    const nextFont = settings.font
+    if (nextTheme) {
+      applyTheme(nextTheme, { skipSync: true })
+    }
+    if (nextFont) {
+      applyFontPreference(nextFont, { skipSync: true })
+    }
+
+    savedFilterViews = parseSavedViewsRows(remoteTables.savedViews)
+    hasLoadedSavedFilterViews = true
+    localStorage.setItem(SAVED_FILTER_VIEWS_STORAGE_KEY, JSON.stringify(savedFilterViews))
+
+    trackedUpgradeKeys = new Set(parseTrackedUpgradeRows(remoteTables.trackedUpgrades))
+    localStorage.setItem(TRACKED_UPGRADES_STORAGE_KEY, JSON.stringify([...trackedUpgradeKeys]))
+
+    blueprintProgressByName = parseBlueprintProgressRows(remoteTables.blueprintProgress)
+    localStorage.setItem(BLUEPRINT_PROGRESS_STORAGE_KEY, JSON.stringify(blueprintProgressByName))
+  } finally {
+    isApplyingRemoteSyncState = false
+  }
+
+  if (allBlueprintItems.length) {
+    renderSavedViews(allBlueprintItems)
+  }
+}
+
+function scheduleGoogleSyncWrite() {
+  if (isApplyingRemoteSyncState) {
+    return
+  }
+
+  const authState = googleAuth.getState()
+  if (!authState?.isAuthenticated || !authState?.accessToken) {
+    return
+  }
+
+  if (!googleSyncState.isReady || !googleSyncState.spreadsheetId) {
+    return
+  }
+
+  if (pendingGoogleSyncWriteTimer) {
+    window.clearTimeout(pendingGoogleSyncWriteTimer)
+  }
+
+  pendingGoogleSyncWriteTimer = window.setTimeout(() => {
+    pendingGoogleSyncWriteTimer = null
+    void pushLocalStateToGoogleSheet(authState.accessToken)
+  }, GOOGLE_SYNC_WRITE_DEBOUNCE_MS)
+}
+
+async function pushLocalStateToGoogleSheet(accessToken) {
+  if (!googleSyncState.spreadsheetId) {
+    return
+  }
+
+  try {
+    googleSyncState.isSyncing = true
+    googleSyncState.error = ''
+    renderGoogleAuthUi(googleAuth.getState())
+
+    await writeSyncTables(accessToken, googleSyncState.spreadsheetId, {
+      settings: buildSettingsRows(),
+      savedViews: buildSavedViewsRows(),
+      trackedUpgrades: buildTrackedUpgradeRows(),
+      blueprintProgress: buildBlueprintProgressRows(),
+    })
+
+    googleSyncState.lastSyncedAt = new Date().toISOString()
+  } catch (error) {
+    googleSyncState.error = error?.message || 'Unable to save user data to Google Sheet.'
+    console.error(error)
+  } finally {
+    googleSyncState.isSyncing = false
+    renderGoogleAuthUi(googleAuth.getState())
+  }
+}
+
+function buildSettingsRows() {
+  return [
+    ['theme', getStoredTheme()],
+    ['font', getStoredFontPreference()],
+  ]
+}
+
+function parseSettingsRows(rows = []) {
+  return rows.reduce((result, row) => {
+    const key = cleanText(row?.[0]).toLowerCase()
+    const value = cleanText(row?.[1])
+    if (key && value) {
+      result[key] = value
+    }
+    return result
+  }, {})
+}
+
+function buildSavedViewsRows() {
+  ensureSavedFilterViewsLoaded()
+
+  return savedFilterViews.map((view) => ([
+    view.id,
+    view.name,
+    view.criteria?.dependency || 'any',
+    view.criteria?.ownership || 'any',
+    view.criteria?.inventory || 'any',
+    view.criteria?.collection || 'any',
+  ]))
+}
+
+function parseSavedViewsRows(rows = []) {
+  return rows
+    .map((row) => {
+      const id = cleanText(row?.[0])
+      const name = cleanText(row?.[1])
+
+      if (!id || !name) {
+        return null
+      }
+
+      return {
+        id,
+        name,
+        criteria: {
+          dependency: cleanText(row?.[2]) || 'any',
+          ownership: cleanText(row?.[3]) || 'any',
+          inventory: cleanText(row?.[4]) || 'any',
+          collection: cleanText(row?.[5]) || 'any',
+        },
+      }
+    })
+    .filter(Boolean)
+}
+
+function buildTrackedUpgradeRows() {
+  return [...trackedUpgradeKeys].map((key) => [key])
+}
+
+function parseTrackedUpgradeRows(rows = []) {
+  return rows
+    .map((row) => cleanText(row?.[0]))
+    .filter(Boolean)
+}
+
+function buildBlueprintProgressRows() {
+  return Object.entries(blueprintProgressByName)
+    .map(([blueprintName, progress]) => {
+      const name = cleanText(blueprintName)
+      if (!name) {
+        return null
+      }
+
+      return [
+        name,
+        progress?.owned ? 'TRUE' : 'FALSE',
+        progress?.master ? 'TRUE' : 'FALSE',
+        String(toInventoryCount(progress?.inventory?.normal)),
+        String(toInventoryCount(progress?.inventory?.superior)),
+        String(toInventoryCount(progress?.inventory?.flawless)),
+        String(toInventoryCount(progress?.inventory?.epic)),
+        String(toInventoryCount(progress?.inventory?.legendary)),
+        progress?.collectionBook?.superior ? 'TRUE' : 'FALSE',
+        progress?.collectionBook?.flawless ? 'TRUE' : 'FALSE',
+        progress?.collectionBook?.epic ? 'TRUE' : 'FALSE',
+        progress?.collectionBook?.legendary ? 'TRUE' : 'FALSE',
+      ]
+    })
+    .filter(Boolean)
+}
+
+function parseBlueprintProgressRows(rows = []) {
+  return rows.reduce((result, row) => {
+    const blueprintName = cleanText(row?.[0])
+    if (!blueprintName) {
+      return result
+    }
+
+    result[blueprintName] = {
+      owned: parseBooleanCell(row?.[1]),
+      master: parseBooleanCell(row?.[2]),
+      inventory: {
+        normal: toInventoryCount(row?.[3]),
+        superior: toInventoryCount(row?.[4]),
+        flawless: toInventoryCount(row?.[5]),
+        epic: toInventoryCount(row?.[6]),
+        legendary: toInventoryCount(row?.[7]),
+      },
+      collectionBook: {
+        superior: parseBooleanCell(row?.[8]),
+        flawless: parseBooleanCell(row?.[9]),
+        epic: parseBooleanCell(row?.[10]),
+        legendary: parseBooleanCell(row?.[11]),
+      },
+    }
+
+    return result
+  }, {})
+}
+
+function parseBooleanCell(value) {
+  if (typeof value === 'boolean') {
+    return value
+  }
+
+  const normalized = String(value || '').trim().toLowerCase()
+  return normalized === 'true' || normalized === '1' || normalized === 'yes'
+}
+
 function updateStatus(message, tone = 'info') {
   statusEl.textContent = message
   statusEl.className = `status ${tone}`
@@ -323,20 +712,87 @@ function updateStatus(message, tone = 'info') {
 
 async function importBlueprintData() {
   try {
-    updateStatus('Resolving the latest spreadsheet…')
+    const authState = googleAuth.getState()
+    if (authState?.isAuthenticated && authState?.accessToken) {
+      try {
+        await initializeGoogleSync(authState.accessToken)
+        const remote = await readSyncTables(authState.accessToken, googleSyncState.spreadsheetId)
+        applyRemoteSyncState(remote)
+      } catch (syncError) {
+        console.warn('Google sync refresh failed. Continuing with blueprint download.', syncError)
+      }
+    }
+
+    updateStatus('Checking the latest Shop Titans spreadsheet link…')
     const resolvedUrl = await resolveSpreadsheetUrl(DEFAULT_SPREADSHEET_URL)
     const exportUrl = buildExportUrl(resolvedUrl)
 
-    updateStatus('Loading Blueprint data…')
+    updateStatus('Downloading blueprints…')
     const { headers, rows, structuredBlueprints } = await importGoogleSheet(exportUrl)
+    saveBlueprintCache({ headers, rows, structuredBlueprints })
+    allBlueprintItems = buildBlueprintItems(headers, rows, structuredBlueprints)
 
     renderPreview(headers, rows, structuredBlueprints)
-    updateStatus('')
+    renderSavedViews(allBlueprintItems)
+    updateStatus(`Blueprints downloaded (${allBlueprintItems.length} items).`, 'info')
     closeSettings()
   } catch (error) {
     console.error(error)
     updateStatus(error.message || 'The spreadsheet could not be imported.', 'error')
     previewEl.innerHTML = ''
+    if (savedViewsContentEl) {
+      savedViewsContentEl.innerHTML = '<p class="empty-state">No blueprint data available yet.</p>'
+    }
+  }
+}
+
+function initializeBlueprintDataFromCache() {
+  const cached = loadBlueprintCache()
+
+  if (!cached) {
+    updateStatus('No local blueprint snapshot yet. Open Settings and click Download Blueprints.', 'info')
+    previewEl.innerHTML = '<p class="empty">No blueprint data downloaded yet.</p>'
+    if (savedViewsContentEl) {
+      savedViewsContentEl.innerHTML = '<p class="empty-state">No blueprint data available yet.</p>'
+    }
+    return
+  }
+
+  const { headers = [], rows = [], structuredBlueprints = [], downloadedAt = '' } = cached
+  allBlueprintItems = buildBlueprintItems(headers, rows, structuredBlueprints)
+  renderPreview(headers, rows, structuredBlueprints)
+  renderSavedViews(allBlueprintItems)
+
+  const stampedAt = downloadedAt ? new Date(downloadedAt).toLocaleString() : 'unknown time'
+  updateStatus(`Loaded cached blueprints (${allBlueprintItems.length} items, ${stampedAt}).`, 'info')
+}
+
+function saveBlueprintCache(payload) {
+  const safePayload = {
+    headers: Array.isArray(payload?.headers) ? payload.headers : [],
+    rows: Array.isArray(payload?.rows) ? payload.rows : [],
+    structuredBlueprints: Array.isArray(payload?.structuredBlueprints) ? payload.structuredBlueprints : [],
+    downloadedAt: new Date().toISOString(),
+  }
+
+  localStorage.setItem(BLUEPRINT_CACHE_STORAGE_KEY, JSON.stringify(safePayload))
+}
+
+function loadBlueprintCache() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(BLUEPRINT_CACHE_STORAGE_KEY) || 'null')
+    if (!parsed || typeof parsed !== 'object') {
+      return null
+    }
+
+    if (!Array.isArray(parsed.headers) || !Array.isArray(parsed.rows) || !Array.isArray(parsed.structuredBlueprints)) {
+      return null
+    }
+
+    return parsed
+  } catch (error) {
+    console.warn('Unable to read blueprint cache.', error)
+    return null
   }
 }
 
@@ -345,21 +801,26 @@ function openBlueprintOverlay(item) {
   const structuredData = item.structuredData || {}
   const progress = getBlueprintProgressState(item.name)
   const owned = Boolean(progress.owned)
-  const workerSummary = Array.isArray(structuredData.workers) && structuredData.workers.length
-    ? structuredData.workers.map((worker) => worker.name).filter(Boolean).join(', ')
-    : 'No worker requirement listed'
+  const blueprintState = {
+    own: owned,
+    master: Boolean(progress.master),
+    inventory: progress.inventory || {},
+    collectionBook: progress.collectionBook || {},
+    materials: structuredData.materials || {},
+  }
+  const totalInventory = calculateTotalInventory(blueprintState)
+  const collectionStatus = getCollectionBookStatus(blueprintState)
   const tierValue = structuredData.meta?.tier ? String(structuredData.meta.tier) : '—'
-  const value = structuredData.economy?.value ? formatValue(structuredData.economy.value) : '—'
-  const craftingTime = structuredData.economy?.craftingTimeSeconds ? `${formatValue(structuredData.economy.craftingTimeSeconds)}s` : '—'
   const unlockPrerequisite = structuredData.meta?.unlockPrerequisite ? structuredData.meta.unlockPrerequisite : '—'
-  const statsMarkup = renderStatsCards(structuredData.stats)
+  const overviewStats = buildOverviewStats(structuredData, {
+    owned,
+    unlockPrerequisite,
+  })
+  const statsMarkup = renderStatsCards(overviewStats)
   const materialsMarkup = renderMaterialsSection(structuredData.materials)
   const upgradesMarkup = renderUpgradeSection(structuredData.upgrades, item.name, owned)
-  const milestoneKeys = getBlueprintMilestoneKeys(item.name, structuredData.upgrades?.crafting || [])
-  const milestonesReady = owned && milestoneKeys.length > 0 && milestoneKeys.every((key) => trackedUpgradeKeys.has(key))
-  const canSubmitCollection = owned && milestonesReady
   const inventoryMarkup = renderInventorySection(progress)
-  const collectionMarkup = renderCollectionSection(progress, canSubmitCollection)
+  const collectionMarkup = renderCollectionSection(progress, owned)
 
   blueprintOverlayContent.innerHTML = `
     <div class="overlay-hero">
@@ -382,17 +843,31 @@ function openBlueprintOverlay(item) {
 
     <div class="overlay-grid">
       <div class="overlay-card">
-        <h4>Quick look</h4>
-        <ul class="info-list">
-          <li><strong>Workers</strong> ${escapeHtml(workerSummary)}</li>
-          <li><strong>Value</strong> ${escapeHtml(value)}</li>
-          <li><strong>Craft time</strong> ${escapeHtml(craftingTime)}</li>
-          <li><strong>Unlock</strong> ${escapeHtml(unlockPrerequisite)}</li>
-        </ul>
+        <details class="overlay-section" open>
+          <summary class="section-summary">
+            <div class="section-summary-title">
+              <h4>Quick look</h4>
+            </div>
+          </summary>
+          <div class="section-body">
+            <ul class="info-list">
+              <li><strong>Total inventory</strong> ${escapeHtml(totalInventory)}</li>
+              <li><strong>Collection</strong> ${escapeHtml(collectionStatus || 'Not started')}</li>
+            </ul>
+          </div>
+        </details>
       </div>
       <div class="overlay-card">
-        <h4>Stats</h4>
-        <div class="info-grid">${statsMarkup}</div>
+        <details class="overlay-section" open>
+          <summary class="section-summary">
+            <div class="section-summary-title">
+              <h4>Stats</h4>
+            </div>
+          </summary>
+          <div class="section-body">
+            <div class="info-grid">${statsMarkup}</div>
+          </div>
+        </details>
       </div>
     </div>
 
@@ -447,14 +922,10 @@ function openBlueprintOverlay(item) {
           <div class="section-summary-title">
             <h4>Collection Book</h4>
           </div>
-          <div class="section-summary-actions">
-            <span class="section-hint">${canSubmitCollection ? 'Ready to submit' : 'Mastered milestone required'}</span>
-            <button class="submit-collection" type="button" ${canSubmitCollection ? '' : 'disabled'}>${canSubmitCollection ? 'Submit' : 'Submit'}</button>
-          </div>
+          <span class="section-hint">${owned ? 'Track qualities' : 'Mark blueprint as Owned first'}</span>
         </summary>
         <div class="section-body">
           <div class="collection-grid">${collectionMarkup}</div>
-          <p class="collection-status">${canSubmitCollection ? 'Ready to submit' : 'Own the blueprint and complete all 5 Milestones to unlock submission.'}</p>
         </div>
       </details>
     </div>
@@ -462,7 +933,7 @@ function openBlueprintOverlay(item) {
 
   renderLucideIcons(blueprintOverlayContent)
 
-  blueprintOverlayContent.querySelectorAll('.owned-toggle input, .submit-collection').forEach((control) => {
+  blueprintOverlayContent.querySelectorAll('.owned-toggle input').forEach((control) => {
     control.addEventListener('click', (event) => {
       event.stopPropagation()
     })
@@ -492,16 +963,6 @@ function openBlueprintOverlay(item) {
     input.addEventListener('change', (event) => {
       const target = event.currentTarget
       persistBlueprintCollection(item.name, target.dataset.qualityKey, target.checked)
-    })
-  })
-
-  blueprintOverlayContent.querySelectorAll('.submit-collection').forEach((button) => {
-    button.addEventListener('click', () => {
-      const collectionMessage = document.querySelector('.collection-status')
-      if (collectionMessage) {
-        collectionMessage.textContent = 'Saved to Collection Book.'
-      }
-      persistBlueprintCollectionStatus(item.name, true)
     })
   })
 
@@ -613,33 +1074,531 @@ function renderInventorySection(progress = {}) {
     const value = progress.inventory?.[key] ?? 0
     const qualityClass = getQualityClass(label)
     return `
-      <label class="inventory-field ${qualityClass}">
-        <span>${escapeHtml(label)}</span>
-        <input class="quality-input" type="number" min="0" step="1" value="${value}" data-quality-key="${escapeHtml(key)}" />
+      <label class="inventory-field inventory-color-only ${qualityClass}" title="${escapeHtml(label)}">
+        <input class="quality-input" aria-label="${escapeHtml(label)} quality inventory" type="number" min="0" step="1" value="${value}" data-quality-key="${escapeHtml(key)}" />
       </label>
     `
   }).join('')
 }
 
-function renderCollectionSection(progress = {}, canSubmitCollection = false) {
+function renderCollectionSection(progress = {}, isOwned = false) {
   const qualities = ['superior', 'flawless', 'epic', 'legendary']
   const collectionValues = progress.collectionBook || {}
 
   return `
-    <div class="collection-notice">${canSubmitCollection ? 'Submission enabled.' : 'Own the blueprint and complete all 5 Milestones first.'}</div>
+    <div class="collection-notice">${isOwned ? 'Checked = complete in your collection book.' : 'Set Owned to enable this section.'}</div>
     <div class="inventory-grid">
       ${qualities.map((key) => {
         const label = key.charAt(0).toUpperCase() + key.slice(1)
         const qualityClass = getQualityClass(label)
         return `
-          <label class="inventory-field collection-toggle-field ${qualityClass}">
-            <span>${escapeHtml(label)}</span>
-            <input class="collection-input" type="checkbox" data-quality-key="${escapeHtml(key)}" ${collectionValues[key] ? 'checked' : ''} ${canSubmitCollection ? '' : 'disabled'} />
+          <label class="inventory-field collection-toggle-field ${qualityClass}" title="${escapeHtml(label)}">
+            <input class="collection-input" aria-label="${escapeHtml(label)} collection status" type="checkbox" data-quality-key="${escapeHtml(key)}" ${collectionValues[key] ? 'checked' : ''} ${isOwned ? '' : 'disabled'} />
           </label>
         `
       }).join('')}
     </div>
   `
+}
+
+function renderSavedViews(items = []) {
+  ensureSavedFilterViewsLoaded()
+
+  if (!savedViewsContentEl) {
+    return
+  }
+
+  if (!Array.isArray(items) || !items.length) {
+    savedViewsContentEl.innerHTML = '<p class="empty-state">No blueprint data available yet.</p>'
+    return
+  }
+
+  const dependencyIndex = buildDependencyIndex(items)
+  const filteredItems = filterBlueprintItems(items, savedViewCriteria, dependencyIndex)
+  const totalCount = items.length
+
+  savedViewsContentEl.innerHTML = `
+    <div class="saved-views-toolbar overlay-card">
+      <div class="saved-view-presets">
+        ${STARTER_VIEW_PRESETS.map((preset) => `
+          <button
+            type="button"
+            class="saved-view-preset ${activeSavedViewPreset === `starter:${preset.id}` ? 'is-active' : ''}"
+            data-starter-view-preset="${escapeHtml(preset.id)}"
+          >${escapeHtml(preset.label)}</button>
+        `).join('')}
+      </div>
+      ${renderSavedFilterViews()}
+    </div>
+
+    <div class="saved-views-toolbar overlay-card">
+      <details class="overlay-section" open>
+        <summary class="section-summary">
+          <div class="section-summary-title">
+            <h4>Filters</h4>
+          </div>
+          <span class="group-count">${filteredItems.length}/${totalCount}</span>
+        </summary>
+        <div class="section-body">
+          <div class="saved-view-filters">
+            <label class="saved-view-filter">
+              <span>Dependency</span>
+              <select data-saved-filter="dependency">
+                ${renderSelectOptions([
+                  ['any', 'Any'],
+                  ['parent', 'Dependent'],
+                  ['child', 'Needed'],
+                  ['none', 'No dependency relation'],
+                ], savedViewCriteria.dependency)}
+              </select>
+            </label>
+            <label class="saved-view-filter">
+              <span>Ownership</span>
+              <select data-saved-filter="ownership">
+                ${renderSelectOptions([
+                  ['any', 'Any'],
+                  ['owned', 'Owned'],
+                  ['not-owned', 'Not owned'],
+                ], savedViewCriteria.ownership)}
+              </select>
+            </label>
+            <label class="saved-view-filter">
+              <span>Inventory</span>
+              <select data-saved-filter="inventory">
+                ${renderSelectOptions([
+                  ['any', 'Any'],
+                  ['has', 'Inventory > 0'],
+                  ['none', 'Inventory = 0'],
+                ], savedViewCriteria.inventory)}
+              </select>
+            </label>
+            <label class="saved-view-filter">
+              <span>Collection</span>
+              <select data-saved-filter="collection">
+                ${renderSelectOptions([
+                  ['any', 'Any'],
+                  ['complete', 'Complete'],
+                  ['incomplete', 'Incomplete'],
+                ], savedViewCriteria.collection)}
+              </select>
+            </label>
+          </div>
+          <form class="saved-view-save-row" data-save-view-form>
+            <input type="text" maxlength="60" placeholder="View Name (e.g. Not Owned + Dependents)" data-saved-view-name />
+            <button type="submit" class="saved-view-save-button">Save New View</button>
+          </form>
+        </div>
+      </details>
+    </div>
+
+    <div class="saved-view-results overlay-card">
+      <details class="overlay-section" open>
+        <summary class="section-summary">
+          <div class="section-summary-title">
+            <h4>Results</h4>
+          </div>
+          <span class="group-count">${filteredItems.length}</span>
+        </summary>
+        <div class="section-body">
+          ${renderSavedViewResults(filteredItems, dependencyIndex)}
+        </div>
+      </details>
+    </div>
+  `
+
+  bindSavedViewControls(items)
+  renderLucideIcons(savedViewsContentEl)
+}
+
+function renderSavedViewResults(items = [], dependencyIndex) {
+  if (!items.length) {
+    return '<p class="empty-state">No blueprints match this criteria set.</p>'
+  }
+
+  const grouped = new Map()
+
+  items.forEach((item) => {
+    const category = item?.classification?.category || 'Accessories'
+    const type = item?.classification?.type || 'Unknown'
+    const categoryTypeKey = `${category}::${type}`
+
+    if (!grouped.has(categoryTypeKey)) {
+      grouped.set(categoryTypeKey, {
+        category,
+        type,
+        items: [],
+      })
+    }
+
+    grouped.get(categoryTypeKey).items.push(item)
+  })
+
+  return Array.from(grouped.values()).map((group) => {
+    const listMarkup = group.items.map((item) => {
+      const summary = buildBlueprintSummary(item, dependencyIndex)
+      const dependencyText = buildDependencySummaryLine(summary)
+      const collectionText = summary.isCollectionComplete ? 'Collection Complete' : `Collection ${summary.collectionStatus || 'Not started'}`
+      const ownershipText = summary.isOwned ? 'Owned' : 'Not Owned'
+
+      return `
+        <li class="resource-item dependency-item saved-view-item" data-blueprint-name="${escapeHtml(item.name)}">
+          <span>
+            <strong>${escapeHtml(item.name)}</strong><br>
+            <small>${escapeHtml(`${ownershipText} · Inventory ${summary.totalInventory} · ${collectionText}`)}</small><br>
+            <small>${escapeHtml(dependencyText)}</small>
+          </span>
+        </li>
+      `
+    }).join('')
+
+    return `
+      <details class="blueprint-type" open>
+        <summary>
+          <span class="group-summary-title">
+            <span class="icon-slot group-summary-icon" aria-hidden="true"><i data-lucide="${escapeHtml(getTypeIconName(group.type, group.category))}"></i></span>
+            <span>${escapeHtml(group.category)} > ${escapeHtml(group.type)}</span>
+          </span>
+          <span class="group-count">${group.items.length}</span>
+        </summary>
+        <ul class="material-list dependency-list">${listMarkup}</ul>
+      </details>
+    `
+  }).join('')
+}
+
+function bindSavedViewControls(items = []) {
+  if (!savedViewsContentEl) {
+    return
+  }
+
+  savedViewsContentEl.querySelectorAll('[data-starter-view-preset]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const presetId = button.dataset.starterViewPreset
+      applyStarterViewPreset(presetId, items)
+    })
+  })
+
+  savedViewsContentEl.querySelectorAll('[data-saved-filter-view-id]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const viewId = button.dataset.savedFilterViewId
+      applySavedFilterView(viewId, items)
+    })
+  })
+
+  savedViewsContentEl.querySelectorAll('[data-delete-saved-filter-view-id]').forEach((button) => {
+    button.addEventListener('click', (event) => {
+      event.stopPropagation()
+      const viewId = button.dataset.deleteSavedFilterViewId
+      deleteSavedFilterView(viewId)
+      renderSavedViews(items)
+    })
+  })
+
+  savedViewsContentEl.querySelectorAll('[data-saved-filter]').forEach((select) => {
+    select.addEventListener('change', (event) => {
+      const target = event.currentTarget
+      const key = target.dataset.savedFilter
+      if (!key) {
+        return
+      }
+
+      savedViewCriteria = {
+        ...savedViewCriteria,
+        [key]: target.value,
+      }
+
+      activeSavedViewPreset = 'custom'
+      renderSavedViews(items)
+    })
+  })
+
+  const saveViewForm = savedViewsContentEl.querySelector('[data-save-view-form]')
+  if (saveViewForm) {
+    saveViewForm.addEventListener('submit', (event) => {
+      event.preventDefault()
+      const nameInput = savedViewsContentEl.querySelector('[data-saved-view-name]')
+      const nextName = cleanText(nameInput?.value)
+
+      if (!nextName) {
+        return
+      }
+
+      const savedView = saveCurrentFilterAsView(nextName)
+      activeSavedViewPreset = `saved:${savedView.id}`
+      renderSavedViews(items)
+    })
+  }
+
+  savedViewsContentEl.querySelectorAll('.saved-view-item').forEach((node) => {
+    node.addEventListener('click', () => {
+      const blueprintName = node.getAttribute('data-blueprint-name')
+      const item = items.find((entry) => entry.name === blueprintName)
+      if (item) {
+        openBlueprintOverlay(item)
+      }
+    })
+  })
+}
+
+function applyStarterViewPreset(presetId, items = []) {
+  const preset = STARTER_VIEW_PRESETS.find((entry) => entry.id === presetId)
+  if (!preset) {
+    return
+  }
+
+  activeSavedViewPreset = `starter:${preset.id}`
+  savedViewCriteria = {
+    ...DEFAULT_SAVED_VIEW_CRITERIA,
+    ...preset.criteria,
+  }
+
+  renderSavedViews(items)
+}
+
+function applySavedFilterView(viewId, items = []) {
+  const view = savedFilterViews.find((entry) => entry.id === viewId)
+  if (!view) {
+    return
+  }
+
+  activeSavedViewPreset = `saved:${view.id}`
+  savedViewCriteria = {
+    ...DEFAULT_SAVED_VIEW_CRITERIA,
+    ...(view.criteria || {}),
+  }
+
+  renderSavedViews(items)
+}
+
+function renderSavedFilterViews() {
+  if (!savedFilterViews.length) {
+    return ''
+  }
+
+  return `
+    <div class="saved-filter-list">
+      ${savedFilterViews.map((view) => `
+        <div class="saved-filter-row">
+          <button
+            type="button"
+            class="saved-view-preset ${activeSavedViewPreset === `saved:${view.id}` ? 'is-active' : ''}"
+            data-saved-filter-view-id="${escapeHtml(view.id)}"
+          >${escapeHtml(view.name)}</button>
+          <button
+            type="button"
+            class="saved-view-delete"
+            data-delete-saved-filter-view-id="${escapeHtml(view.id)}"
+            aria-label="Delete ${escapeHtml(view.name)}"
+          >×</button>
+        </div>
+      `).join('')}
+    </div>
+  `
+}
+
+function renderSelectOptions(options = [], selectedValue = 'any') {
+  return options.map(([value, label]) => {
+    const selected = value === selectedValue ? 'selected' : ''
+    return `<option value="${escapeHtml(value)}" ${selected}>${escapeHtml(label)}</option>`
+  }).join('')
+}
+
+function buildDependencyIndex(items = []) {
+  const dependentsByComponent = new Map()
+
+  items.forEach((item) => {
+    const components = getBlueprintMaterials(item).components || []
+
+    components.forEach((component) => {
+      const componentName = normalizeBlueprintName(component?.name)
+      if (!componentName) {
+        return
+      }
+
+      if (!dependentsByComponent.has(componentName)) {
+        dependentsByComponent.set(componentName, new Set())
+      }
+
+      dependentsByComponent.get(componentName).add(item.name)
+    })
+  })
+
+  return {
+    dependentsByComponent,
+  }
+}
+
+function filterBlueprintItems(items = [], criteria = {}, dependencyIndex) {
+  return items.filter((item) => {
+    const summary = buildBlueprintSummary(item, dependencyIndex)
+
+    if (criteria.dependency === 'parent' && !summary.isParentDependency) {
+      return false
+    }
+
+    if (criteria.dependency === 'child' && !summary.isChildDependency) {
+      return false
+    }
+
+    if (criteria.dependency === 'none' && (summary.isParentDependency || summary.isChildDependency)) {
+      return false
+    }
+
+    if (criteria.ownership === 'owned' && !summary.isOwned) {
+      return false
+    }
+
+    if (criteria.ownership === 'not-owned' && summary.isOwned) {
+      return false
+    }
+
+    if (criteria.inventory === 'has' && !summary.hasInventory) {
+      return false
+    }
+
+    if (criteria.inventory === 'none' && summary.hasInventory) {
+      return false
+    }
+
+    if (criteria.collection === 'complete' && !summary.isCollectionComplete) {
+      return false
+    }
+
+    if (criteria.collection === 'incomplete' && summary.isCollectionComplete) {
+      return false
+    }
+
+    return true
+  })
+}
+
+function buildBlueprintSummary(item, dependencyIndex) {
+  const progress = getBlueprintProgressState(item.name)
+  const blueprintState = {
+    own: Boolean(progress.owned),
+    master: Boolean(progress.master),
+    inventory: progress.inventory || {},
+    collectionBook: progress.collectionBook || {},
+    materials: getBlueprintMaterials(item),
+  }
+
+  const normalizedName = normalizeBlueprintName(item.name)
+  const dependentSet = dependencyIndex?.dependentsByComponent?.get(normalizedName)
+  const dependentNames = dependentSet ? [...dependentSet] : []
+  const totalInventory = calculateTotalInventory(blueprintState)
+  const collectionStatus = getCollectionBookStatus(blueprintState)
+
+  return {
+    isOwned: Boolean(progress.owned),
+    isParentDependency: hasCraftingComponents(item),
+    isChildDependency: dependentNames.length > 0,
+    dependentNames,
+    hasInventory: totalInventory > 0,
+    totalInventory,
+    isCollectionComplete: collectionStatus === '✅ Complete',
+    collectionStatus,
+  }
+}
+
+function buildDependencySummaryLine(summary = {}) {
+  const parts = []
+
+  if (summary.isParentDependency) {
+    parts.push('Dependent')
+  }
+
+  if (summary.isChildDependency) {
+    const dependentCount = summary.dependentNames?.length || 0
+    parts.push(`Needed (${dependentCount})`)
+  }
+
+  if (!parts.length) {
+    return 'No dependency relation'
+  }
+
+  return parts.join(' · ')
+}
+
+function loadSavedFilterViews() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(SAVED_FILTER_VIEWS_STORAGE_KEY) || '[]')
+    if (!Array.isArray(stored)) {
+      return []
+    }
+
+    return stored
+      .map((entry) => {
+        const id = cleanText(entry?.id)
+        const name = cleanText(entry?.name)
+        if (!id || !name) {
+          return null
+        }
+
+        return {
+          id,
+          name,
+          criteria: {
+            ...DEFAULT_SAVED_VIEW_CRITERIA,
+            ...(entry.criteria || {}),
+          },
+        }
+      })
+      .filter(Boolean)
+  } catch (error) {
+    console.warn('Unable to load saved filter views.', error)
+    return []
+  }
+}
+
+function ensureSavedFilterViewsLoaded() {
+  if (hasLoadedSavedFilterViews) {
+    return
+  }
+
+  savedFilterViews = loadSavedFilterViews()
+  hasLoadedSavedFilterViews = true
+}
+
+function saveSavedFilterViews() {
+  localStorage.setItem(SAVED_FILTER_VIEWS_STORAGE_KEY, JSON.stringify(savedFilterViews))
+  scheduleGoogleSyncWrite()
+}
+
+function saveCurrentFilterAsView(name) {
+  const normalizedName = name.toLowerCase()
+  const existing = savedFilterViews.find((entry) => entry.name.toLowerCase() === normalizedName)
+
+  if (existing) {
+    existing.criteria = {
+      ...savedViewCriteria,
+    }
+    saveSavedFilterViews()
+    return existing
+  }
+
+  const nextView = {
+    id: `view-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    name,
+    criteria: {
+      ...savedViewCriteria,
+    },
+  }
+
+  savedFilterViews = [nextView, ...savedFilterViews]
+  saveSavedFilterViews()
+  return nextView
+}
+
+function deleteSavedFilterView(viewId) {
+  if (!viewId) {
+    return
+  }
+
+  savedFilterViews = savedFilterViews.filter((entry) => entry.id !== viewId)
+  if (activeSavedViewPreset === `saved:${viewId}`) {
+    activeSavedViewPreset = 'custom'
+  }
+  saveSavedFilterViews()
 }
 
 function loadTrackedUpgradeKeys() {
@@ -652,8 +1611,19 @@ function loadTrackedUpgradeKeys() {
   }
 }
 
+function loadBlueprintProgressMap() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(BLUEPRINT_PROGRESS_STORAGE_KEY) || '{}')
+    return stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {}
+  } catch (error) {
+    console.warn('Unable to load blueprint progress.', error)
+    return {}
+  }
+}
+
 function saveTrackedUpgradeKeys() {
   localStorage.setItem(TRACKED_UPGRADES_STORAGE_KEY, JSON.stringify([...trackedUpgradeKeys]))
+  scheduleGoogleSyncWrite()
 }
 
 function toggleTrackedUpgrade(key) {
@@ -679,26 +1649,17 @@ function getBlueprintMilestoneKeys(blueprintName, entries = []) {
 }
 
 function getBlueprintProgressState(blueprintName) {
-  try {
-    const stored = JSON.parse(localStorage.getItem(BLUEPRINT_PROGRESS_STORAGE_KEY) || '{}')
-    return stored[blueprintName] || {}
-  } catch (error) {
-    console.warn('Unable to load blueprint progress.', error)
-    return {}
-  }
+  return blueprintProgressByName[blueprintName] || {}
 }
 
 function saveBlueprintProgressState(blueprintName, updates) {
-  try {
-    const stored = JSON.parse(localStorage.getItem(BLUEPRINT_PROGRESS_STORAGE_KEY) || '{}')
-    stored[blueprintName] = {
-      ...(stored[blueprintName] || {}),
-      ...updates,
-    }
-    localStorage.setItem(BLUEPRINT_PROGRESS_STORAGE_KEY, JSON.stringify(stored))
-  } catch (error) {
-    console.warn('Unable to save blueprint progress.', error)
+  blueprintProgressByName[blueprintName] = {
+    ...(blueprintProgressByName[blueprintName] || {}),
+    ...updates,
   }
+
+  localStorage.setItem(BLUEPRINT_PROGRESS_STORAGE_KEY, JSON.stringify(blueprintProgressByName))
+  scheduleGoogleSyncWrite()
 }
 
 function persistBlueprintOwnership(blueprintName, owned) {
@@ -742,6 +1703,123 @@ function persistBlueprintCollectionStatus(blueprintName, submitted) {
   saveBlueprintProgressState(blueprintName, { collectionSubmitted: submitted })
 }
 
+function buildOverviewStats(structuredData = {}, options = {}) {
+  const baseStats = {
+    ...(structuredData?.stats || {}),
+  }
+
+  const value = structuredData?.economy?.value
+  const craftingTimeSeconds = structuredData?.economy?.craftingTimeSeconds
+
+  if (value !== undefined) {
+    baseStats.value = value
+  }
+
+  if (craftingTimeSeconds !== undefined) {
+    baseStats.craftingTime = `${formatValue(craftingTimeSeconds)}s`
+  }
+
+  const unlockPrerequisite = cleanText(options.unlockPrerequisite)
+  if (!options.owned && unlockPrerequisite && /chest/i.test(unlockPrerequisite)) {
+    baseStats.unlock = unlockPrerequisite
+  }
+
+  return baseStats
+}
+
+function calculateTotalInventory(blueprint) {
+  const inventory = blueprint?.inventory || {}
+
+  return INVENTORY_QUALITY_KEYS.reduce((total, qualityKey) => {
+    return total + toInventoryCount(inventory[qualityKey])
+  }, 0)
+}
+
+function isQualityDone(blueprint, quality) {
+  if (!isBlueprintOwned(blueprint)) {
+    return false
+  }
+
+  if (!Boolean(blueprint?.master)) {
+    return toInventoryCount(blueprint?.inventory?.[quality]) > 0
+  }
+
+  return blueprint?.collectionBook?.[quality] === true
+}
+
+function getCollectionBookStatus(blueprint) {
+  if (!isBlueprintOwned(blueprint)) {
+    return ''
+  }
+
+  for (const quality of COLLECTION_BOOK_QUALITY_ORDER) {
+    if (!isQualityDone(blueprint, quality)) {
+      return formatQualityLabel(quality)
+    }
+  }
+
+  return '✅ Complete'
+}
+
+function hasCraftingComponents(blueprint) {
+  const materials = getBlueprintMaterials(blueprint)
+  const components = Array.isArray(materials.components) ? materials.components : []
+
+  return components.some((component) => cleanText(component?.name))
+}
+
+function getDependentBlueprints(blueprintName, allBlueprints = []) {
+  const target = normalizeBlueprintName(blueprintName)
+  if (!target || !Array.isArray(allBlueprints)) {
+    return []
+  }
+
+  return allBlueprints.filter((blueprint) => {
+    if (!hasCraftingComponents(blueprint)) {
+      return false
+    }
+
+    const materials = getBlueprintMaterials(blueprint)
+    const components = Array.isArray(materials.components) ? materials.components : []
+
+    return components.some((component) => normalizeBlueprintName(component?.name) === target)
+  })
+}
+
+function getBlueprintMaterials(blueprint) {
+  if (blueprint?.structuredData?.materials) {
+    return blueprint.structuredData.materials
+  }
+
+  if (blueprint?.materials) {
+    return blueprint.materials
+  }
+
+  return {}
+}
+
+function isBlueprintOwned(blueprint) {
+  return Boolean(blueprint?.own ?? blueprint?.owned)
+}
+
+function toInventoryCount(value) {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return 0
+  }
+
+  return parsed
+}
+
+function formatQualityLabel(quality) {
+  const normalized = String(quality || '').trim().toLowerCase()
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1)
+}
+
+function normalizeBlueprintName(value) {
+  return cleanText(value).toLowerCase()
+}
+
 function formatStatLabel(key) {
   const labelMap = {
     atk: 'ATK',
@@ -753,6 +1831,9 @@ function formatStatLabel(key) {
     spiritAffinity: 'Spirit Affinity',
     builtInElement: 'Built-In Element',
     builtInSpirit: 'Built-In Spirit',
+    value: 'Value',
+    craftingTime: 'Craft Time',
+    unlock: 'Unlock',
   }
 
   return labelMap[key] || String(key)
@@ -1032,7 +2113,8 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;')
 }
 
-function applyTheme(theme) {
+function applyTheme(theme, options = {}) {
+  const skipSync = Boolean(options.skipSync)
   const resolvedTheme = theme === 'light' || theme === 'dark' ? theme : 'device'
   const isDark = resolvedTheme === 'dark' || (resolvedTheme === 'device' && window.matchMedia('(prefers-color-scheme: dark)').matches)
 
@@ -1045,10 +2127,14 @@ function applyTheme(theme) {
     selectedInput.checked = true
   }
 
-  localStorage.setItem('shopkeeper-theme', resolvedTheme)
+  localStorage.setItem(THEME_PREFERENCE_STORAGE_KEY, resolvedTheme)
+  if (!skipSync) {
+    scheduleGoogleSyncWrite()
+  }
 }
 
-function applyFontPreference(fontPreference) {
+function applyFontPreference(fontPreference, options = {}) {
+  const skipSync = Boolean(options.skipSync)
   const resolvedFont = ['default', 'serif', 'sans'].includes(fontPreference) ? fontPreference : 'default'
   document.documentElement.dataset.fontPreference = resolvedFont
 
@@ -1057,10 +2143,13 @@ function applyFontPreference(fontPreference) {
   }
 
   localStorage.setItem(FONT_PREFERENCE_STORAGE_KEY, resolvedFont)
+  if (!skipSync) {
+    scheduleGoogleSyncWrite()
+  }
 }
 
 function getStoredTheme() {
-  return localStorage.getItem('shopkeeper-theme') || 'device'
+  return localStorage.getItem(THEME_PREFERENCE_STORAGE_KEY) || 'device'
 }
 
 function getStoredFontPreference() {
@@ -1276,13 +2365,7 @@ function renderPreview(headers, rows, structuredBlueprints = []) {
 }
 
 function buildBlueprintGroups(headers, rows, structuredBlueprints = []) {
-  const nameIndex = getColumnIndex(headers, 'Name', 'Item Name', 'Blueprint Name')
-  const typeIndex = getColumnIndex(headers, 'Type', 'Item Type', 'Category')
-  const tierIndex = getColumnIndex(headers, 'Tier', 'Rank', 'Level')
-
-  const resolvedNameIndex = nameIndex >= 0 ? nameIndex : 0
-  const resolvedTypeIndex = typeIndex >= 0 ? typeIndex : 1
-  const resolvedTierIndex = tierIndex >= 0 ? tierIndex : -1
+  const items = buildBlueprintItems(headers, rows, structuredBlueprints)
 
   const categoryMaps = CATEGORY_DEFINITIONS.map((definition) => ({
     title: definition.title,
@@ -1290,24 +2373,14 @@ function buildBlueprintGroups(headers, rows, structuredBlueprints = []) {
     typeGroups: new Map(),
   }))
 
-  rows.forEach((row, rowIndex) => {
-    const name = getCellValue(row, resolvedNameIndex)
-    const type = getCellValue(row, resolvedTypeIndex)
-    const tier = getCellValue(row, resolvedTierIndex)
-    const structuredData = structuredBlueprints[rowIndex] || {}
-
-    if (!name) {
-      return
-    }
-
-    const classification = classifyBlueprint(type, name)
-    const group = categoryMaps.find((entry) => entry.title === classification.category)
+  items.forEach((item) => {
+    const group = categoryMaps.find((entry) => entry.title === item.classification.category)
 
     if (!group) {
       return
     }
 
-    const normalizedType = classification.type || type || 'Unknown'
+    const normalizedType = item.classification.type || 'Unknown'
     const typeKey = normalizedType.toLowerCase()
     let typeGroup = group.typeGroups.get(typeKey)
 
@@ -1319,12 +2392,7 @@ function buildBlueprintGroups(headers, rows, structuredBlueprints = []) {
       group.typeGroups.set(typeKey, typeGroup)
     }
 
-    typeGroup.items.push({
-      name,
-      meta: tier ? `Tier ${tier}` : 'No tier',
-      structuredData,
-      classification,
-    })
+    typeGroup.items.push(item)
   })
 
   return categoryMaps.map((group) => {
@@ -1349,6 +2417,39 @@ function buildBlueprintGroups(headers, rows, structuredBlueprints = []) {
       types: orderedTypes,
     }
   }).filter((group) => group.totalItems > 0)
+}
+
+function buildBlueprintItems(headers, rows, structuredBlueprints = []) {
+  const nameIndex = getColumnIndex(headers, 'Name', 'Item Name', 'Blueprint Name')
+  const typeIndex = getColumnIndex(headers, 'Type', 'Item Type', 'Category')
+  const tierIndex = getColumnIndex(headers, 'Tier', 'Rank', 'Level')
+
+  const resolvedNameIndex = nameIndex >= 0 ? nameIndex : 0
+  const resolvedTypeIndex = typeIndex >= 0 ? typeIndex : 1
+  const resolvedTierIndex = tierIndex >= 0 ? tierIndex : -1
+
+  const items = []
+
+  rows.forEach((row, rowIndex) => {
+    const name = getCellValue(row, resolvedNameIndex)
+    const type = getCellValue(row, resolvedTypeIndex)
+    const tier = getCellValue(row, resolvedTierIndex)
+    const structuredData = structuredBlueprints[rowIndex] || {}
+
+    if (!name) {
+      return
+    }
+
+    const classification = classifyBlueprint(type, name)
+    items.push({
+      name,
+      meta: tier ? `Tier ${tier}` : 'No tier',
+      structuredData,
+      classification,
+    })
+  })
+
+  return items
 }
 
 function convertBlueprintRowToObject(headers, row) {
