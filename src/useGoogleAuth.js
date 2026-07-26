@@ -1,5 +1,5 @@
 const GOOGLE_IDENTITY_SCRIPT = 'https://accounts.google.com/gsi/client'
-const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets'
+const SHEETS_SCOPE = 'https://www.googleapis.com/auth/drive.file'
 
 let gisScriptPromise = null
 

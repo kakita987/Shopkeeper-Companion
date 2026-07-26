@@ -4,6 +4,7 @@ import { ensureUserSyncSpreadsheet, readSyncTables, writeSyncTables } from './go
 import { createIcons, Axe, BadgeAlert, BadgeHelp, BadgeInfo, BowArrow, CakeSlice, Candy, CandyCane, CircleDashed, Clover, Coffee, Crosshair, Diamond, Drumstick, FlaskConical, FlaskRound, Footprints, Gem, Hand, HandMetal, HardHat, HatGlasses, Leaf, MoonStar, Music2, Package, PackageOpen, PartyPopper, PillBottle, Pizza, Salad, ScrollText, Shield, Shirt, Sandwich, Sparkles, Swords, Sword, Target, UtensilsCrossed, Wand, WandSparkles, Apple, Fish, SunMedium, Cherry, Cookie } from 'lucide'
 
 const DEFAULT_SPREADSHEET_URL = 'https://playshoptitans.com/spreadsheet'
+const FALLBACK_GOOGLE_SHEET_URL = import.meta.env.VITE_BLUEPRINT_SHEET_URL || 'https://docs.google.com/spreadsheets/d/1WLa7X8h3O0-aGKxeAlCL7bnN8-FhGd3t7pz2RCzSg8c/edit'
 
 const CATEGORY_DEFINITIONS = [
   {
@@ -2158,15 +2159,45 @@ function getStoredFontPreference() {
 
 async function resolveSpreadsheetUrl(rawUrl) {
   const normalizedUrl = normalizeUrl(rawUrl)
+
+  if (!import.meta.env.DEV) {
+    // Production deployments (for example static Vercel) may not provide /api/resolve.
+    // Try to follow redirects directly, then fall back to the known official sheet URL.
+    if (/docs\.google\.com\/spreadsheets\/d\//i.test(normalizedUrl)) {
+      return normalizedUrl
+    }
+
+    try {
+      const directResponse = await fetch(normalizedUrl, {
+        redirect: 'follow',
+      })
+      if (directResponse?.url && /docs\.google\.com\/spreadsheets\/d\//i.test(directResponse.url)) {
+        return directResponse.url
+      }
+    } catch (error) {
+      console.warn('Direct production spreadsheet URL resolve failed; using fallback URL.', error)
+    }
+
+    return FALLBACK_GOOGLE_SHEET_URL
+  }
+
   const proxyUrl = `/api/resolve?url=${encodeURIComponent(normalizedUrl)}`
   const response = await fetch(proxyUrl)
 
   if (!response.ok) {
+    if (!/docs\.google\.com\/spreadsheets\/d\//i.test(normalizedUrl)) {
+      return FALLBACK_GOOGLE_SHEET_URL
+    }
     throw new Error(`The spreadsheet link returned ${response.status}.`)
   }
 
   const resolved = await response.text()
-  return resolved.trim()
+  const nextUrl = resolved.trim()
+  if (!nextUrl) {
+    return FALLBACK_GOOGLE_SHEET_URL
+  }
+
+  return nextUrl
 }
 
 function normalizeUrl(rawUrl) {
