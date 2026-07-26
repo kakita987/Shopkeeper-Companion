@@ -207,7 +207,6 @@ export function useGoogleAuth({ clientId }) {
 
   return {
     getState: () => ({ ...state }),
-    isAuthenticated: () => Boolean(state.isAuthenticated),
     subscribe,
     renderSignInButton,
     signIn,

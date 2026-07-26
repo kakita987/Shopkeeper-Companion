@@ -197,6 +197,7 @@ app.innerHTML = `
         <section class="settings-section">
           <h3>Blueprint Sync</h3>
           <p class="settings-copy">Download the latest blueprints when you choose, then browse locally.</p>
+          <p id="blueprint-version" class="settings-copy blueprint-version"></p>
 
           <form id="import-form" class="import-form compact-form">
             <button type="submit">Download Blueprints</button>
@@ -228,6 +229,7 @@ const fontSelect = document.querySelector('#font-select')
 const statusEl = document.querySelector('#status')
 const previewEl = document.querySelector('#preview')
 const savedViewsContentEl = document.querySelector('#saved-views-content')
+const blueprintVersionEl = document.querySelector('#blueprint-version')
 const blueprintOverlay = document.querySelector('#blueprint-overlay')
 const blueprintOverlayContent = document.querySelector('#blueprint-overlay-content')
 const googleAuthContainer = document.querySelector('#google-auth')
@@ -245,6 +247,7 @@ let activeSavedViewPreset = 'custom'
 let pendingGoogleSyncWriteTimer = null
 let pendingGoogleSyncInitPromise = null
 let isApplyingRemoteSyncState = false
+let blueprintVersionLabel = ''
 const googleSyncState = {
   spreadsheetId: localStorage.getItem(GOOGLE_SYNC_SPREADSHEET_ID_STORAGE_KEY) || '',
   spreadsheetUrl: '',
@@ -747,11 +750,14 @@ async function importBlueprintData() {
     updateStatus('Checking the latest Shop Titans spreadsheet link…')
     const resolvedUrl = await resolveSpreadsheetUrl(DEFAULT_SPREADSHEET_URL)
     const exportUrl = buildExportUrl(resolvedUrl)
+    const versionLabel = await fetchSpreadsheetVersionLabel(resolvedUrl)
 
     updateStatus('Downloading blueprints…')
     const { headers, rows, structuredBlueprints } = await importGoogleSheet(exportUrl)
-    saveBlueprintCache({ headers, rows, structuredBlueprints })
+    blueprintVersionLabel = versionLabel || blueprintVersionLabel
+    saveBlueprintCache({ headers, rows, structuredBlueprints, versionLabel: blueprintVersionLabel })
     allBlueprintItems = buildBlueprintItems(headers, rows, structuredBlueprints)
+    renderBlueprintVersionLabel(blueprintVersionLabel)
 
     renderPreview(headers, rows, structuredBlueprints)
     renderSavedViews(allBlueprintItems)
@@ -769,6 +775,8 @@ async function importBlueprintData() {
 
 function initializeBlueprintDataFromCache() {
   const cached = loadBlueprintCache()
+  blueprintVersionLabel = cached?.versionLabel || ''
+  renderBlueprintVersionLabel(blueprintVersionLabel)
 
   if (!cached) {
     updateStatus('No local blueprint snapshot yet. Open Settings and click Download Blueprints.', 'info')
@@ -779,13 +787,11 @@ function initializeBlueprintDataFromCache() {
     return
   }
 
-  const { headers = [], rows = [], structuredBlueprints = [], downloadedAt = '' } = cached
+  const { headers = [], rows = [], structuredBlueprints = [] } = cached
   allBlueprintItems = buildBlueprintItems(headers, rows, structuredBlueprints)
   renderPreview(headers, rows, structuredBlueprints)
   renderSavedViews(allBlueprintItems)
-
-  const stampedAt = downloadedAt ? new Date(downloadedAt).toLocaleString() : 'unknown time'
-  updateStatus(`Loaded cached blueprints (${allBlueprintItems.length} items, ${stampedAt}).`, 'info')
+  updateStatus('', 'info')
 }
 
 function saveBlueprintCache(payload) {
@@ -793,10 +799,56 @@ function saveBlueprintCache(payload) {
     headers: Array.isArray(payload?.headers) ? payload.headers : [],
     rows: Array.isArray(payload?.rows) ? payload.rows : [],
     structuredBlueprints: Array.isArray(payload?.structuredBlueprints) ? payload.structuredBlueprints : [],
-    downloadedAt: new Date().toISOString(),
+    versionLabel: typeof payload?.versionLabel === 'string' ? payload.versionLabel : '',
   }
 
   localStorage.setItem(BLUEPRINT_CACHE_STORAGE_KEY, JSON.stringify(safePayload))
+}
+
+function renderBlueprintVersionLabel(versionLabel) {
+  if (!blueprintVersionEl) {
+    return
+  }
+
+  blueprintVersionEl.innerHTML = versionLabel
+    ? `Current data version: <strong>${escapeHtml(versionLabel)}</strong>`
+    : 'Current data version: <strong>Not downloaded yet</strong>'
+}
+
+async function fetchSpreadsheetVersionLabel(resolvedUrl) {
+  try {
+    const response = await fetch(resolvedUrl, { redirect: 'follow' })
+    if (!response.ok) {
+      return ''
+    }
+
+    const html = await response.text()
+    const titleMatch = html.match(/<title>([^<]+)<\/title>/i)
+    const title = titleMatch?.[1]?.trim() || ''
+    return extractSpreadsheetVersionLabel(title)
+  } catch (error) {
+    console.warn('Unable to read spreadsheet title.', error)
+    return ''
+  }
+}
+
+function extractSpreadsheetVersionLabel(title) {
+  const normalizedTitle = String(title || '').trim()
+  if (!normalizedTitle) {
+    return ''
+  }
+
+  const versionMatch = normalizedTitle.match(/\|\s*c:\s*(.+?)(?:\s*-\s*Google Sheets)?$/i)
+  if (versionMatch?.[1]) {
+    return versionMatch[1].trim()
+  }
+
+  const parts = normalizedTitle.split('|')
+  if (parts.length > 1) {
+    return parts[parts.length - 1].trim().replace(/\s*-\s*Google Sheets$/i, '')
+  }
+
+  return normalizedTitle.replace(/\s*-\s*Google Sheets$/i, '')
 }
 
 function loadBlueprintCache() {
@@ -1978,227 +2030,11 @@ function closeBlueprintOverlay() {
 function getBlueprintVisuals(item) {
   const category = item?.classification?.category || 'Accessories'
   const type = item?.classification?.type || item?.structuredData?.meta?.type || ''
-  const itemAsset = getItemAsset(item?.name || '', type, category)
-  const iconAsset = itemAsset || getTypeIconAsset(type, item?.name || '', category)
-  const categoryAsset = getCategoryBackgroundAsset(category)
 
   return {
     category,
     type,
-    iconAsset,
-    categoryAsset,
   }
-}
-
-function getCategoryVisuals(category) {
-  switch (category) {
-    case 'Weapons':
-      return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_weapons_landscape_selected.png' }
-    case 'Armor':
-      return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_armor_landscape_selected.png' }
-    case 'Accessories':
-      return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_accessories_landscape_selected.png' }
-    case 'Enchantments':
-      return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_enchantment_landscape_selected.png' }
-    default:
-      return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_all_landscape_selected.png' }
-  }
-}
-
-function getTypeGroupVisuals(typeTitle, category) {
-  const haystack = `${typeTitle || ''}`.toLowerCase()
-
-  if (/sword/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_weapons_landscape_selected.png' }
-  }
-
-  if (/axe/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_weapons_landscape_selected.png' }
-  }
-
-  if (/dagger/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_weapons_landscape_selected.png' }
-  }
-
-  if (/mace/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_weapons_landscape_selected.png' }
-  }
-
-  if (/spear/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_weapons_landscape_selected.png' }
-  }
-
-  if (/bow/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_weapons_landscape_selected.png' }
-  }
-
-  if (/wand/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_weapons_landscape_selected.png' }
-  }
-
-  if (/staff/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_weapons_landscape_selected.png' }
-  }
-
-  if (/crossbow/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_weapons_landscape_selected.png' }
-  }
-
-  if (/shield/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_accessories_landscape_selected.png' }
-  }
-
-  if (/cloak/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_accessories_landscape_selected.png' }
-  }
-
-  if (/ring/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_accessories_landscape_selected.png' }
-  }
-
-  if (/amulet/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_accessories_landscape_selected.png' }
-  }
-
-  if (/familiar/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_accessories_landscape_selected.png' }
-  }
-
-  if (/potion|herbal|remedy|herb/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_accessories_landscape_selected.png' }
-  }
-
-  if (/spell|scroll/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_accessories_landscape_selected.png' }
-  }
-
-  if (/spirit/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_enchantment_landscape_selected.png' }
-  }
-
-  if (/element/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_enchantment_landscape_selected.png' }
-  }
-
-  if (category === 'Enchantments') {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_enchantment_landscape_selected.png' }
-  }
-
-  if (category === 'Armor') {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_armor_landscape_selected.png' }
-  }
-
-  if (category === 'Weapons') {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_weapons_landscape_selected.png' }
-  }
-
-  return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_all_landscape_selected.png' }
-}
-
-function getCategoryBackgroundAsset(category) {
-  switch (category) {
-    case 'Weapons':
-      return '/Fan Kit Assets (Shop Titans)/Blueprint Types/Backgrounds/img_card_circle_blueprint_blue.png'
-    case 'Armor':
-      return '/Fan Kit Assets (Shop Titans)/Blueprint Types/Backgrounds/img_card_circle_blueprint_chest.png'
-    case 'Accessories':
-      return '/Fan Kit Assets (Shop Titans)/Blueprint Types/Backgrounds/img_card_circle_blueprint_artifact.png'
-    case 'Enchantments':
-      return '/Fan Kit Assets (Shop Titans)/Blueprint Types/Backgrounds/img_card_circle_blueprint_premium.png'
-    default:
-      return '/Fan Kit Assets (Shop Titans)/Blueprint Types/Backgrounds/img_card_circle_blueprint.png'
-  }
-}
-
-function getTypeIconAsset(type, name, category) {
-  return getItemAsset(name, type, category)
-}
-
-function getItemAsset(name, type, category) {
-  const haystack = `${type || ''} ${name || ''}`.toLowerCase()
-
-  if (category === 'Weapons') {
-    if (/crossbow|gun/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_crossbow_big.png'
-    }
-    if (/bow/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_bow_big.png'
-    }
-    if (/wand/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_wand_big.png'
-    }
-    if (/staff/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_staff_big.png'
-    }
-    if (/dagger/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_dagger_big.png'
-    }
-    if (/mace/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_mace_big.png'
-    }
-    if (/spear/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_spear_big.png'
-    }
-    if (/axe/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_axe_big.png'
-    }
-    return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_sword_big.png'
-  }
-
-  if (category === 'Armor') {
-    if (/helmet|hat/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_helmet_big.png'
-    }
-    if (/gauntlet|glove|bracer/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_gauntlets_big.png'
-    }
-    if (/shoe|boot|footwear/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_shoes_big.png'
-    }
-    if (/cloak/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_cloak_big.png'
-    }
-    return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_armorheavy_big.png'
-  }
-
-  if (category === 'Accessories') {
-    if (/potion|herb|remedy/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_potion_big.png'
-    }
-    if (/spell|scroll/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_scrolls_big.png'
-    }
-    if (/shield/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_shield_big.png'
-    }
-    if (/cloak/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_cloak_big.png'
-    }
-    if (/ring/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_ring_big.png'
-    }
-    if (/amulet/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_amulet_big.png'
-    }
-    if (/familiar/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_familiar_big.png'
-    }
-    return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_tag.png'
-  }
-
-  if (category === 'Enchantments') {
-    if (/spirit/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_spirit_big.png'
-    }
-    return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_element_big.png'
-  }
-
-  return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_tag.png'
-}
-
-function buildAssetSrc(path, fallbackPath = '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_tag.png') {
-  const resolvedPath = path && String(path).trim() ? path : fallbackPath
-  return encodeURI(resolvedPath)
 }
 
 function escapeHtml(value) {
