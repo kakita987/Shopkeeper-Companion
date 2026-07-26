@@ -38,7 +38,8 @@ const DEFAULT_SAVED_VIEW_CRITERIA = {
   dependency: 'any',
   ownership: 'any',
   inventory: 'any',
-  collection: 'any',
+  mastered: 'any',
+  collectionBook: [],
 }
 const STARTER_VIEW_PRESETS = [
   {
@@ -196,6 +197,7 @@ app.innerHTML = `
         <section class="settings-section">
           <h3>Blueprint Sync</h3>
           <p class="settings-copy">Download the latest blueprints when you choose, then browse locally.</p>
+          <p id="blueprint-version" class="settings-copy blueprint-version"></p>
 
           <form id="import-form" class="import-form compact-form">
             <button type="submit">Download Blueprints</button>
@@ -227,6 +229,7 @@ const fontSelect = document.querySelector('#font-select')
 const statusEl = document.querySelector('#status')
 const previewEl = document.querySelector('#preview')
 const savedViewsContentEl = document.querySelector('#saved-views-content')
+const blueprintVersionEl = document.querySelector('#blueprint-version')
 const blueprintOverlay = document.querySelector('#blueprint-overlay')
 const blueprintOverlayContent = document.querySelector('#blueprint-overlay-content')
 const googleAuthContainer = document.querySelector('#google-auth')
@@ -244,6 +247,7 @@ let activeSavedViewPreset = 'custom'
 let pendingGoogleSyncWriteTimer = null
 let pendingGoogleSyncInitPromise = null
 let isApplyingRemoteSyncState = false
+let blueprintVersionLabel = ''
 const googleSyncState = {
   spreadsheetId: localStorage.getItem(GOOGLE_SYNC_SPREADSHEET_ID_STORAGE_KEY) || '',
   spreadsheetUrl: '',
@@ -377,14 +381,17 @@ function renderGoogleAuthUi(state) {
   googleAuthContainer.innerHTML = '<div class="google-signin-slot" data-auth-signin-slot></div>'
   const signInSlot = googleAuthContainer.querySelector('[data-auth-signin-slot]')
   const renderedGoogleButton = googleAuth.renderSignInButton(signInSlot)
+  const authMessage = state.error ? `<p class="settings-copy sync-caption sync-error">${escapeHtml(state.error)}</p>` : ''
 
   if (!renderedGoogleButton) {
-    const isDisabled = state.isAuthenticating
-    googleAuthContainer.innerHTML = `<button type="button" class="auth-button" data-auth-action="sign-in" ${isDisabled ? 'disabled' : ''}>Sign in with Google</button>`
+    const isDisabled = state.isAuthenticating || state.clientIdMissing
+    googleAuthContainer.innerHTML = `<button type="button" class="auth-button" data-auth-action="sign-in" ${isDisabled ? 'disabled' : ''}>Sign in with Google</button>${authMessage}`
     const signInButton = googleAuthContainer.querySelector('[data-auth-action="sign-in"]')
     signInButton?.addEventListener('click', async () => {
       await googleAuth.signIn()
     })
+  } else if (authMessage) {
+    googleAuthContainer.insertAdjacentHTML('beforeend', authMessage)
   }
 }
 
@@ -604,7 +611,8 @@ function buildSavedViewsRows() {
     view.criteria?.dependency || 'any',
     view.criteria?.ownership || 'any',
     view.criteria?.inventory || 'any',
-    view.criteria?.collection || 'any',
+    view.criteria?.mastered || 'any',
+    JSON.stringify(view.criteria?.collectionBook || []),
   ]))
 }
 
@@ -625,11 +633,26 @@ function parseSavedViewsRows(rows = []) {
           dependency: cleanText(row?.[2]) || 'any',
           ownership: cleanText(row?.[3]) || 'any',
           inventory: cleanText(row?.[4]) || 'any',
-          collection: cleanText(row?.[5]) || 'any',
+          mastered: cleanText(row?.[5]) || 'any',
+          collectionBook: parseCollectionBookCriteria(row?.[6]),
         },
       }
     })
     .filter(Boolean)
+}
+
+function parseCollectionBookCriteria(value) {
+  const raw = cleanText(value)
+  if (!raw) {
+    return []
+  }
+
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch (error) {
+    return raw.split(',').map((entry) => cleanText(entry.toLowerCase())).filter(Boolean)
+  }
 }
 
 function buildTrackedUpgradeRows() {
@@ -727,11 +750,14 @@ async function importBlueprintData() {
     updateStatus('Checking the latest Shop Titans spreadsheet link…')
     const resolvedUrl = await resolveSpreadsheetUrl(DEFAULT_SPREADSHEET_URL)
     const exportUrl = buildExportUrl(resolvedUrl)
+    const versionLabel = await fetchSpreadsheetVersionLabel(resolvedUrl)
 
     updateStatus('Downloading blueprints…')
     const { headers, rows, structuredBlueprints } = await importGoogleSheet(exportUrl)
-    saveBlueprintCache({ headers, rows, structuredBlueprints })
+    blueprintVersionLabel = versionLabel || blueprintVersionLabel
+    saveBlueprintCache({ headers, rows, structuredBlueprints, versionLabel: blueprintVersionLabel })
     allBlueprintItems = buildBlueprintItems(headers, rows, structuredBlueprints)
+    renderBlueprintVersionLabel(blueprintVersionLabel)
 
     renderPreview(headers, rows, structuredBlueprints)
     renderSavedViews(allBlueprintItems)
@@ -749,6 +775,8 @@ async function importBlueprintData() {
 
 function initializeBlueprintDataFromCache() {
   const cached = loadBlueprintCache()
+  blueprintVersionLabel = cached?.versionLabel || ''
+  renderBlueprintVersionLabel(blueprintVersionLabel)
 
   if (!cached) {
     updateStatus('No local blueprint snapshot yet. Open Settings and click Download Blueprints.', 'info')
@@ -759,13 +787,11 @@ function initializeBlueprintDataFromCache() {
     return
   }
 
-  const { headers = [], rows = [], structuredBlueprints = [], downloadedAt = '' } = cached
+  const { headers = [], rows = [], structuredBlueprints = [] } = cached
   allBlueprintItems = buildBlueprintItems(headers, rows, structuredBlueprints)
   renderPreview(headers, rows, structuredBlueprints)
   renderSavedViews(allBlueprintItems)
-
-  const stampedAt = downloadedAt ? new Date(downloadedAt).toLocaleString() : 'unknown time'
-  updateStatus(`Loaded cached blueprints (${allBlueprintItems.length} items, ${stampedAt}).`, 'info')
+  updateStatus('', 'info')
 }
 
 function saveBlueprintCache(payload) {
@@ -773,10 +799,56 @@ function saveBlueprintCache(payload) {
     headers: Array.isArray(payload?.headers) ? payload.headers : [],
     rows: Array.isArray(payload?.rows) ? payload.rows : [],
     structuredBlueprints: Array.isArray(payload?.structuredBlueprints) ? payload.structuredBlueprints : [],
-    downloadedAt: new Date().toISOString(),
+    versionLabel: typeof payload?.versionLabel === 'string' ? payload.versionLabel : '',
   }
 
   localStorage.setItem(BLUEPRINT_CACHE_STORAGE_KEY, JSON.stringify(safePayload))
+}
+
+function renderBlueprintVersionLabel(versionLabel) {
+  if (!blueprintVersionEl) {
+    return
+  }
+
+  blueprintVersionEl.innerHTML = versionLabel
+    ? `Current data version: <strong>${escapeHtml(versionLabel)}</strong>`
+    : 'Current data version: <strong>Not downloaded yet</strong>'
+}
+
+async function fetchSpreadsheetVersionLabel(resolvedUrl) {
+  try {
+    const response = await fetch(resolvedUrl, { redirect: 'follow' })
+    if (!response.ok) {
+      return ''
+    }
+
+    const html = await response.text()
+    const titleMatch = html.match(/<title>([^<]+)<\/title>/i)
+    const title = titleMatch?.[1]?.trim() || ''
+    return extractSpreadsheetVersionLabel(title)
+  } catch (error) {
+    console.warn('Unable to read spreadsheet title.', error)
+    return ''
+  }
+}
+
+function extractSpreadsheetVersionLabel(title) {
+  const normalizedTitle = String(title || '').trim()
+  if (!normalizedTitle) {
+    return ''
+  }
+
+  const versionMatch = normalizedTitle.match(/\|\s*c:\s*(.+?)(?:\s*-\s*Google Sheets)?$/i)
+  if (versionMatch?.[1]) {
+    return versionMatch[1].trim()
+  }
+
+  const parts = normalizedTitle.split('|')
+  if (parts.length > 1) {
+    return parts[parts.length - 1].trim().replace(/\s*-\s*Google Sheets$/i, '')
+  }
+
+  return normalizedTitle.replace(/\s*-\s*Google Sheets$/i, '')
 }
 
 function loadBlueprintCache() {
@@ -1148,7 +1220,6 @@ function renderSavedViews(items = []) {
                 ${renderSelectOptions([
                   ['any', 'Any'],
                   ['parent', 'Dependent'],
-                  ['child', 'Needed'],
                   ['none', 'No dependency relation'],
                 ], savedViewCriteria.dependency)}
               </select>
@@ -1156,9 +1227,9 @@ function renderSavedViews(items = []) {
             <label class="saved-view-filter">
               <span>Ownership</span>
               <select data-saved-filter="ownership">
-                ${renderSelectOptions([
                   ['any', 'Any'],
                   ['owned', 'Owned'],
+                  ['any', 'Either'],
                   ['not-owned', 'Not owned'],
                 ], savedViewCriteria.ownership)}
               </select>
@@ -1166,22 +1237,28 @@ function renderSavedViews(items = []) {
             <label class="saved-view-filter">
               <span>Inventory</span>
               <select data-saved-filter="inventory">
-                ${renderSelectOptions([
-                  ['any', 'Any'],
-                  ['has', 'Inventory > 0'],
+                  ['any', 'Any Status'],
+                  ['has', 'Has Inventory'],
+                  ['none', 'Out of Stock'],
                   ['none', 'Inventory = 0'],
                 ], savedViewCriteria.inventory)}
               </select>
-            </label>
-            <label class="saved-view-filter">
-              <span>Collection</span>
-              <select data-saved-filter="collection">
+            <label class="saved-view-filter saved-view-filter-mastered">
+              <span>Mastered</span>
+              <select data-saved-filter="mastered">
                 ${renderSelectOptions([
-                  ['any', 'Any'],
-                  ['complete', 'Complete'],
-                  ['incomplete', 'Incomplete'],
-                ], savedViewCriteria.collection)}
+                  ['any', 'Any Status'],
+                  ['mastered', 'Mastered'],
+                  ['not-mastered', 'Not Mastered'],
+                ], savedViewCriteria.mastered)}
               </select>
+            </label>
+            <fieldset class="saved-view-filter saved-view-filter-multiselect">
+              <legend>Collection Book</legend>
+              <div class="collection-book-options">
+                ${renderCollectionBookFilterOptions(savedViewCriteria.collectionBook)}
+              </div>
+            </fieldset>
             </label>
           </div>
           <form class="saved-view-save-row" data-save-view-form>
@@ -1313,6 +1390,31 @@ function bindSavedViewControls(items = []) {
     })
   })
 
+  savedViewsContentEl.querySelectorAll('[data-saved-filter-book]').forEach((checkbox) => {
+    checkbox.addEventListener('change', (event) => {
+      const target = event.currentTarget
+      const quality = target.dataset.savedFilterBook
+      if (!quality) {
+        return
+      }
+
+      const nextCollectionBook = new Set(savedViewCriteria.collectionBook || [])
+      if (target.checked) {
+        nextCollectionBook.add(quality)
+      } else {
+        nextCollectionBook.delete(quality)
+      }
+
+      savedViewCriteria = {
+        ...savedViewCriteria,
+        collectionBook: [...nextCollectionBook],
+      }
+
+      activeSavedViewPreset = 'custom'
+      renderSavedViews(items)
+    })
+  })
+
   const saveViewForm = savedViewsContentEl.querySelector('[data-save-view-form]')
   if (saveViewForm) {
     saveViewForm.addEventListener('submit', (event) => {
@@ -1348,10 +1450,10 @@ function applyStarterViewPreset(presetId, items = []) {
   }
 
   activeSavedViewPreset = `starter:${preset.id}`
-  savedViewCriteria = {
+  savedViewCriteria = normalizeSavedViewCriteria({
     ...DEFAULT_SAVED_VIEW_CRITERIA,
     ...preset.criteria,
-  }
+  })
 
   renderSavedViews(items)
 }
@@ -1363,10 +1465,10 @@ function applySavedFilterView(viewId, items = []) {
   }
 
   activeSavedViewPreset = `saved:${view.id}`
-  savedViewCriteria = {
+  savedViewCriteria = normalizeSavedViewCriteria({
     ...DEFAULT_SAVED_VIEW_CRITERIA,
     ...(view.criteria || {}),
-  }
+  })
 
   renderSavedViews(items)
 }
@@ -1404,6 +1506,38 @@ function renderSelectOptions(options = [], selectedValue = 'any') {
   }).join('')
 }
 
+function renderCollectionBookFilterOptions(selectedValues = []) {
+  const normalizedSelected = new Set(Array.isArray(selectedValues) ? selectedValues.map((value) => String(value).toLowerCase()) : [])
+  const options = ['superior', 'flawless', 'epic', 'legendary']
+
+  return options.map((quality) => {
+    const label = formatQualityLabel(quality)
+    const isChecked = normalizedSelected.has(quality)
+    return `
+      <label class="collection-book-option">
+        <input type="checkbox" data-saved-filter-book="${escapeHtml(quality)}" ${isChecked ? 'checked' : ''} />
+        <span>${escapeHtml(label)}</span>
+      </label>
+    `
+  }).join('')
+}
+
+function normalizeSavedViewCriteria(criteria = {}) {
+  const collectionBook = Array.isArray(criteria.collectionBook)
+    ? criteria.collectionBook
+    : typeof criteria.collection === 'string' && criteria.collection !== 'any'
+      ? [criteria.collection]
+      : []
+
+  return {
+    dependency: ['any', 'parent', 'child'].includes(criteria.dependency) ? criteria.dependency : 'any',
+    ownership: ['owned', 'not-owned', 'any'].includes(criteria.ownership) ? criteria.ownership : 'any',
+    inventory: ['any', 'has', 'none'].includes(criteria.inventory) ? criteria.inventory : 'any',
+    mastered: ['any', 'mastered', 'not-mastered'].includes(criteria.mastered) ? criteria.mastered : 'any',
+    collectionBook: collectionBook.filter((value) => ['superior', 'flawless', 'epic', 'legendary'].includes(String(value).toLowerCase())),
+  }
+}
+
 function buildDependencyIndex(items = []) {
   const dependentsByComponent = new Map()
 
@@ -1430,43 +1564,48 @@ function buildDependencyIndex(items = []) {
 }
 
 function filterBlueprintItems(items = [], criteria = {}, dependencyIndex) {
+  const normalizedCriteria = normalizeSavedViewCriteria(criteria)
+
   return items.filter((item) => {
     const summary = buildBlueprintSummary(item, dependencyIndex)
 
-    if (criteria.dependency === 'parent' && !summary.isParentDependency) {
+    if (normalizedCriteria.dependency === 'parent' && !summary.isParentDependency) {
       return false
     }
 
-    if (criteria.dependency === 'child' && !summary.isChildDependency) {
+    if (normalizedCriteria.dependency === 'child' && !summary.isChildDependency) {
       return false
     }
 
-    if (criteria.dependency === 'none' && (summary.isParentDependency || summary.isChildDependency)) {
+    if (normalizedCriteria.ownership === 'owned' && !summary.isOwned) {
       return false
     }
 
-    if (criteria.ownership === 'owned' && !summary.isOwned) {
+    if (normalizedCriteria.ownership === 'not-owned' && summary.isOwned) {
       return false
     }
 
-    if (criteria.ownership === 'not-owned' && summary.isOwned) {
+    if (normalizedCriteria.inventory === 'has' && !summary.hasInventory) {
       return false
     }
 
-    if (criteria.inventory === 'has' && !summary.hasInventory) {
+    if (normalizedCriteria.inventory === 'none' && summary.hasInventory) {
       return false
     }
 
-    if (criteria.inventory === 'none' && summary.hasInventory) {
+    if (normalizedCriteria.mastered === 'mastered' && !summary.isMastered) {
       return false
     }
 
-    if (criteria.collection === 'complete' && !summary.isCollectionComplete) {
+    if (normalizedCriteria.mastered === 'not-mastered' && summary.isMastered) {
       return false
     }
 
-    if (criteria.collection === 'incomplete' && summary.isCollectionComplete) {
-      return false
+    if (normalizedCriteria.collectionBook.length) {
+      const collectionMatches = normalizedCriteria.collectionBook.some((quality) => summary.collectionBookQualities.includes(quality))
+      if (!collectionMatches) {
+        return false
+      }
     }
 
     return true
@@ -1475,6 +1614,7 @@ function filterBlueprintItems(items = [], criteria = {}, dependencyIndex) {
 
 function buildBlueprintSummary(item, dependencyIndex) {
   const progress = getBlueprintProgressState(item.name)
+  const craftingMilestones = Array.isArray(item?.structuredData?.upgrades?.crafting) ? item.structuredData.upgrades.crafting : []
   const blueprintState = {
     own: Boolean(progress.owned),
     master: Boolean(progress.master),
@@ -1488,9 +1628,14 @@ function buildBlueprintSummary(item, dependencyIndex) {
   const dependentNames = dependentSet ? [...dependentSet] : []
   const totalInventory = calculateTotalInventory(blueprintState)
   const collectionStatus = getCollectionBookStatus(blueprintState)
+  const isMastered = Boolean(progress.owned) && craftingMilestones.length >= 5 && getBlueprintMilestoneKeys(item.name, craftingMilestones.slice(0, 5)).every((key) => isTrackedUpgrade(key))
+  const collectionBookQualities = Object.entries(progress.collectionBook || {})
+    .filter(([, checked]) => Boolean(checked))
+    .map(([quality]) => quality)
 
   return {
     isOwned: Boolean(progress.owned),
+    isMastered,
     isParentDependency: hasCraftingComponents(item),
     isChildDependency: dependentNames.length > 0,
     dependentNames,
@@ -1498,6 +1643,7 @@ function buildBlueprintSummary(item, dependencyIndex) {
     totalInventory,
     isCollectionComplete: collectionStatus === '✅ Complete',
     collectionStatus,
+    collectionBookQualities,
   }
 }
 
@@ -1538,10 +1684,7 @@ function loadSavedFilterViews() {
         return {
           id,
           name,
-          criteria: {
-            ...DEFAULT_SAVED_VIEW_CRITERIA,
-            ...(entry.criteria || {}),
-          },
+          criteria: normalizeSavedViewCriteria(entry.criteria || {}),
         }
       })
       .filter(Boolean)
@@ -1563,6 +1706,7 @@ function ensureSavedFilterViewsLoaded() {
 function saveSavedFilterViews() {
   localStorage.setItem(SAVED_FILTER_VIEWS_STORAGE_KEY, JSON.stringify(savedFilterViews))
   scheduleGoogleSyncWrite()
+  refreshSavedViewsResults()
 }
 
 function saveCurrentFilterAsView(name) {
@@ -1570,9 +1714,7 @@ function saveCurrentFilterAsView(name) {
   const existing = savedFilterViews.find((entry) => entry.name.toLowerCase() === normalizedName)
 
   if (existing) {
-    existing.criteria = {
-      ...savedViewCriteria,
-    }
+    existing.criteria = normalizeSavedViewCriteria(savedViewCriteria)
     saveSavedFilterViews()
     return existing
   }
@@ -1580,9 +1722,7 @@ function saveCurrentFilterAsView(name) {
   const nextView = {
     id: `view-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     name,
-    criteria: {
-      ...savedViewCriteria,
-    },
+    criteria: normalizeSavedViewCriteria(savedViewCriteria),
   }
 
   savedFilterViews = [nextView, ...savedFilterViews]
@@ -1600,6 +1740,12 @@ function deleteSavedFilterView(viewId) {
     activeSavedViewPreset = 'custom'
   }
   saveSavedFilterViews()
+}
+
+function refreshSavedViewsResults() {
+  if (Array.isArray(allBlueprintItems) && allBlueprintItems.length) {
+    renderSavedViews(allBlueprintItems)
+  }
 }
 
 function loadTrackedUpgradeKeys() {
@@ -1625,6 +1771,7 @@ function loadBlueprintProgressMap() {
 function saveTrackedUpgradeKeys() {
   localStorage.setItem(TRACKED_UPGRADES_STORAGE_KEY, JSON.stringify([...trackedUpgradeKeys]))
   scheduleGoogleSyncWrite()
+  refreshSavedViewsResults()
 }
 
 function toggleTrackedUpgrade(key) {
@@ -1661,6 +1808,7 @@ function saveBlueprintProgressState(blueprintName, updates) {
 
   localStorage.setItem(BLUEPRINT_PROGRESS_STORAGE_KEY, JSON.stringify(blueprintProgressByName))
   scheduleGoogleSyncWrite()
+  refreshSavedViewsResults()
 }
 
 function persistBlueprintOwnership(blueprintName, owned) {
@@ -1882,227 +2030,11 @@ function closeBlueprintOverlay() {
 function getBlueprintVisuals(item) {
   const category = item?.classification?.category || 'Accessories'
   const type = item?.classification?.type || item?.structuredData?.meta?.type || ''
-  const itemAsset = getItemAsset(item?.name || '', type, category)
-  const iconAsset = itemAsset || getTypeIconAsset(type, item?.name || '', category)
-  const categoryAsset = getCategoryBackgroundAsset(category)
 
   return {
     category,
     type,
-    iconAsset,
-    categoryAsset,
   }
-}
-
-function getCategoryVisuals(category) {
-  switch (category) {
-    case 'Weapons':
-      return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_weapons_landscape_selected.png' }
-    case 'Armor':
-      return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_armor_landscape_selected.png' }
-    case 'Accessories':
-      return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_accessories_landscape_selected.png' }
-    case 'Enchantments':
-      return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_enchantment_landscape_selected.png' }
-    default:
-      return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_all_landscape_selected.png' }
-  }
-}
-
-function getTypeGroupVisuals(typeTitle, category) {
-  const haystack = `${typeTitle || ''}`.toLowerCase()
-
-  if (/sword/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_weapons_landscape_selected.png' }
-  }
-
-  if (/axe/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_weapons_landscape_selected.png' }
-  }
-
-  if (/dagger/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_weapons_landscape_selected.png' }
-  }
-
-  if (/mace/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_weapons_landscape_selected.png' }
-  }
-
-  if (/spear/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_weapons_landscape_selected.png' }
-  }
-
-  if (/bow/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_weapons_landscape_selected.png' }
-  }
-
-  if (/wand/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_weapons_landscape_selected.png' }
-  }
-
-  if (/staff/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_weapons_landscape_selected.png' }
-  }
-
-  if (/crossbow/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_weapons_landscape_selected.png' }
-  }
-
-  if (/shield/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_accessories_landscape_selected.png' }
-  }
-
-  if (/cloak/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_accessories_landscape_selected.png' }
-  }
-
-  if (/ring/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_accessories_landscape_selected.png' }
-  }
-
-  if (/amulet/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_accessories_landscape_selected.png' }
-  }
-
-  if (/familiar/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_accessories_landscape_selected.png' }
-  }
-
-  if (/potion|herbal|remedy|herb/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_accessories_landscape_selected.png' }
-  }
-
-  if (/spell|scroll/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_accessories_landscape_selected.png' }
-  }
-
-  if (/spirit/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_enchantment_landscape_selected.png' }
-  }
-
-  if (/element/i.test(haystack)) {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_enchantment_landscape_selected.png' }
-  }
-
-  if (category === 'Enchantments') {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_enchantment_landscape_selected.png' }
-  }
-
-  if (category === 'Armor') {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_armor_landscape_selected.png' }
-  }
-
-  if (category === 'Weapons') {
-    return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_weapons_landscape_selected.png' }
-  }
-
-  return { icon: '/Fan Kit Assets (Shop Titans)/Filter Types/icon_global_itemtype_all_landscape_selected.png' }
-}
-
-function getCategoryBackgroundAsset(category) {
-  switch (category) {
-    case 'Weapons':
-      return '/Fan Kit Assets (Shop Titans)/Blueprint Types/Backgrounds/img_card_circle_blueprint_blue.png'
-    case 'Armor':
-      return '/Fan Kit Assets (Shop Titans)/Blueprint Types/Backgrounds/img_card_circle_blueprint_chest.png'
-    case 'Accessories':
-      return '/Fan Kit Assets (Shop Titans)/Blueprint Types/Backgrounds/img_card_circle_blueprint_artifact.png'
-    case 'Enchantments':
-      return '/Fan Kit Assets (Shop Titans)/Blueprint Types/Backgrounds/img_card_circle_blueprint_premium.png'
-    default:
-      return '/Fan Kit Assets (Shop Titans)/Blueprint Types/Backgrounds/img_card_circle_blueprint.png'
-  }
-}
-
-function getTypeIconAsset(type, name, category) {
-  return getItemAsset(name, type, category)
-}
-
-function getItemAsset(name, type, category) {
-  const haystack = `${type || ''} ${name || ''}`.toLowerCase()
-
-  if (category === 'Weapons') {
-    if (/crossbow|gun/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_crossbow_big.png'
-    }
-    if (/bow/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_bow_big.png'
-    }
-    if (/wand/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_wand_big.png'
-    }
-    if (/staff/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_staff_big.png'
-    }
-    if (/dagger/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_dagger_big.png'
-    }
-    if (/mace/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_mace_big.png'
-    }
-    if (/spear/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_spear_big.png'
-    }
-    if (/axe/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_axe_big.png'
-    }
-    return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_sword_big.png'
-  }
-
-  if (category === 'Armor') {
-    if (/helmet|hat/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_helmet_big.png'
-    }
-    if (/gauntlet|glove|bracer/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_gauntlets_big.png'
-    }
-    if (/shoe|boot|footwear/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_shoes_big.png'
-    }
-    if (/cloak/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_cloak_big.png'
-    }
-    return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_armorheavy_big.png'
-  }
-
-  if (category === 'Accessories') {
-    if (/potion|herb|remedy/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_potion_big.png'
-    }
-    if (/spell|scroll/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_scrolls_big.png'
-    }
-    if (/shield/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_shield_big.png'
-    }
-    if (/cloak/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_cloak_big.png'
-    }
-    if (/ring/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_ring_big.png'
-    }
-    if (/amulet/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_amulet_big.png'
-    }
-    if (/familiar/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_familiar_big.png'
-    }
-    return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_tag.png'
-  }
-
-  if (category === 'Enchantments') {
-    if (/spirit/i.test(haystack)) {
-      return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_spirit_big.png'
-    }
-    return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_element_big.png'
-  }
-
-  return '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_tag.png'
-}
-
-function buildAssetSrc(path, fallbackPath = '/Fan Kit Assets (Shop Titans)/Item Types/icon_global_item_tag.png') {
-  const resolvedPath = path && String(path).trim() ? path : fallbackPath
-  return encodeURI(resolvedPath)
 }
 
 function escapeHtml(value) {
