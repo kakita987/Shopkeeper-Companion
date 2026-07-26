@@ -1,4 +1,6 @@
 import './style.css'
+import { mountAdBanner } from './adBanner.js'
+import { getRandomTavernText } from './kofiText.js'
 import { useGoogleAuth } from './useGoogleAuth.js'
 import { ensureUserSyncSpreadsheet, readSyncTables, writeSyncTables } from './googleSheetSync.js'
 import { createIcons, Axe, BadgeAlert, BadgeHelp, BadgeInfo, BowArrow, CakeSlice, Candy, CandyCane, CircleDashed, Clover, Coffee, Crosshair, Diamond, Drumstick, FlaskConical, FlaskRound, Footprints, Gem, Hand, HandMetal, HardHat, HatGlasses, Leaf, MoonStar, Music2, Package, PackageOpen, PartyPopper, PillBottle, Pizza, Salad, ScrollText, Shield, Shirt, Sandwich, Sparkles, Swords, Sword, Target, UtensilsCrossed, Wand, WandSparkles, Apple, Fish, SunMedium, Cherry, Cookie } from 'lucide'
@@ -67,6 +69,8 @@ const THEME_PREFERENCE_STORAGE_KEY = 'shopkeeper-theme'
 const BLUEPRINT_CACHE_STORAGE_KEY = 'shopkeeper-blueprint-cache-v1'
 const GOOGLE_SYNC_SPREADSHEET_ID_STORAGE_KEY = 'shopkeeper-google-sync-spreadsheet-id'
 const GOOGLE_SYNC_WRITE_DEBOUNCE_MS = 900
+const KOFI_HANDLE = 'shopkeepercompanion'
+const KOFI_URL = 'https://ko-fi.com/shopkeepercompanion'
 
 const LUCIDE_ICONS = {
   Axe,
@@ -119,7 +123,8 @@ const LUCIDE_ICONS = {
 }
 
 app.innerHTML = `
-  <main class="importer-shell">
+  <div class="app-layout">
+    <main class="importer-shell">
     <header class="app-header">
       <div class="hero-copy">
         <h1>Shopkeeper Companion</h1>
@@ -205,6 +210,15 @@ app.innerHTML = `
         </section>
 
         <section class="settings-section">
+          <h3>Support</h3>
+          <p class="settings-copy">If this companion helps your shop flow, you can support ongoing updates.</p>
+          <a id="kofi-support-button" class="kofi-support-button kofi-link-button" href="https://ko-fi.com/shopkeepercompanion" target="_blank" rel="noopener noreferrer">
+            <img class="kofi-link-icon" src="https://storage.ko-fi.com/cdn/cup-border.png" alt="" aria-hidden="true" />
+            <span class="kofi-link-text" data-kofi-button-text>Support on Ko-fi</span>
+          </a>
+        </section>
+
+        <section class="settings-section">
           <h3>Attribution</h3>
           <details class="attribution-details">
             <summary>Icons</summary>
@@ -217,7 +231,16 @@ app.innerHTML = `
         </section>
       </div>
     </aside>
-  </main>
+    </main>
+
+    <aside class="desktop-ad-rail" aria-label="Sponsored content">
+      <div id="desktop-ad-banner"></div>
+    </aside>
+  </div>
+
+  <div class="mobile-ad-rail" aria-label="Sponsored content">
+    <div id="mobile-ad-banner"></div>
+  </div>
 `
 
 const form = document.querySelector('#import-form')
@@ -230,9 +253,12 @@ const statusEl = document.querySelector('#status')
 const previewEl = document.querySelector('#preview')
 const savedViewsContentEl = document.querySelector('#saved-views-content')
 const blueprintVersionEl = document.querySelector('#blueprint-version')
+const kofiSupportButtonEl = document.querySelector('#kofi-support-button')
 const blueprintOverlay = document.querySelector('#blueprint-overlay')
 const blueprintOverlayContent = document.querySelector('#blueprint-overlay-content')
 const googleAuthContainer = document.querySelector('#google-auth')
+const desktopAdBannerEl = document.querySelector('#desktop-ad-banner')
+const mobileAdBannerEl = document.querySelector('#mobile-ad-banner')
 const topTabs = Array.from(document.querySelectorAll('.top-tab'))
 const viewPanels = Array.from(document.querySelectorAll('[data-view-panel]'))
 let trackedUpgradeKeys = loadTrackedUpgradeKeys()
@@ -248,6 +274,8 @@ let pendingGoogleSyncWriteTimer = null
 let pendingGoogleSyncInitPromise = null
 let isApplyingRemoteSyncState = false
 let blueprintVersionLabel = ''
+let disposeDesktopAd = () => {}
+let disposeMobileAd = () => {}
 const googleSyncState = {
   spreadsheetId: localStorage.getItem(GOOGLE_SYNC_SPREADSHEET_ID_STORAGE_KEY) || '',
   spreadsheetUrl: '',
@@ -262,12 +290,14 @@ function openSettings() {
   settingsPanel.classList.add('is-open')
   settingsPanel.setAttribute('aria-hidden', 'false')
   settingsToggle.setAttribute('aria-expanded', 'true')
+  document.body.classList.add('settings-open')
 }
 
 function closeSettings() {
   settingsPanel.classList.remove('is-open')
   settingsPanel.setAttribute('aria-hidden', 'true')
   settingsToggle.setAttribute('aria-expanded', 'false')
+  document.body.classList.remove('settings-open')
 }
 
 settingsToggle.addEventListener('click', () => {
@@ -322,6 +352,8 @@ topTabs.forEach((tab) => {
 applyTheme(getStoredTheme())
 applyFontPreference(getStoredFontPreference())
 initializeGoogleAuthUi()
+initializeAdBanners()
+initializeKofiSupportButton()
 
 form.addEventListener('submit', async (event) => {
   event.preventDefault()
@@ -342,6 +374,32 @@ function initializeGoogleAuthUi() {
     renderGoogleAuthUi(state)
     void handleGoogleAuthStateChange(state)
   })
+}
+
+function initializeAdBanners() {
+  disposeDesktopAd()
+  disposeMobileAd()
+
+  disposeDesktopAd = mountAdBanner(desktopAdBannerEl, {
+    publisher: KOFI_HANDLE,
+    kofiUrl: KOFI_URL,
+  })
+
+  disposeMobileAd = mountAdBanner(mobileAdBannerEl, {
+    publisher: KOFI_HANDLE,
+    kofiUrl: KOFI_URL,
+  })
+}
+
+function initializeKofiSupportButton() {
+  if (!kofiSupportButtonEl) {
+    return
+  }
+
+  const textEl = kofiSupportButtonEl.querySelector('[data-kofi-button-text]')
+  if (textEl) {
+    textEl.textContent = getRandomTavernText()
+  }
 }
 
 function renderGoogleAuthUi(state) {
