@@ -882,6 +882,60 @@ body.theme-dark .overlay-card,
   font: inherit;
 }
 
+.saved-view-filter-multiselect {
+  border: 1px solid rgba(17, 24, 39, 0.12);
+  border-radius: 12px;
+  padding: 10px;
+  margin: 0;
+  min-width: 0;
+}
+
+.saved-view-filter-multiselect legend {
+  padding: 0 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #374151;
+}
+
+.saved-view-filter-collection-state {
+  margin-bottom: 8px;
+}
+
+.collection-book-help {
+  margin: 0 0 8px;
+  font-size: 0.76rem;
+  line-height: 1.35;
+  color: #6b7280;
+}
+
+.collection-book-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.collection-book-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(17, 24, 39, 0.12);
+  background: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+}
+
+.collection-book-option input {
+  width: 16px;
+  height: 16px;
+}
+
+.collection-book-option span {
+  font-size: 0.8rem;
+  color: #1f2937;
+}
+
 .dependency-list {
   margin-top: 10px;
 }
@@ -921,6 +975,32 @@ body.theme-dark .saved-view-preset.is-active,
 body.theme-dark .saved-view-filter,
 :root[data-theme='dark'] .saved-view-filter {
   color: #d1d5db;
+}
+
+body.theme-dark .saved-view-filter-multiselect,
+:root[data-theme='dark'] .saved-view-filter-multiselect {
+  border-color: rgba(148, 163, 184, 0.35);
+}
+
+body.theme-dark .saved-view-filter-multiselect legend,
+:root[data-theme='dark'] .saved-view-filter-multiselect legend {
+  color: #e5e7eb;
+}
+
+body.theme-dark .collection-book-help,
+:root[data-theme='dark'] .collection-book-help {
+  color: #cbd5e1;
+}
+
+body.theme-dark .collection-book-option,
+:root[data-theme='dark'] .collection-book-option {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(148, 163, 184, 0.3);
+}
+
+body.theme-dark .collection-book-option span,
+:root[data-theme='dark'] .collection-book-option span {
+  color: #f8fafc;
 }
 
 body.theme-dark .saved-view-delete,

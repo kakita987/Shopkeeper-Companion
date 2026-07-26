@@ -41,6 +41,7 @@ const DEFAULT_SAVED_VIEW_CRITERIA = {
   ownership: 'any',
   inventory: 'any',
   mastered: 'any',
+  collectionBookState: 'completed',
   collectionBook: [],
 }
 const STARTER_VIEW_PRESETS = [
@@ -1268,7 +1269,6 @@ function renderSavedViews(items = []) {
           <div class="section-summary-title">
             <h4>Filters</h4>
           </div>
-          <span class="group-count">${filteredItems.length}/${totalCount}</span>
         </summary>
         <div class="section-body">
           <div class="saved-view-filters">
@@ -1278,16 +1278,16 @@ function renderSavedViews(items = []) {
                 ${renderSelectOptions([
                   ['any', 'Any'],
                   ['parent', 'Dependent'],
-                  ['none', 'No dependency relation'],
+                  ['child', 'Needed'],
                 ], savedViewCriteria.dependency)}
               </select>
             </label>
             <label class="saved-view-filter">
               <span>Ownership</span>
               <select data-saved-filter="ownership">
+                ${renderSelectOptions([
                   ['any', 'Any'],
                   ['owned', 'Owned'],
-                  ['any', 'Either'],
                   ['not-owned', 'Not owned'],
                 ], savedViewCriteria.ownership)}
               </select>
@@ -1295,12 +1295,13 @@ function renderSavedViews(items = []) {
             <label class="saved-view-filter">
               <span>Inventory</span>
               <select data-saved-filter="inventory">
+                ${renderSelectOptions([
                   ['any', 'Any Status'],
                   ['has', 'Has Inventory'],
-                  ['none', 'Out of Stock'],
                   ['none', 'Inventory = 0'],
                 ], savedViewCriteria.inventory)}
               </select>
+            </label>
             <label class="saved-view-filter saved-view-filter-mastered">
               <span>Mastered</span>
               <select data-saved-filter="mastered">
@@ -1313,11 +1314,20 @@ function renderSavedViews(items = []) {
             </label>
             <fieldset class="saved-view-filter saved-view-filter-multiselect">
               <legend>Collection Book</legend>
+              <label class="saved-view-filter saved-view-filter-collection-state">
+                <span>Match</span>
+                <select data-saved-filter="collectionBookState">
+                  ${renderSelectOptions([
+                    ['completed', 'Completed'],
+                    ['needed', 'Still Needed'],
+                  ], savedViewCriteria.collectionBookState)}
+                </select>
+              </label>
+              <p class="collection-book-help">Select qualities to match. Completed checks finished qualities; Still Needed checks missing ones.</p>
               <div class="collection-book-options">
                 ${renderCollectionBookFilterOptions(savedViewCriteria.collectionBook)}
               </div>
             </fieldset>
-            </label>
           </div>
           <form class="saved-view-save-row" data-save-view-form>
             <input type="text" maxlength="60" placeholder="View Name (e.g. Not Owned + Dependents)" data-saved-view-name />
@@ -1333,7 +1343,7 @@ function renderSavedViews(items = []) {
           <div class="section-summary-title">
             <h4>Results</h4>
           </div>
-          <span class="group-count">${filteredItems.length}</span>
+          <span class="group-count">${filteredItems.length}/${totalCount}</span>
         </summary>
         <div class="section-body">
           ${renderSavedViewResults(filteredItems, dependencyIndex)}
@@ -1574,7 +1584,7 @@ function renderCollectionBookFilterOptions(selectedValues = []) {
     return `
       <label class="collection-book-option">
         <input type="checkbox" data-saved-filter-book="${escapeHtml(quality)}" ${isChecked ? 'checked' : ''} />
-        <span>${escapeHtml(label)}</span>
+          <span>${escapeHtml(label)} quality</span>
       </label>
     `
   }).join('')
@@ -1592,6 +1602,7 @@ function normalizeSavedViewCriteria(criteria = {}) {
     ownership: ['owned', 'not-owned', 'any'].includes(criteria.ownership) ? criteria.ownership : 'any',
     inventory: ['any', 'has', 'none'].includes(criteria.inventory) ? criteria.inventory : 'any',
     mastered: ['any', 'mastered', 'not-mastered'].includes(criteria.mastered) ? criteria.mastered : 'any',
+    collectionBookState: ['completed', 'needed'].includes(criteria.collectionBookState) ? criteria.collectionBookState : 'completed',
     collectionBook: collectionBook.filter((value) => ['superior', 'flawless', 'epic', 'legendary'].includes(String(value).toLowerCase())),
   }
 }
@@ -1660,7 +1671,10 @@ function filterBlueprintItems(items = [], criteria = {}, dependencyIndex) {
     }
 
     if (normalizedCriteria.collectionBook.length) {
-      const collectionMatches = normalizedCriteria.collectionBook.some((quality) => summary.collectionBookQualities.includes(quality))
+      const qualitiesToMatch = normalizedCriteria.collectionBookState === 'needed'
+        ? summary.collectionBookNeededQualities
+        : summary.collectionBookQualities
+      const collectionMatches = normalizedCriteria.collectionBook.some((quality) => qualitiesToMatch.includes(quality))
       if (!collectionMatches) {
         return false
       }
@@ -1690,6 +1704,8 @@ function buildBlueprintSummary(item, dependencyIndex) {
   const collectionBookQualities = Object.entries(progress.collectionBook || {})
     .filter(([, checked]) => Boolean(checked))
     .map(([quality]) => quality)
+  const allCollectionQualities = ['superior', 'flawless', 'epic', 'legendary']
+  const collectionBookNeededQualities = allCollectionQualities.filter((quality) => !collectionBookQualities.includes(quality))
 
   return {
     isOwned: Boolean(progress.owned),
@@ -1702,6 +1718,7 @@ function buildBlueprintSummary(item, dependencyIndex) {
     isCollectionComplete: collectionStatus === '✅ Complete',
     collectionStatus,
     collectionBookQualities,
+    collectionBookNeededQualities,
   }
 }
 
