@@ -162,7 +162,7 @@ body.theme-dark .top-tab:not(.is-active),
 
 body.theme-dark .top-tab.is-active::after,
 :root[data-theme='dark'] .top-tab.is-active::after {
-  background: linear-gradient(165deg, #334155 0%, #293547 100%);
+  background: linear-gradient(165deg, #263244 0%, #1f2937 100%);
 }
 
 .view-shell {
@@ -172,8 +172,10 @@ body.theme-dark .top-tab.is-active::after,
 
 body.theme-dark .top-tab.is-active,
 :root[data-theme='dark'] .top-tab.is-active {
-  background: linear-gradient(165deg, #334155 0%, #293547 100%);
+  background: linear-gradient(165deg, #2a3648 0%, #223042 100%);
+  border-color: rgba(148, 163, 184, 0.42);
   color: #f8fafc;
+  box-shadow: 0 6px 12px rgba(2, 6, 23, 0.24);
 }
 
 .is-hidden {
@@ -1208,8 +1210,26 @@ body.theme-dark .preview-table th,
 
 .google-auth {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 8px;
   min-height: 42px;
+}
+
+.auth-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sync-caption {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.sync-error {
+  color: #b91c1c;
 }
 
 .google-signin-slot {

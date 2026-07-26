@@ -1,5 +1,6 @@
 import './style.css'
 import { useGoogleAuth } from './useGoogleAuth.js'
+import { ensureUserSyncSpreadsheet, readSyncTables, writeSyncTables } from './googleSheetSync.js'
 import { createIcons, Axe, BadgeAlert, BadgeHelp, BadgeInfo, BowArrow, CakeSlice, Candy, CandyCane, CircleDashed, Clover, Coffee, Crosshair, Diamond, Drumstick, FlaskConical, FlaskRound, Footprints, Gem, Hand, HandMetal, HardHat, HatGlasses, Leaf, MoonStar, Music2, Package, PackageOpen, PartyPopper, PillBottle, Pizza, Salad, ScrollText, Shield, Shirt, Sandwich, Sparkles, Swords, Sword, Target, UtensilsCrossed, Wand, WandSparkles, Apple, Fish, SunMedium, Cherry, Cookie } from 'lucide'
 
 const DEFAULT_SPREADSHEET_URL = 'https://playshoptitans.com/spreadsheet'
@@ -60,6 +61,10 @@ const TRACKED_UPGRADES_STORAGE_KEY = 'shopkeeper-tracked-upgrades'
 const BLUEPRINT_PROGRESS_STORAGE_KEY = 'shopkeeper-blueprint-progress'
 const SAVED_FILTER_VIEWS_STORAGE_KEY = 'shopkeeper-saved-filter-views'
 const FONT_PREFERENCE_STORAGE_KEY = 'shopkeeper-font-preference'
+const THEME_PREFERENCE_STORAGE_KEY = 'shopkeeper-theme'
+const BLUEPRINT_CACHE_STORAGE_KEY = 'shopkeeper-blueprint-cache-v1'
+const GOOGLE_SYNC_SPREADSHEET_ID_STORAGE_KEY = 'shopkeeper-google-sync-spreadsheet-id'
+const GOOGLE_SYNC_WRITE_DEBOUNCE_MS = 900
 
 const LUCIDE_ICONS = {
   Axe,
@@ -176,17 +181,23 @@ app.innerHTML = `
 
         <section class="settings-section">
           <h3>Google Sync Sign-In</h3>
-          <p class="settings-copy">Signing in with Google OAuth creates a personal Google Sheet in your Drive for Shopkeeper Companion sync data.</p>
-          <p class="settings-copy">If you make bulk edits in that sheet, those updates will be reflected in the app during sync.</p>
+          <p class="settings-copy">Sign in to sync your companion data automatically while you use the app.</p>
+          <p class="settings-copy">Your data sheet is created in Google Drive for backup and optional advanced editing.</p>
           <div id="google-auth" class="google-auth"></div>
+          <details class="attribution-details advanced-sync-details">
+            <summary>Advanced: Bulk Edit in Google Sheets</summary>
+            <p class="settings-copy">The app is the primary experience. If you want spreadsheet-style bulk edits, open Google Drive and find the file named <strong>Shopkeeper Companion User Data</strong>.</p>
+            <p class="settings-copy">Edit values in the data tabs, then use <strong>Sync Now</strong> in this Settings panel to load those changes back into the app.</p>
+            <p class="settings-copy">Keep data-tab headers unchanged so sync can parse rows correctly.</p>
+          </details>
         </section>
 
         <section class="settings-section">
           <h3>Blueprint Sync</h3>
-          <p class="settings-copy">Refresh the blueprint preview from the latest spreadsheet data.</p>
+          <p class="settings-copy">Download the latest blueprints when you choose, then browse locally.</p>
 
           <form id="import-form" class="import-form compact-form">
-            <button type="submit">Update Blueprints</button>
+            <button type="submit">Download Blueprints</button>
           </form>
         </section>
 
@@ -221,6 +232,7 @@ const googleAuthContainer = document.querySelector('#google-auth')
 const topTabs = Array.from(document.querySelectorAll('.top-tab'))
 const viewPanels = Array.from(document.querySelectorAll('[data-view-panel]'))
 let trackedUpgradeKeys = loadTrackedUpgradeKeys()
+let blueprintProgressByName = loadBlueprintProgressMap()
 let allBlueprintItems = []
 let savedFilterViews = []
 let hasLoadedSavedFilterViews = false
@@ -228,6 +240,17 @@ let savedViewCriteria = {
   ...DEFAULT_SAVED_VIEW_CRITERIA,
 }
 let activeSavedViewPreset = 'custom'
+let pendingGoogleSyncWriteTimer = null
+let pendingGoogleSyncInitPromise = null
+let isApplyingRemoteSyncState = false
+const googleSyncState = {
+  spreadsheetId: localStorage.getItem(GOOGLE_SYNC_SPREADSHEET_ID_STORAGE_KEY) || '',
+  spreadsheetUrl: '',
+  isReady: false,
+  isSyncing: false,
+  error: '',
+  lastSyncedAt: '',
+}
 const googleAuth = useGoogleAuth({ clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID })
 
 function openSettings() {
@@ -300,7 +323,7 @@ form.addEventListener('submit', async (event) => {
   await importBlueprintData()
 })
 
-void importBlueprintData()
+initializeBlueprintDataFromCache()
 
 function initializeGoogleAuthUi() {
   if (!googleAuthContainer) {
@@ -308,8 +331,11 @@ function initializeGoogleAuthUi() {
   }
 
   renderGoogleAuthUi(googleAuth.getState())
+  void handleGoogleAuthStateChange(googleAuth.getState())
+
   googleAuth.subscribe((state) => {
     renderGoogleAuthUi(state)
+    void handleGoogleAuthStateChange(state)
   })
 }
 
@@ -321,9 +347,25 @@ function renderGoogleAuthUi(state) {
   const signOutDisabled = state.isLoading || state.isAuthenticating || !state.isAuthenticated
 
   if (state.isAuthenticated) {
+    const syncLabel = googleSyncState.lastSyncedAt
+      ? `Last sync: ${new Date(googleSyncState.lastSyncedAt).toLocaleString()}`
+      : 'Connected. Ready to sync.'
+    const syncDisabled = googleSyncState.isSyncing || !googleSyncState.isReady
+
     googleAuthContainer.innerHTML = `
-      <button type="button" class="auth-button auth-button-secondary" data-auth-action="sign-out" ${signOutDisabled ? 'disabled' : ''}>Sign Out</button>
+      <div class="auth-controls">
+        <button type="button" class="auth-button" data-auth-action="sync-now" ${syncDisabled ? 'disabled' : ''}>${googleSyncState.isSyncing ? 'Syncing…' : 'Sync Now'}</button>
+        <button type="button" class="auth-button auth-button-secondary" data-auth-action="sign-out" ${signOutDisabled ? 'disabled' : ''}>Sign Out</button>
+      </div>
+      <p class="settings-copy sync-caption">${escapeHtml(syncLabel)}</p>
+      ${googleSyncState.error ? `<p class="settings-copy sync-caption sync-error">${escapeHtml(googleSyncState.error)}</p>` : ''}
     `
+
+    const syncNowButton = googleAuthContainer.querySelector('[data-auth-action="sync-now"]')
+    syncNowButton?.addEventListener('click', async () => {
+      await syncFromGoogleSheet()
+    })
+
     const signOutButton = googleAuthContainer.querySelector('[data-auth-action="sign-out"]')
     signOutButton?.addEventListener('click', async () => {
       await googleAuth.signOut()
@@ -345,6 +387,324 @@ function renderGoogleAuthUi(state) {
   }
 }
 
+async function handleGoogleAuthStateChange(state) {
+  if (!state?.isAuthenticated || !state?.accessToken) {
+    googleSyncState.isReady = false
+    googleSyncState.error = ''
+    googleSyncState.isSyncing = false
+    pendingGoogleSyncInitPromise = null
+    renderGoogleAuthUi(state)
+    return
+  }
+
+  if (!googleSyncState.isReady && !googleSyncState.isSyncing) {
+    await initializeGoogleSync(state.accessToken)
+  }
+}
+
+async function initializeGoogleSync(accessToken) {
+  if (pendingGoogleSyncInitPromise) {
+    await pendingGoogleSyncInitPromise
+    return
+  }
+
+  pendingGoogleSyncInitPromise = (async () => {
+    try {
+      googleSyncState.isSyncing = true
+      googleSyncState.error = ''
+      renderGoogleAuthUi(googleAuth.getState())
+
+      const ensured = await ensureUserSyncSpreadsheet(accessToken, googleSyncState.spreadsheetId)
+      googleSyncState.spreadsheetId = ensured.spreadsheetId
+      googleSyncState.spreadsheetUrl = ensured.spreadsheetUrl
+      localStorage.setItem(GOOGLE_SYNC_SPREADSHEET_ID_STORAGE_KEY, ensured.spreadsheetId)
+
+      const remote = await readSyncTables(accessToken, ensured.spreadsheetId)
+      if (hasRemoteSyncData(remote)) {
+        applyRemoteSyncState(remote)
+      } else if (hasLocalUserData()) {
+        await pushLocalStateToGoogleSheet(accessToken)
+      }
+
+      googleSyncState.isReady = true
+      googleSyncState.lastSyncedAt = new Date().toISOString()
+      renderGoogleAuthUi(googleAuth.getState())
+    } catch (error) {
+      googleSyncState.error = error?.message || 'Unable to initialize Google Sheet sync.'
+      googleSyncState.isReady = false
+      console.error(error)
+      renderGoogleAuthUi(googleAuth.getState())
+    } finally {
+      googleSyncState.isSyncing = false
+      renderGoogleAuthUi(googleAuth.getState())
+    }
+  })()
+
+  try {
+    await pendingGoogleSyncInitPromise
+  } finally {
+    pendingGoogleSyncInitPromise = null
+  }
+}
+
+async function syncFromGoogleSheet() {
+  const authState = googleAuth.getState()
+  if (!authState?.isAuthenticated || !authState?.accessToken) {
+    return
+  }
+
+  try {
+    await initializeGoogleSync(authState.accessToken)
+    googleSyncState.isSyncing = true
+    googleSyncState.error = ''
+    renderGoogleAuthUi(authState)
+
+    const remote = await readSyncTables(authState.accessToken, googleSyncState.spreadsheetId)
+    applyRemoteSyncState(remote)
+    googleSyncState.lastSyncedAt = new Date().toISOString()
+    renderGoogleAuthUi(googleAuth.getState())
+    updateStatus('Synced user data from Google Sheet.', 'info')
+  } catch (error) {
+    googleSyncState.error = error?.message || 'Unable to sync from Google Sheet.'
+    renderGoogleAuthUi(googleAuth.getState())
+    console.error(error)
+  } finally {
+    googleSyncState.isSyncing = false
+    renderGoogleAuthUi(googleAuth.getState())
+  }
+}
+
+function hasRemoteSyncData(remote) {
+  if (!remote || typeof remote !== 'object') {
+    return false
+  }
+
+  return ['settings', 'savedViews', 'trackedUpgrades', 'blueprintProgress']
+    .some((key) => Array.isArray(remote[key]) && remote[key].length > 0)
+}
+
+function hasLocalUserData() {
+  return (
+    Boolean(savedFilterViews.length) ||
+    Boolean(trackedUpgradeKeys.size) ||
+    Boolean(Object.keys(blueprintProgressByName).length) ||
+    Boolean(localStorage.getItem(FONT_PREFERENCE_STORAGE_KEY)) ||
+    Boolean(localStorage.getItem(THEME_PREFERENCE_STORAGE_KEY))
+  )
+}
+
+function applyRemoteSyncState(remoteTables) {
+  isApplyingRemoteSyncState = true
+
+  try {
+    const settings = parseSettingsRows(remoteTables.settings)
+    const nextTheme = settings.theme
+    const nextFont = settings.font
+    if (nextTheme) {
+      applyTheme(nextTheme, { skipSync: true })
+    }
+    if (nextFont) {
+      applyFontPreference(nextFont, { skipSync: true })
+    }
+
+    savedFilterViews = parseSavedViewsRows(remoteTables.savedViews)
+    hasLoadedSavedFilterViews = true
+    localStorage.setItem(SAVED_FILTER_VIEWS_STORAGE_KEY, JSON.stringify(savedFilterViews))
+
+    trackedUpgradeKeys = new Set(parseTrackedUpgradeRows(remoteTables.trackedUpgrades))
+    localStorage.setItem(TRACKED_UPGRADES_STORAGE_KEY, JSON.stringify([...trackedUpgradeKeys]))
+
+    blueprintProgressByName = parseBlueprintProgressRows(remoteTables.blueprintProgress)
+    localStorage.setItem(BLUEPRINT_PROGRESS_STORAGE_KEY, JSON.stringify(blueprintProgressByName))
+  } finally {
+    isApplyingRemoteSyncState = false
+  }
+
+  if (allBlueprintItems.length) {
+    renderSavedViews(allBlueprintItems)
+  }
+}
+
+function scheduleGoogleSyncWrite() {
+  if (isApplyingRemoteSyncState) {
+    return
+  }
+
+  const authState = googleAuth.getState()
+  if (!authState?.isAuthenticated || !authState?.accessToken) {
+    return
+  }
+
+  if (!googleSyncState.isReady || !googleSyncState.spreadsheetId) {
+    return
+  }
+
+  if (pendingGoogleSyncWriteTimer) {
+    window.clearTimeout(pendingGoogleSyncWriteTimer)
+  }
+
+  pendingGoogleSyncWriteTimer = window.setTimeout(() => {
+    pendingGoogleSyncWriteTimer = null
+    void pushLocalStateToGoogleSheet(authState.accessToken)
+  }, GOOGLE_SYNC_WRITE_DEBOUNCE_MS)
+}
+
+async function pushLocalStateToGoogleSheet(accessToken) {
+  if (!googleSyncState.spreadsheetId) {
+    return
+  }
+
+  try {
+    googleSyncState.isSyncing = true
+    googleSyncState.error = ''
+    renderGoogleAuthUi(googleAuth.getState())
+
+    await writeSyncTables(accessToken, googleSyncState.spreadsheetId, {
+      settings: buildSettingsRows(),
+      savedViews: buildSavedViewsRows(),
+      trackedUpgrades: buildTrackedUpgradeRows(),
+      blueprintProgress: buildBlueprintProgressRows(),
+    })
+
+    googleSyncState.lastSyncedAt = new Date().toISOString()
+  } catch (error) {
+    googleSyncState.error = error?.message || 'Unable to save user data to Google Sheet.'
+    console.error(error)
+  } finally {
+    googleSyncState.isSyncing = false
+    renderGoogleAuthUi(googleAuth.getState())
+  }
+}
+
+function buildSettingsRows() {
+  return [
+    ['theme', getStoredTheme()],
+    ['font', getStoredFontPreference()],
+  ]
+}
+
+function parseSettingsRows(rows = []) {
+  return rows.reduce((result, row) => {
+    const key = cleanText(row?.[0]).toLowerCase()
+    const value = cleanText(row?.[1])
+    if (key && value) {
+      result[key] = value
+    }
+    return result
+  }, {})
+}
+
+function buildSavedViewsRows() {
+  ensureSavedFilterViewsLoaded()
+
+  return savedFilterViews.map((view) => ([
+    view.id,
+    view.name,
+    view.criteria?.dependency || 'any',
+    view.criteria?.ownership || 'any',
+    view.criteria?.inventory || 'any',
+    view.criteria?.collection || 'any',
+  ]))
+}
+
+function parseSavedViewsRows(rows = []) {
+  return rows
+    .map((row) => {
+      const id = cleanText(row?.[0])
+      const name = cleanText(row?.[1])
+
+      if (!id || !name) {
+        return null
+      }
+
+      return {
+        id,
+        name,
+        criteria: {
+          dependency: cleanText(row?.[2]) || 'any',
+          ownership: cleanText(row?.[3]) || 'any',
+          inventory: cleanText(row?.[4]) || 'any',
+          collection: cleanText(row?.[5]) || 'any',
+        },
+      }
+    })
+    .filter(Boolean)
+}
+
+function buildTrackedUpgradeRows() {
+  return [...trackedUpgradeKeys].map((key) => [key])
+}
+
+function parseTrackedUpgradeRows(rows = []) {
+  return rows
+    .map((row) => cleanText(row?.[0]))
+    .filter(Boolean)
+}
+
+function buildBlueprintProgressRows() {
+  return Object.entries(blueprintProgressByName)
+    .map(([blueprintName, progress]) => {
+      const name = cleanText(blueprintName)
+      if (!name) {
+        return null
+      }
+
+      return [
+        name,
+        progress?.owned ? 'TRUE' : 'FALSE',
+        progress?.master ? 'TRUE' : 'FALSE',
+        String(toInventoryCount(progress?.inventory?.normal)),
+        String(toInventoryCount(progress?.inventory?.superior)),
+        String(toInventoryCount(progress?.inventory?.flawless)),
+        String(toInventoryCount(progress?.inventory?.epic)),
+        String(toInventoryCount(progress?.inventory?.legendary)),
+        progress?.collectionBook?.superior ? 'TRUE' : 'FALSE',
+        progress?.collectionBook?.flawless ? 'TRUE' : 'FALSE',
+        progress?.collectionBook?.epic ? 'TRUE' : 'FALSE',
+        progress?.collectionBook?.legendary ? 'TRUE' : 'FALSE',
+      ]
+    })
+    .filter(Boolean)
+}
+
+function parseBlueprintProgressRows(rows = []) {
+  return rows.reduce((result, row) => {
+    const blueprintName = cleanText(row?.[0])
+    if (!blueprintName) {
+      return result
+    }
+
+    result[blueprintName] = {
+      owned: parseBooleanCell(row?.[1]),
+      master: parseBooleanCell(row?.[2]),
+      inventory: {
+        normal: toInventoryCount(row?.[3]),
+        superior: toInventoryCount(row?.[4]),
+        flawless: toInventoryCount(row?.[5]),
+        epic: toInventoryCount(row?.[6]),
+        legendary: toInventoryCount(row?.[7]),
+      },
+      collectionBook: {
+        superior: parseBooleanCell(row?.[8]),
+        flawless: parseBooleanCell(row?.[9]),
+        epic: parseBooleanCell(row?.[10]),
+        legendary: parseBooleanCell(row?.[11]),
+      },
+    }
+
+    return result
+  }, {})
+}
+
+function parseBooleanCell(value) {
+  if (typeof value === 'boolean') {
+    return value
+  }
+
+  const normalized = String(value || '').trim().toLowerCase()
+  return normalized === 'true' || normalized === '1' || normalized === 'yes'
+}
+
 function updateStatus(message, tone = 'info') {
   statusEl.textContent = message
   statusEl.className = `status ${tone}`
@@ -352,17 +712,29 @@ function updateStatus(message, tone = 'info') {
 
 async function importBlueprintData() {
   try {
-    updateStatus('Resolving the latest spreadsheet…')
+    const authState = googleAuth.getState()
+    if (authState?.isAuthenticated && authState?.accessToken) {
+      try {
+        await initializeGoogleSync(authState.accessToken)
+        const remote = await readSyncTables(authState.accessToken, googleSyncState.spreadsheetId)
+        applyRemoteSyncState(remote)
+      } catch (syncError) {
+        console.warn('Google sync refresh failed. Continuing with blueprint download.', syncError)
+      }
+    }
+
+    updateStatus('Checking the latest Shop Titans spreadsheet link…')
     const resolvedUrl = await resolveSpreadsheetUrl(DEFAULT_SPREADSHEET_URL)
     const exportUrl = buildExportUrl(resolvedUrl)
 
-    updateStatus('Loading Blueprint data…')
+    updateStatus('Downloading blueprints…')
     const { headers, rows, structuredBlueprints } = await importGoogleSheet(exportUrl)
+    saveBlueprintCache({ headers, rows, structuredBlueprints })
     allBlueprintItems = buildBlueprintItems(headers, rows, structuredBlueprints)
 
     renderPreview(headers, rows, structuredBlueprints)
     renderSavedViews(allBlueprintItems)
-    updateStatus('')
+    updateStatus(`Blueprints downloaded (${allBlueprintItems.length} items).`, 'info')
     closeSettings()
   } catch (error) {
     console.error(error)
@@ -371,6 +743,56 @@ async function importBlueprintData() {
     if (savedViewsContentEl) {
       savedViewsContentEl.innerHTML = '<p class="empty-state">No blueprint data available yet.</p>'
     }
+  }
+}
+
+function initializeBlueprintDataFromCache() {
+  const cached = loadBlueprintCache()
+
+  if (!cached) {
+    updateStatus('No local blueprint snapshot yet. Open Settings and click Download Blueprints.', 'info')
+    previewEl.innerHTML = '<p class="empty">No blueprint data downloaded yet.</p>'
+    if (savedViewsContentEl) {
+      savedViewsContentEl.innerHTML = '<p class="empty-state">No blueprint data available yet.</p>'
+    }
+    return
+  }
+
+  const { headers = [], rows = [], structuredBlueprints = [], downloadedAt = '' } = cached
+  allBlueprintItems = buildBlueprintItems(headers, rows, structuredBlueprints)
+  renderPreview(headers, rows, structuredBlueprints)
+  renderSavedViews(allBlueprintItems)
+
+  const stampedAt = downloadedAt ? new Date(downloadedAt).toLocaleString() : 'unknown time'
+  updateStatus(`Loaded cached blueprints (${allBlueprintItems.length} items, ${stampedAt}).`, 'info')
+}
+
+function saveBlueprintCache(payload) {
+  const safePayload = {
+    headers: Array.isArray(payload?.headers) ? payload.headers : [],
+    rows: Array.isArray(payload?.rows) ? payload.rows : [],
+    structuredBlueprints: Array.isArray(payload?.structuredBlueprints) ? payload.structuredBlueprints : [],
+    downloadedAt: new Date().toISOString(),
+  }
+
+  localStorage.setItem(BLUEPRINT_CACHE_STORAGE_KEY, JSON.stringify(safePayload))
+}
+
+function loadBlueprintCache() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(BLUEPRINT_CACHE_STORAGE_KEY) || 'null')
+    if (!parsed || typeof parsed !== 'object') {
+      return null
+    }
+
+    if (!Array.isArray(parsed.headers) || !Array.isArray(parsed.rows) || !Array.isArray(parsed.structuredBlueprints)) {
+      return null
+    }
+
+    return parsed
+  } catch (error) {
+    console.warn('Unable to read blueprint cache.', error)
+    return null
   }
 }
 
@@ -1139,6 +1561,7 @@ function ensureSavedFilterViewsLoaded() {
 
 function saveSavedFilterViews() {
   localStorage.setItem(SAVED_FILTER_VIEWS_STORAGE_KEY, JSON.stringify(savedFilterViews))
+  scheduleGoogleSyncWrite()
 }
 
 function saveCurrentFilterAsView(name) {
@@ -1188,8 +1611,19 @@ function loadTrackedUpgradeKeys() {
   }
 }
 
+function loadBlueprintProgressMap() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(BLUEPRINT_PROGRESS_STORAGE_KEY) || '{}')
+    return stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {}
+  } catch (error) {
+    console.warn('Unable to load blueprint progress.', error)
+    return {}
+  }
+}
+
 function saveTrackedUpgradeKeys() {
   localStorage.setItem(TRACKED_UPGRADES_STORAGE_KEY, JSON.stringify([...trackedUpgradeKeys]))
+  scheduleGoogleSyncWrite()
 }
 
 function toggleTrackedUpgrade(key) {
@@ -1215,26 +1649,17 @@ function getBlueprintMilestoneKeys(blueprintName, entries = []) {
 }
 
 function getBlueprintProgressState(blueprintName) {
-  try {
-    const stored = JSON.parse(localStorage.getItem(BLUEPRINT_PROGRESS_STORAGE_KEY) || '{}')
-    return stored[blueprintName] || {}
-  } catch (error) {
-    console.warn('Unable to load blueprint progress.', error)
-    return {}
-  }
+  return blueprintProgressByName[blueprintName] || {}
 }
 
 function saveBlueprintProgressState(blueprintName, updates) {
-  try {
-    const stored = JSON.parse(localStorage.getItem(BLUEPRINT_PROGRESS_STORAGE_KEY) || '{}')
-    stored[blueprintName] = {
-      ...(stored[blueprintName] || {}),
-      ...updates,
-    }
-    localStorage.setItem(BLUEPRINT_PROGRESS_STORAGE_KEY, JSON.stringify(stored))
-  } catch (error) {
-    console.warn('Unable to save blueprint progress.', error)
+  blueprintProgressByName[blueprintName] = {
+    ...(blueprintProgressByName[blueprintName] || {}),
+    ...updates,
   }
+
+  localStorage.setItem(BLUEPRINT_PROGRESS_STORAGE_KEY, JSON.stringify(blueprintProgressByName))
+  scheduleGoogleSyncWrite()
 }
 
 function persistBlueprintOwnership(blueprintName, owned) {
@@ -1688,7 +2113,8 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;')
 }
 
-function applyTheme(theme) {
+function applyTheme(theme, options = {}) {
+  const skipSync = Boolean(options.skipSync)
   const resolvedTheme = theme === 'light' || theme === 'dark' ? theme : 'device'
   const isDark = resolvedTheme === 'dark' || (resolvedTheme === 'device' && window.matchMedia('(prefers-color-scheme: dark)').matches)
 
@@ -1701,10 +2127,14 @@ function applyTheme(theme) {
     selectedInput.checked = true
   }
 
-  localStorage.setItem('shopkeeper-theme', resolvedTheme)
+  localStorage.setItem(THEME_PREFERENCE_STORAGE_KEY, resolvedTheme)
+  if (!skipSync) {
+    scheduleGoogleSyncWrite()
+  }
 }
 
-function applyFontPreference(fontPreference) {
+function applyFontPreference(fontPreference, options = {}) {
+  const skipSync = Boolean(options.skipSync)
   const resolvedFont = ['default', 'serif', 'sans'].includes(fontPreference) ? fontPreference : 'default'
   document.documentElement.dataset.fontPreference = resolvedFont
 
@@ -1713,10 +2143,13 @@ function applyFontPreference(fontPreference) {
   }
 
   localStorage.setItem(FONT_PREFERENCE_STORAGE_KEY, resolvedFont)
+  if (!skipSync) {
+    scheduleGoogleSyncWrite()
+  }
 }
 
 function getStoredTheme() {
-  return localStorage.getItem('shopkeeper-theme') || 'device'
+  return localStorage.getItem(THEME_PREFERENCE_STORAGE_KEY) || 'device'
 }
 
 function getStoredFontPreference() {
