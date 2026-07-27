@@ -3,6 +3,7 @@ import { mountAdBanner } from './adBanner.js'
 import { getRandomTavernText } from './kofiText.js'
 import { useGoogleAuth } from './useGoogleAuth.js'
 import { ensureUserSyncSpreadsheet, readSyncTables, writeSyncTables } from './googleSheetSync.js'
+import { getItem, setItem } from './storage.js'
 import { createIcons, Axe, BadgeAlert, BadgeHelp, BadgeInfo, BowArrow, CakeSlice, Candy, CandyCane, CircleDashed, Clover, Coffee, Crosshair, Diamond, Drumstick, FlaskConical, FlaskRound, Footprints, Gem, Hand, HandMetal, HardHat, HatGlasses, Leaf, MoonStar, Music2, Package, PackageOpen, PartyPopper, PillBottle, Pizza, Salad, ScrollText, Shield, Shirt, Sandwich, Sparkles, Swords, Sword, Target, UtensilsCrossed, Wand, WandSparkles, Apple, Fish, SunMedium, Cherry, Cookie } from 'lucide'
 
 const DEFAULT_SPREADSHEET_URL = 'https://playshoptitans.com/spreadsheet'
@@ -361,7 +362,11 @@ form.addEventListener('submit', async (event) => {
   await importBlueprintData()
 })
 
-initializeBlueprintDataFromCache()
+async function init() {
+  await initializeBlueprintDataFromCache()
+}
+
+init()
 
 function initializeGoogleAuthUi() {
   if (!googleAuthContainer) {
@@ -814,7 +819,7 @@ async function importBlueprintData() {
     updateStatus('Downloading blueprints…')
     const { headers, rows, structuredBlueprints } = await importGoogleSheet(exportUrl)
     blueprintVersionLabel = versionLabel || blueprintVersionLabel
-    saveBlueprintCache({ headers, rows, structuredBlueprints, versionLabel: blueprintVersionLabel })
+    await saveBlueprintCache({ headers, structuredBlueprints, versionLabel: blueprintVersionLabel })
     allBlueprintItems = buildBlueprintItems(headers, rows, structuredBlueprints)
     renderBlueprintVersionLabel(blueprintVersionLabel)
 
@@ -832,8 +837,8 @@ async function importBlueprintData() {
   }
 }
 
-function initializeBlueprintDataFromCache() {
-  const cached = loadBlueprintCache()
+async function initializeBlueprintDataFromCache() {
+  const cached = await loadBlueprintCache()
   blueprintVersionLabel = cached?.versionLabel || ''
   renderBlueprintVersionLabel(blueprintVersionLabel)
 
@@ -846,22 +851,21 @@ function initializeBlueprintDataFromCache() {
     return
   }
 
-  const { headers = [], rows = [], structuredBlueprints = [] } = cached
-  allBlueprintItems = buildBlueprintItems(headers, rows, structuredBlueprints)
-  renderPreview(headers, rows, structuredBlueprints)
+  const { headers = [], structuredBlueprints = [] } = cached
+  allBlueprintItems = buildBlueprintItems(headers, [], structuredBlueprints)
+  renderPreview(headers, [], structuredBlueprints)
   renderSavedViews(allBlueprintItems)
   updateStatus('', 'info')
 }
 
-function saveBlueprintCache(payload) {
+async function saveBlueprintCache(payload) {
   const safePayload = {
     headers: Array.isArray(payload?.headers) ? payload.headers : [],
-    rows: Array.isArray(payload?.rows) ? payload.rows : [],
     structuredBlueprints: Array.isArray(payload?.structuredBlueprints) ? payload.structuredBlueprints : [],
     versionLabel: typeof payload?.versionLabel === 'string' ? payload.versionLabel : '',
   }
 
-  localStorage.setItem(BLUEPRINT_CACHE_STORAGE_KEY, JSON.stringify(safePayload))
+  await setItem(BLUEPRINT_CACHE_STORAGE_KEY, safePayload)
 }
 
 function renderBlueprintVersionLabel(versionLabel) {
@@ -910,18 +914,25 @@ function extractSpreadsheetVersionLabel(title) {
   return normalizedTitle.replace(/\s*-\s*Google Sheets$/i, '')
 }
 
-function loadBlueprintCache() {
+async function loadBlueprintCache() {
   try {
-    const parsed = JSON.parse(localStorage.getItem(BLUEPRINT_CACHE_STORAGE_KEY) || 'null')
-    if (!parsed || typeof parsed !== 'object') {
+    const cached = await getItem(BLUEPRINT_CACHE_STORAGE_KEY)
+    if (!cached || typeof cached !== 'object') {
+      // Check legacy localStorage cache
+      const legacy = JSON.parse(localStorage.getItem(BLUEPRINT_CACHE_STORAGE_KEY) || 'null')
+      if (legacy) {
+        localStorage.removeItem(BLUEPRINT_CACHE_STORAGE_KEY)
+        await saveBlueprintCache(legacy)
+        return legacy
+      }
       return null
     }
 
-    if (!Array.isArray(parsed.headers) || !Array.isArray(parsed.rows) || !Array.isArray(parsed.structuredBlueprints)) {
+    if (!Array.isArray(cached.headers) || !Array.isArray(cached.structuredBlueprints)) {
       return null
     }
 
-    return parsed
+    return cached
   } catch (error) {
     console.warn('Unable to read blueprint cache.', error)
     return null
@@ -2458,6 +2469,23 @@ function buildBlueprintGroups(headers, rows, structuredBlueprints = []) {
 }
 
 function buildBlueprintItems(headers, rows, structuredBlueprints = []) {
+  if (!rows.length && structuredBlueprints.length) {
+    // If we're loading from cache, we only have structured data
+    return structuredBlueprints.map((structuredData) => {
+      const name = structuredData.meta?.name || 'Unknown'
+      const type = structuredData.meta?.type || 'Unknown'
+      const tier = structuredData.meta?.tier
+
+      const classification = classifyBlueprint(type, name)
+      return {
+        name,
+        meta: tier ? `Tier ${tier}` : 'No tier',
+        structuredData,
+        classification,
+      }
+    })
+  }
+
   const nameIndex = getColumnIndex(headers, 'Name', 'Item Name', 'Blueprint Name')
   const typeIndex = getColumnIndex(headers, 'Type', 'Item Type', 'Category')
   const tierIndex = getColumnIndex(headers, 'Tier', 'Rank', 'Level')
