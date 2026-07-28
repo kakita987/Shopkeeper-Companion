@@ -1934,10 +1934,6 @@ function getQualityClass(label) {
   }
 }
 
-function persistBlueprintCollectionStatus(blueprintName, submitted) {
-  saveBlueprintProgressState(blueprintName, { collectionSubmitted: submitted })
-}
-
 function buildOverviewStats(structuredData = {}, options = {}) {
   const baseStats = {
     ...(structuredData?.stats || {}),
@@ -2001,24 +1997,6 @@ function hasCraftingComponents(blueprint) {
   const components = Array.isArray(materials.components) ? materials.components : []
 
   return components.some((component) => cleanText(component?.name))
-}
-
-function getDependentBlueprints(blueprintName, allBlueprints = []) {
-  const target = normalizeBlueprintName(blueprintName)
-  if (!target || !Array.isArray(allBlueprints)) {
-    return []
-  }
-
-  return allBlueprints.filter((blueprint) => {
-    if (!hasCraftingComponents(blueprint)) {
-      return false
-    }
-
-    const materials = getBlueprintMaterials(blueprint)
-    const components = Array.isArray(materials.components) ? materials.components : []
-
-    return components.some((component) => normalizeBlueprintName(component?.name) === target)
-  })
 }
 
 function getBlueprintMaterials(blueprint) {
