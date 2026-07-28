@@ -1,6 +1,9 @@
 import './style.css'
+import { mountAdBanner } from './adBanner.js'
+import { getRandomTavernText } from './kofiText.js'
 import { useGoogleAuth } from './useGoogleAuth.js'
 import { ensureUserSyncSpreadsheet, readSyncTables, writeSyncTables } from './googleSheetSync.js'
+import { getItem, setItem } from './storage.js'
 import { createIcons, Axe, BadgeAlert, BadgeHelp, BadgeInfo, BowArrow, CakeSlice, Candy, CandyCane, CircleDashed, Clover, Coffee, Crosshair, Diamond, Drumstick, FlaskConical, FlaskRound, Footprints, Gem, Hand, HandMetal, HardHat, HatGlasses, Leaf, MoonStar, Music2, Package, PackageOpen, PartyPopper, PillBottle, Pizza, Salad, ScrollText, Shield, Shirt, Sandwich, Sparkles, Swords, Sword, Target, UtensilsCrossed, Wand, WandSparkles, Apple, Fish, SunMedium, Cherry, Cookie } from 'lucide'
 
 const DEFAULT_SPREADSHEET_URL = 'https://playshoptitans.com/spreadsheet'
@@ -39,6 +42,7 @@ const DEFAULT_SAVED_VIEW_CRITERIA = {
   ownership: 'any',
   inventory: 'any',
   mastered: 'any',
+  collectionBookState: 'completed',
   collectionBook: [],
 }
 const STARTER_VIEW_PRESETS = [
@@ -67,6 +71,8 @@ const THEME_PREFERENCE_STORAGE_KEY = 'shopkeeper-theme'
 const BLUEPRINT_CACHE_STORAGE_KEY = 'shopkeeper-blueprint-cache-v1'
 const GOOGLE_SYNC_SPREADSHEET_ID_STORAGE_KEY = 'shopkeeper-google-sync-spreadsheet-id'
 const GOOGLE_SYNC_WRITE_DEBOUNCE_MS = 900
+const KOFI_HANDLE = 'shopkeepercompanion'
+const KOFI_URL = 'https://ko-fi.com/shopkeepercompanion'
 
 const LUCIDE_ICONS = {
   Axe,
@@ -119,7 +125,8 @@ const LUCIDE_ICONS = {
 }
 
 app.innerHTML = `
-  <main class="importer-shell">
+  <div class="app-layout">
+    <main class="importer-shell">
     <header class="app-header">
       <div class="hero-copy">
         <h1>Shopkeeper Companion</h1>
@@ -205,6 +212,15 @@ app.innerHTML = `
         </section>
 
         <section class="settings-section">
+          <h3>Support</h3>
+          <p class="settings-copy">If this companion helps your shop flow, you can support ongoing updates.</p>
+          <a id="kofi-support-button" class="kofi-support-button kofi-link-button" href="https://ko-fi.com/shopkeepercompanion" target="_blank" rel="noopener noreferrer">
+            <img class="kofi-link-icon" src="https://storage.ko-fi.com/cdn/cup-border.png" alt="" aria-hidden="true" />
+            <span class="kofi-link-text" data-kofi-button-text>Support on Ko-fi</span>
+          </a>
+        </section>
+
+        <section class="settings-section">
           <h3>Attribution</h3>
           <details class="attribution-details">
             <summary>Icons</summary>
@@ -217,7 +233,16 @@ app.innerHTML = `
         </section>
       </div>
     </aside>
-  </main>
+    </main>
+
+    <aside class="desktop-ad-rail" aria-label="Sponsored content">
+      <div id="desktop-ad-banner"></div>
+    </aside>
+  </div>
+
+  <div class="mobile-ad-rail" aria-label="Sponsored content">
+    <div id="mobile-ad-banner"></div>
+  </div>
 `
 
 const form = document.querySelector('#import-form')
@@ -230,9 +255,12 @@ const statusEl = document.querySelector('#status')
 const previewEl = document.querySelector('#preview')
 const savedViewsContentEl = document.querySelector('#saved-views-content')
 const blueprintVersionEl = document.querySelector('#blueprint-version')
+const kofiSupportButtonEl = document.querySelector('#kofi-support-button')
 const blueprintOverlay = document.querySelector('#blueprint-overlay')
 const blueprintOverlayContent = document.querySelector('#blueprint-overlay-content')
 const googleAuthContainer = document.querySelector('#google-auth')
+const desktopAdBannerEl = document.querySelector('#desktop-ad-banner')
+const mobileAdBannerEl = document.querySelector('#mobile-ad-banner')
 const topTabs = Array.from(document.querySelectorAll('.top-tab'))
 const viewPanels = Array.from(document.querySelectorAll('[data-view-panel]'))
 let trackedUpgradeKeys = loadTrackedUpgradeKeys()
@@ -248,6 +276,8 @@ let pendingGoogleSyncWriteTimer = null
 let pendingGoogleSyncInitPromise = null
 let isApplyingRemoteSyncState = false
 let blueprintVersionLabel = ''
+let disposeDesktopAd = () => {}
+let disposeMobileAd = () => {}
 const googleSyncState = {
   spreadsheetId: localStorage.getItem(GOOGLE_SYNC_SPREADSHEET_ID_STORAGE_KEY) || '',
   spreadsheetUrl: '',
@@ -262,12 +292,14 @@ function openSettings() {
   settingsPanel.classList.add('is-open')
   settingsPanel.setAttribute('aria-hidden', 'false')
   settingsToggle.setAttribute('aria-expanded', 'true')
+  document.body.classList.add('settings-open')
 }
 
 function closeSettings() {
   settingsPanel.classList.remove('is-open')
   settingsPanel.setAttribute('aria-hidden', 'true')
   settingsToggle.setAttribute('aria-expanded', 'false')
+  document.body.classList.remove('settings-open')
 }
 
 settingsToggle.addEventListener('click', () => {
@@ -322,13 +354,19 @@ topTabs.forEach((tab) => {
 applyTheme(getStoredTheme())
 applyFontPreference(getStoredFontPreference())
 initializeGoogleAuthUi()
+initializeAdBanners()
+initializeKofiSupportButton()
 
 form.addEventListener('submit', async (event) => {
   event.preventDefault()
   await importBlueprintData()
 })
 
-initializeBlueprintDataFromCache()
+async function init() {
+  await initializeBlueprintDataFromCache()
+}
+
+init()
 
 function initializeGoogleAuthUi() {
   if (!googleAuthContainer) {
@@ -342,6 +380,32 @@ function initializeGoogleAuthUi() {
     renderGoogleAuthUi(state)
     void handleGoogleAuthStateChange(state)
   })
+}
+
+function initializeAdBanners() {
+  disposeDesktopAd()
+  disposeMobileAd()
+
+  disposeDesktopAd = mountAdBanner(desktopAdBannerEl, {
+    publisher: KOFI_HANDLE,
+    kofiUrl: KOFI_URL,
+  })
+
+  disposeMobileAd = mountAdBanner(mobileAdBannerEl, {
+    publisher: KOFI_HANDLE,
+    kofiUrl: KOFI_URL,
+  })
+}
+
+function initializeKofiSupportButton() {
+  if (!kofiSupportButtonEl) {
+    return
+  }
+
+  const textEl = kofiSupportButtonEl.querySelector('[data-kofi-button-text]')
+  if (textEl) {
+    textEl.textContent = getRandomTavernText()
+  }
 }
 
 function renderGoogleAuthUi(state) {
@@ -755,7 +819,7 @@ async function importBlueprintData() {
     updateStatus('Downloading blueprints…')
     const { headers, rows, structuredBlueprints } = await importGoogleSheet(exportUrl)
     blueprintVersionLabel = versionLabel || blueprintVersionLabel
-    saveBlueprintCache({ headers, rows, structuredBlueprints, versionLabel: blueprintVersionLabel })
+    await saveBlueprintCache({ headers, structuredBlueprints, versionLabel: blueprintVersionLabel })
     allBlueprintItems = buildBlueprintItems(headers, rows, structuredBlueprints)
     renderBlueprintVersionLabel(blueprintVersionLabel)
 
@@ -773,8 +837,8 @@ async function importBlueprintData() {
   }
 }
 
-function initializeBlueprintDataFromCache() {
-  const cached = loadBlueprintCache()
+async function initializeBlueprintDataFromCache() {
+  const cached = await loadBlueprintCache()
   blueprintVersionLabel = cached?.versionLabel || ''
   renderBlueprintVersionLabel(blueprintVersionLabel)
 
@@ -787,22 +851,21 @@ function initializeBlueprintDataFromCache() {
     return
   }
 
-  const { headers = [], rows = [], structuredBlueprints = [] } = cached
-  allBlueprintItems = buildBlueprintItems(headers, rows, structuredBlueprints)
-  renderPreview(headers, rows, structuredBlueprints)
+  const { headers = [], structuredBlueprints = [] } = cached
+  allBlueprintItems = buildBlueprintItems(headers, [], structuredBlueprints)
+  renderPreview(headers, [], structuredBlueprints)
   renderSavedViews(allBlueprintItems)
   updateStatus('', 'info')
 }
 
-function saveBlueprintCache(payload) {
+async function saveBlueprintCache(payload) {
   const safePayload = {
     headers: Array.isArray(payload?.headers) ? payload.headers : [],
-    rows: Array.isArray(payload?.rows) ? payload.rows : [],
     structuredBlueprints: Array.isArray(payload?.structuredBlueprints) ? payload.structuredBlueprints : [],
     versionLabel: typeof payload?.versionLabel === 'string' ? payload.versionLabel : '',
   }
 
-  localStorage.setItem(BLUEPRINT_CACHE_STORAGE_KEY, JSON.stringify(safePayload))
+  await setItem(BLUEPRINT_CACHE_STORAGE_KEY, safePayload)
 }
 
 function renderBlueprintVersionLabel(versionLabel) {
@@ -851,18 +914,25 @@ function extractSpreadsheetVersionLabel(title) {
   return normalizedTitle.replace(/\s*-\s*Google Sheets$/i, '')
 }
 
-function loadBlueprintCache() {
+async function loadBlueprintCache() {
   try {
-    const parsed = JSON.parse(localStorage.getItem(BLUEPRINT_CACHE_STORAGE_KEY) || 'null')
-    if (!parsed || typeof parsed !== 'object') {
+    const cached = await getItem(BLUEPRINT_CACHE_STORAGE_KEY)
+    if (!cached || typeof cached !== 'object') {
+      // Check legacy localStorage cache
+      const legacy = JSON.parse(localStorage.getItem(BLUEPRINT_CACHE_STORAGE_KEY) || 'null')
+      if (legacy) {
+        localStorage.removeItem(BLUEPRINT_CACHE_STORAGE_KEY)
+        await saveBlueprintCache(legacy)
+        return legacy
+      }
       return null
     }
 
-    if (!Array.isArray(parsed.headers) || !Array.isArray(parsed.rows) || !Array.isArray(parsed.structuredBlueprints)) {
+    if (!Array.isArray(cached.headers) || !Array.isArray(cached.structuredBlueprints)) {
       return null
     }
 
-    return parsed
+    return cached
   } catch (error) {
     console.warn('Unable to read blueprint cache.', error)
     return null
@@ -1210,7 +1280,6 @@ function renderSavedViews(items = []) {
           <div class="section-summary-title">
             <h4>Filters</h4>
           </div>
-          <span class="group-count">${filteredItems.length}/${totalCount}</span>
         </summary>
         <div class="section-body">
           <div class="saved-view-filters">
@@ -1220,16 +1289,16 @@ function renderSavedViews(items = []) {
                 ${renderSelectOptions([
                   ['any', 'Any'],
                   ['parent', 'Dependent'],
-                  ['none', 'No dependency relation'],
+                  ['child', 'Needed'],
                 ], savedViewCriteria.dependency)}
               </select>
             </label>
             <label class="saved-view-filter">
               <span>Ownership</span>
               <select data-saved-filter="ownership">
+                ${renderSelectOptions([
                   ['any', 'Any'],
                   ['owned', 'Owned'],
-                  ['any', 'Either'],
                   ['not-owned', 'Not owned'],
                 ], savedViewCriteria.ownership)}
               </select>
@@ -1237,12 +1306,13 @@ function renderSavedViews(items = []) {
             <label class="saved-view-filter">
               <span>Inventory</span>
               <select data-saved-filter="inventory">
+                ${renderSelectOptions([
                   ['any', 'Any Status'],
                   ['has', 'Has Inventory'],
-                  ['none', 'Out of Stock'],
                   ['none', 'Inventory = 0'],
                 ], savedViewCriteria.inventory)}
               </select>
+            </label>
             <label class="saved-view-filter saved-view-filter-mastered">
               <span>Mastered</span>
               <select data-saved-filter="mastered">
@@ -1255,11 +1325,20 @@ function renderSavedViews(items = []) {
             </label>
             <fieldset class="saved-view-filter saved-view-filter-multiselect">
               <legend>Collection Book</legend>
+              <label class="saved-view-filter saved-view-filter-collection-state">
+                <span>Match</span>
+                <select data-saved-filter="collectionBookState">
+                  ${renderSelectOptions([
+                    ['completed', 'Completed'],
+                    ['needed', 'Still Needed'],
+                  ], savedViewCriteria.collectionBookState)}
+                </select>
+              </label>
+              <p class="collection-book-help">Select qualities to match. Completed checks finished qualities; Still Needed checks missing ones.</p>
               <div class="collection-book-options">
                 ${renderCollectionBookFilterOptions(savedViewCriteria.collectionBook)}
               </div>
             </fieldset>
-            </label>
           </div>
           <form class="saved-view-save-row" data-save-view-form>
             <input type="text" maxlength="60" placeholder="View Name (e.g. Not Owned + Dependents)" data-saved-view-name />
@@ -1275,7 +1354,7 @@ function renderSavedViews(items = []) {
           <div class="section-summary-title">
             <h4>Results</h4>
           </div>
-          <span class="group-count">${filteredItems.length}</span>
+          <span class="group-count">${filteredItems.length}/${totalCount}</span>
         </summary>
         <div class="section-body">
           ${renderSavedViewResults(filteredItems, dependencyIndex)}
@@ -1516,7 +1595,7 @@ function renderCollectionBookFilterOptions(selectedValues = []) {
     return `
       <label class="collection-book-option">
         <input type="checkbox" data-saved-filter-book="${escapeHtml(quality)}" ${isChecked ? 'checked' : ''} />
-        <span>${escapeHtml(label)}</span>
+          <span>${escapeHtml(label)} quality</span>
       </label>
     `
   }).join('')
@@ -1534,6 +1613,7 @@ function normalizeSavedViewCriteria(criteria = {}) {
     ownership: ['owned', 'not-owned', 'any'].includes(criteria.ownership) ? criteria.ownership : 'any',
     inventory: ['any', 'has', 'none'].includes(criteria.inventory) ? criteria.inventory : 'any',
     mastered: ['any', 'mastered', 'not-mastered'].includes(criteria.mastered) ? criteria.mastered : 'any',
+    collectionBookState: ['completed', 'needed'].includes(criteria.collectionBookState) ? criteria.collectionBookState : 'completed',
     collectionBook: collectionBook.filter((value) => ['superior', 'flawless', 'epic', 'legendary'].includes(String(value).toLowerCase())),
   }
 }
@@ -1602,7 +1682,10 @@ function filterBlueprintItems(items = [], criteria = {}, dependencyIndex) {
     }
 
     if (normalizedCriteria.collectionBook.length) {
-      const collectionMatches = normalizedCriteria.collectionBook.some((quality) => summary.collectionBookQualities.includes(quality))
+      const qualitiesToMatch = normalizedCriteria.collectionBookState === 'needed'
+        ? summary.collectionBookNeededQualities
+        : summary.collectionBookQualities
+      const collectionMatches = normalizedCriteria.collectionBook.some((quality) => qualitiesToMatch.includes(quality))
       if (!collectionMatches) {
         return false
       }
@@ -1632,6 +1715,8 @@ function buildBlueprintSummary(item, dependencyIndex) {
   const collectionBookQualities = Object.entries(progress.collectionBook || {})
     .filter(([, checked]) => Boolean(checked))
     .map(([quality]) => quality)
+  const allCollectionQualities = ['superior', 'flawless', 'epic', 'legendary']
+  const collectionBookNeededQualities = allCollectionQualities.filter((quality) => !collectionBookQualities.includes(quality))
 
   return {
     isOwned: Boolean(progress.owned),
@@ -1644,6 +1729,7 @@ function buildBlueprintSummary(item, dependencyIndex) {
     isCollectionComplete: collectionStatus === '✅ Complete',
     collectionStatus,
     collectionBookQualities,
+    collectionBookNeededQualities,
   }
 }
 
@@ -2383,6 +2469,23 @@ function buildBlueprintGroups(headers, rows, structuredBlueprints = []) {
 }
 
 function buildBlueprintItems(headers, rows, structuredBlueprints = []) {
+  if (!rows.length && structuredBlueprints.length) {
+    // If we're loading from cache, we only have structured data
+    return structuredBlueprints.map((structuredData) => {
+      const name = structuredData.meta?.name || 'Unknown'
+      const type = structuredData.meta?.type || 'Unknown'
+      const tier = structuredData.meta?.tier
+
+      const classification = classifyBlueprint(type, name)
+      return {
+        name,
+        meta: tier ? `Tier ${tier}` : 'No tier',
+        structuredData,
+        classification,
+      }
+    })
+  }
+
   const nameIndex = getColumnIndex(headers, 'Name', 'Item Name', 'Blueprint Name')
   const typeIndex = getColumnIndex(headers, 'Type', 'Item Type', 'Category')
   const tierIndex = getColumnIndex(headers, 'Tier', 'Rank', 'Level')
