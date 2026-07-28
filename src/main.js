@@ -231,6 +231,10 @@ app.innerHTML = `
             <p class="settings-copy">The aesthetic font style uses Redressed for titles, Bokor for headers and accent labels, and Philosopher for body text.</p>
           </details>
         </section>
+
+        <p class="settings-privacy-link">
+          <a class="inline-link settings-privacy-link-anchor" href="/privacy.html">Privacy Policy</a>
+        </p>
       </div>
     </aside>
     </main>

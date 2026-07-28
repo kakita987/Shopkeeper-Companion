@@ -1698,6 +1698,59 @@ body.theme-dark .kofi-support-button,
   color: #6b7280;
 }
 
+/* ----------------------------------------
+   Privacy Policy page
+   .privacy-panel sits inside .panel and uses
+   standard HTML prose elements (p, ul, h2).
+   .top-tab used as <a> on the privacy page
+   needs its link appearance reset.
+   .settings-privacy-link is the subtle footer
+   link shown at the bottom of the settings
+   card on both the main app and privacy page.
+---------------------------------------- */
+
+.privacy-panel p,
+.privacy-panel ul {
+  margin: 0 0 14px;
+  color: #374151;
+  line-height: 1.7;
+}
+
+.privacy-panel ul {
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+body.theme-dark .privacy-panel p,
+body.theme-dark .privacy-panel ul,
+:root[data-theme='dark'] .privacy-panel p,
+:root[data-theme='dark'] .privacy-panel ul {
+  color: #d1d5db;
+}
+
+a.top-tab {
+  text-decoration: none;
+}
+
+.settings-privacy-link {
+  margin: 4px 0 0;
+  text-align: center;
+}
+
+.settings-privacy-link-anchor {
+  font-size: 0.8rem;
+  font-weight: 400;
+  opacity: 0.6;
+  text-decoration: none;
+}
+
+.settings-privacy-link-anchor:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
 @media (min-width: 901px) {
   .blueprint-overlay {
     align-items: center;
