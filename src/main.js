@@ -231,6 +231,10 @@ app.innerHTML = `
             <p class="settings-copy">The aesthetic font style uses Redressed for titles, Bokor for headers and accent labels, and Philosopher for body text.</p>
           </details>
         </section>
+
+        <p class="settings-privacy-link">
+          <a class="inline-link settings-privacy-link-anchor" href="/privacy.html">Privacy Policy</a>
+        </p>
       </div>
     </aside>
     </main>
@@ -1934,10 +1938,6 @@ function getQualityClass(label) {
   }
 }
 
-function persistBlueprintCollectionStatus(blueprintName, submitted) {
-  saveBlueprintProgressState(blueprintName, { collectionSubmitted: submitted })
-}
-
 function buildOverviewStats(structuredData = {}, options = {}) {
   const baseStats = {
     ...(structuredData?.stats || {}),
@@ -2001,24 +2001,6 @@ function hasCraftingComponents(blueprint) {
   const components = Array.isArray(materials.components) ? materials.components : []
 
   return components.some((component) => cleanText(component?.name))
-}
-
-function getDependentBlueprints(blueprintName, allBlueprints = []) {
-  const target = normalizeBlueprintName(blueprintName)
-  if (!target || !Array.isArray(allBlueprints)) {
-    return []
-  }
-
-  return allBlueprints.filter((blueprint) => {
-    if (!hasCraftingComponents(blueprint)) {
-      return false
-    }
-
-    const materials = getBlueprintMaterials(blueprint)
-    const components = Array.isArray(materials.components) ? materials.components : []
-
-    return components.some((component) => normalizeBlueprintName(component?.name) === target)
-  })
 }
 
 function getBlueprintMaterials(blueprint) {

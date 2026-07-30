@@ -272,14 +272,6 @@ body.theme-dark .top-tab.is-active,
 
 .settings-toggle {
   border: none;
-  border-radius: 999px;
-  padding: 10px 14px;
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.settings-toggle {
   position: static;
   width: 44px;
   height: 44px;
@@ -293,6 +285,7 @@ body.theme-dark .top-tab.is-active,
   box-shadow: none;
   padding: 0;
   border-radius: 50%;
+  cursor: pointer;
   transition: transform 140ms ease, background 140ms ease;
   margin-top: 2px;
   justify-self: end;
@@ -700,20 +693,7 @@ body.theme-dark .overlay-card,
   font-weight: 700;
 }
 
-.group-summary-icon {
-  width: 24px;
-  height: 24px;
-  object-fit: contain;
-  flex-shrink: 0;
-}
 
-.group-count {
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: rgba(17, 24, 39, 0.08);
-  font-size: 0.8rem;
-  font-weight: 700;
-}
 
 .overlay-hero {
   position: relative;
@@ -1050,23 +1030,6 @@ body.theme-dark .resource-item strong,
   color: #f9fafb;
 }
 
-.blueprint-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.7);
-  cursor: pointer;
-  transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease;
-}
-
-.blueprint-item:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.1);
-  background: rgba(255, 255, 255, 0.9);
-}
-
 .item-copy {
   display: flex;
   flex-direction: column;
@@ -1086,11 +1049,6 @@ body.theme-dark .resource-item strong,
   font-weight: 700;
   font-size: 1.15rem;
   line-height: 1.1;
-}
-
-body.theme-dark .blueprint-item,
-:root[data-theme='dark'] .blueprint-item {
-  background: rgba(255, 255, 255, 0.08);
 }
 
 .settings-card {
@@ -1227,12 +1185,8 @@ body.theme-dark .panel,
 }
 
 body.theme-dark .settings-copy,
-body.theme-dark .resolved-url,
-body.theme-dark .summary,
 body.theme-dark .empty,
 :root[data-theme='dark'] .settings-copy,
-:root[data-theme='dark'] .resolved-url,
-:root[data-theme='dark'] .summary,
 :root[data-theme='dark'] .empty {
   color: #d1d5db;
 }
@@ -1257,35 +1211,9 @@ body.theme-dark .blueprint-type > summary,
   background: rgba(165, 180, 252, 0.18);
 }
 
-body.theme-dark .blueprint-item,
-:root[data-theme='dark'] .blueprint-item {
-  background: #374151;
-  border: 1px solid #4b5563;
-}
-
 body.theme-dark .item-name,
 :root[data-theme='dark'] .item-name {
   color: #ffffff;
-}
-
-body.theme-dark .item-meta,
-body.theme-dark .group-count,
-:root[data-theme='dark'] .item-meta,
-:root[data-theme='dark'] .group-count {
-  color: #e5edf8;
-}
-
-body.theme-dark .preview-table th,
-:root[data-theme='dark'] .preview-table th {
-  background: #374151;
-  color: #f9fafb;
-}
-
-body.theme-dark .preview-table td,
-body.theme-dark .preview-table th,
-:root[data-theme='dark'] .preview-table td,
-:root[data-theme='dark'] .preview-table th {
-  border-color: #4b5563;
 }
 
 .settings-header {
@@ -1308,13 +1236,6 @@ body.theme-dark .preview-table th,
 .settings-section h3 {
   margin: 0 0 8px;
   font-size: 1rem;
-}
-
-.font-select-label {
-  display: block;
-  margin-bottom: 6px;
-  color: #4b5563;
-  font-size: 0.9rem;
 }
 
 .font-select {
@@ -1456,16 +1377,6 @@ body.theme-dark .close-settings:hover,
   background: linear-gradient(165deg, #fbf2de 0%, #f2e2c4 100%);
 }
 
-.eyebrow {
-  margin: 0 0 8px;
-  font-size: 0.78rem;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  color: #7c3aed;
-  font-weight: 700;
-  font-family: var(--font-accent);
-}
-
 h1,
 h2 {
   margin: 0 0 12px;
@@ -1575,13 +1486,6 @@ h2 {
   align-items: flex-start;
   gap: 12px;
   margin-bottom: 10px;
-}
-
-.summary {
-  color: #6b7280;
-  font-size: 0.95rem;
-  white-space: nowrap;
-  font-family: var(--font-accent);
 }
 
 .blueprint-groups {
@@ -1697,12 +1601,21 @@ h2 {
 
 .blueprint-item {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 8px 10px;
   margin-right: 4px;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.82);
+  cursor: pointer;
+  transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+
+.blueprint-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.1);
+  background: rgba(255, 255, 255, 0.9);
 }
 
 body.theme-dark .blueprint-category[open],
@@ -1785,6 +1698,59 @@ body.theme-dark .kofi-support-button,
   color: #6b7280;
 }
 
+/* ----------------------------------------
+   Privacy Policy page
+   .privacy-panel sits inside .panel and uses
+   standard HTML prose elements (p, ul, h2).
+   .top-tab used as <a> on the privacy page
+   needs its link appearance reset.
+   .settings-privacy-link is the subtle footer
+   link shown at the bottom of the settings
+   card on both the main app and privacy page.
+---------------------------------------- */
+
+.privacy-panel p,
+.privacy-panel ul {
+  margin: 0 0 14px;
+  color: #374151;
+  line-height: 1.7;
+}
+
+.privacy-panel ul {
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+body.theme-dark .privacy-panel p,
+body.theme-dark .privacy-panel ul,
+:root[data-theme='dark'] .privacy-panel p,
+:root[data-theme='dark'] .privacy-panel ul {
+  color: #d1d5db;
+}
+
+a.top-tab {
+  text-decoration: none;
+}
+
+.settings-privacy-link {
+  margin: 4px 0 0;
+  text-align: center;
+}
+
+.settings-privacy-link-anchor {
+  font-size: 0.8rem;
+  font-weight: 400;
+  opacity: 0.6;
+  text-decoration: none;
+}
+
+.settings-privacy-link-anchor:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
 @media (min-width: 901px) {
   .blueprint-overlay {
     align-items: center;
@@ -1803,10 +1769,6 @@ body.theme-dark .kofi-support-button,
 @media (max-width: 700px) {
   .panel {
     padding: 18px;
-  }
-
-  .saved-view-grid {
-    grid-template-columns: 1fr;
   }
 
   .saved-view-filters {

@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Privacy Policy — Shopkeeper Companion</title>
+  </head>
+  <body>
+    <div id="app">
+      <div class="app-layout">
+        <main class="importer-shell">
+
+          <header class="app-header">
+            <div class="hero-copy">
+              <h1>Shopkeeper Companion</h1>
+            </div>
+
+            <nav class="top-tabs" aria-label="Primary">
+              <a class="top-tab" href="/" data-view="blueprints">Blueprints</a>
+              <a class="top-tab" href="/#saved-views" data-view="saved-views">Saved Views</a>
+            </nav>
+
+            <button id="settings-toggle" class="settings-toggle" type="button" aria-label="Open settings" aria-expanded="false" aria-controls="settings-panel">⚙</button>
+          </header>
+
+          <div class="view-shell">
+            <article class="panel preview-panel privacy-panel">
+
+              <h2>Privacy Policy</h2>
+
+              <p class="settings-copy"><strong>Effective Date:</strong> July 2026</p>
+
+              <p>Shopkeeper Companion is a free, local-first web tool for <strong>Shop Titans</strong> players.</p>
+
+              <p>The short version: <strong>I don't want your data, I don't track you, and I don't even own a server to store your information on.</strong> If I wanted to harvest your data, I would have to rewrite the entire application from scratch.</p>
+
+              <h2>How Your Data Works</h2>
+
+              <p>Shopkeeper Companion is designed to keep your data under your control.</p>
+
+              <ul>
+                <li><strong>Community Game Data:</strong> Blueprint information comes from publicly available community sources. Shopkeeper Companion uses this data to provide an interface for organizing and viewing blueprint information.</li>
+                <li><strong>Your Data Stays With You:</strong> Your settings and player progress data are stored on your device unless you choose to enable Google synchronization.</li>
+                <li><strong>No Developer Database:</strong> Shopkeeper Companion does not hold a server-side database of your activity or player data.</li>
+                <li><strong>No Tracking:</strong> Shopkeeper Companion does not track your browsing activity, fingerprint your device, or collect personal identifiers for advertising or analytics.</li>
+              </ul>
+
+              <h2>Google Synchronization</h2>
+
+              <p>Shopkeeper Companion uses 'Sign in with Google' and Google Sheets to optionally back up and sync your progress. Your Shopkeeper Companion spreadsheet is stored in your own Google Drive and allows two-way synchronization between the app and your saved progress.</p>
+
+              <p>This use of Google APIs follows the <a class="inline-link" href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener noreferrer">Google API Services User Data Policy</a>, including the Limited Use requirements. Information received from Google APIs is used only to provide synchronization features and is not sold, shared, or used for advertising.</p>
+
+              <ul>
+                <li><strong>Authentication:</strong> Google handles the Sign-In process directly. Shopkeeper Companion does not see, collect, or store your name, email address, Google account password, or any of your Google account details.</li>
+                <li><strong>Google Drive Access:</strong> The app requests permission to create and edit its own spreadsheet in your Google Drive, which is used to back up and sync your Shopkeeper Companion progress. The app cannot see, read, or modify any other files in your Drive.</li>
+                <li><strong>Direct Connection:</strong> Sync data travels directly between your browser and Google's servers. It never passes through a middleman or developer server.</li>
+                <li><strong>Managing Your Data:</strong> You can delete the Shopkeeper Companion backup from your Google Drive at any time. If you are signed in and choose to sync again, the app may create a new spreadsheet for storing your progress.</li>
+              </ul>
+
+              <h2>Analytics</h2>
+
+              <p>Shopkeeper Companion may track website traffic, such as total page visits or which websites referred visitors (for example, knowing if a visit came from Reddit or a search engine).</p>
+
+              <p>This information is used to understand overall website performance and traffic trends, not to identify or track individual users.</p>
+
+              <h2>Third-Party Services</h2>
+
+              <p>Shopkeeper Companion may use external services:</p>
+
+              <ul>
+                <li><strong>EthicalAds:</strong> Used to display privacy-preserving advertisements. EthicalAds does not use tracking cookies or sell your personal data.</li>
+                <li><strong>Ko-fi:</strong> An optional link for users who wish to support development. Any transactions are handled entirely on Ko-fi's platform.</li>
+              </ul>
+
+              <p>These services may have their own privacy policies.</p>
+
+              <h2>Contact</h2>
+
+              <p>If you have feature requests or bug reports, you can reach out through GitHub repository or support links.</p>
+
+            </article>
+          </div>
+
+        </main>
+      </div>
+    </div>
+
+    <aside id="settings-panel" class="settings-panel" aria-hidden="true">
+      <div class="settings-card">
+        <div class="settings-header">
+          <h2 class="settings-title">Settings</h2>
+          <button id="close-settings" class="close-settings" type="button" aria-label="Close settings">×</button>
+        </div>
+
+        <section class="settings-section">
+          <h3>Theme</h3>
+          <div class="theme-options">
+            <label><input type="radio" name="theme" value="light" /> Light</label>
+            <label><input type="radio" name="theme" value="dark" /> Dark</label>
+            <label><input type="radio" name="theme" value="device" checked /> Device</label>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h3>Font</h3>
+          <select id="font-select" class="font-select" aria-label="Font style">
+            <option value="default">Aesthetic (Default)</option>
+            <option value="sans">Century Gothic</option>
+            <option value="serif">Times New Roman</option>
+          </select>
+        </section>
+
+        <p class="settings-privacy-link">
+          <a class="inline-link settings-privacy-link-anchor" href="/privacy.html">Privacy Policy</a>
+        </p>
+      </div>
+    </aside>
+
+    <script type="module" src="/src/privacy.js"></script>
+  </body>
+</html>
