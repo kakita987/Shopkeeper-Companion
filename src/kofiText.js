@@ -1,7 +1,4 @@
-// ========================================
 // Drinks
-// ========================================
-
 const DRINKS = [
   { name: "coffee", weight: 5 },
   { name: "tea", weight: 5 },
@@ -62,12 +59,9 @@ const CHARACTER_NAMES = [
   "King Reinhold"
 ];
 
-// ========================================
 // Character Title Pool
 // Used when a phrase needs a role/title.
 // Capitalization is handled separately.
-// ========================================
-
 const CHARACTER_TITLES = [
   "Blacksmith",
   "Tailor",
@@ -206,7 +200,6 @@ const RECIPIENTS = {
 };
 
 // Phrase Templates
-
 const PHRASES = [
 
   // Character + drink + Shopkeeper
@@ -257,10 +250,7 @@ const PHRASES = [
 
 ];
 
-// ========================================
 // Helpers
-// ========================================
-
 function random(array) {
   return array[Math.floor(Math.random() * array.length)];
 }
@@ -336,12 +326,9 @@ function getCharacter(format = "random") {
   ]);
 }
 
-
-// ========================================
 // Message Generator
-// ========================================
-
-function generateKofiMessage() {
+// Exported as getRandomTavernText to match the name used across the app.
+export function getRandomTavernText() {
 
   const phrase = random(PHRASES);
   let message = phrase.text;
@@ -366,7 +353,7 @@ function generateKofiMessage() {
   if (phrase.requiresDrink) {
     message = message.replace(
       "{drink}",
-      getDrink()
+      getDrink().name
     );
   }
 
