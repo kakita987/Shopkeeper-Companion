@@ -2,7 +2,7 @@ import './style.css'
 import { mountAdBanner } from './adBanner.js'
 import { getRandomTavernText } from './kofiText.js'
 import { useGoogleAuth } from './useGoogleAuth.js'
-import { ensureUserSyncSpreadsheet, readSyncTables, writeSyncTables } from './googleSheetSync.js'
+import { ensureUserSyncSpreadsheet, parseWorkbookBlueprintProgress, readSyncTables, writeSyncTables } from './googleSheetSync.js'
 import { getItem, setItem } from './storage.js'
 import { createIcons, Axe, BadgeAlert, BadgeHelp, BadgeInfo, BowArrow, CakeSlice, Candy, CandyCane, CircleDashed, Clover, Coffee, Crosshair, Diamond, Drumstick, FlaskConical, FlaskRound, Footprints, Gem, Hand, HandMetal, HardHat, HatGlasses, Leaf, MoonStar, Music2, Package, PackageOpen, PartyPopper, PillBottle, Pizza, Salad, ScrollText, Shield, Shirt, Sandwich, Sparkles, Swords, Sword, Target, UtensilsCrossed, Wand, WandSparkles, Apple, Fish, SunMedium, Cherry, Cookie } from 'lucide'
 
@@ -556,7 +556,18 @@ function hasRemoteSyncData(remote) {
   }
 
   return ['settings', 'savedViews', 'trackedUpgrades', 'blueprintProgress']
-    .some((key) => Array.isArray(remote[key]) && remote[key].length > 0)
+    .some((key) => {
+      const value = remote[key]
+      if (Array.isArray(value)) {
+        return value.length > 0
+      }
+
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        return Object.keys(value).length > 0
+      }
+
+      return false
+    })
 }
 
 function hasLocalUserData() {
@@ -587,10 +598,10 @@ function applyRemoteSyncState(remoteTables) {
     hasLoadedSavedFilterViews = true
     localStorage.setItem(SAVED_FILTER_VIEWS_STORAGE_KEY, JSON.stringify(savedFilterViews))
 
-    trackedUpgradeKeys = new Set(parseTrackedUpgradeRows(remoteTables.trackedUpgrades))
+    trackedUpgradeKeys = new Set(parseTrackedUpgradeRows(settings))
     localStorage.setItem(TRACKED_UPGRADES_STORAGE_KEY, JSON.stringify([...trackedUpgradeKeys]))
 
-    blueprintProgressByName = parseBlueprintProgressRows(remoteTables.blueprintProgress)
+    blueprintProgressByName = parseBlueprintProgressRows(remoteTables.blueprintProgress, blueprintProgressByName)
     localStorage.setItem(BLUEPRINT_PROGRESS_STORAGE_KEY, JSON.stringify(blueprintProgressByName))
   } finally {
     isApplyingRemoteSyncState = false
@@ -638,8 +649,8 @@ async function pushLocalStateToGoogleSheet(accessToken) {
     await writeSyncTables(accessToken, googleSyncState.spreadsheetId, {
       settings: buildSettingsRows(),
       savedViews: buildSavedViewsRows(),
-      trackedUpgrades: buildTrackedUpgradeRows(),
-      blueprintProgress: buildBlueprintProgressRows(),
+      blueprintItems: allBlueprintItems,
+      blueprintProgressByName,
     })
 
     googleSyncState.lastSyncedAt = new Date().toISOString()
@@ -656,6 +667,7 @@ function buildSettingsRows() {
   return [
     ['theme', getStoredTheme()],
     ['font', getStoredFontPreference()],
+    ['tracked-upgrades', JSON.stringify([...trackedUpgradeKeys])],
   ]
 }
 
@@ -727,10 +739,22 @@ function buildTrackedUpgradeRows() {
   return [...trackedUpgradeKeys].map((key) => [key])
 }
 
-function parseTrackedUpgradeRows(rows = []) {
-  return rows
-    .map((row) => cleanText(row?.[0]))
-    .filter(Boolean)
+function parseTrackedUpgradeRows(settings = {}) {
+  if (settings && typeof settings === 'object' && !Array.isArray(settings)) {
+    const raw = cleanText(settings['tracked-upgrades'] || settings['trackedUpgrades'])
+    if (!raw) {
+      return []
+    }
+
+    try {
+      const parsed = JSON.parse(raw)
+      return Array.isArray(parsed) ? parsed.filter(Boolean) : []
+    } catch (error) {
+      return []
+    }
+  }
+
+  return []
 }
 
 function buildBlueprintProgressRows() {
@@ -759,33 +783,8 @@ function buildBlueprintProgressRows() {
     .filter(Boolean)
 }
 
-function parseBlueprintProgressRows(rows = []) {
-  return rows.reduce((result, row) => {
-    const blueprintName = cleanText(row?.[0])
-    if (!blueprintName) {
-      return result
-    }
-
-    result[blueprintName] = {
-      owned: parseBooleanCell(row?.[1]),
-      master: parseBooleanCell(row?.[2]),
-      inventory: {
-        normal: toInventoryCount(row?.[3]),
-        superior: toInventoryCount(row?.[4]),
-        flawless: toInventoryCount(row?.[5]),
-        epic: toInventoryCount(row?.[6]),
-        legendary: toInventoryCount(row?.[7]),
-      },
-      collectionBook: {
-        superior: parseBooleanCell(row?.[8]),
-        flawless: parseBooleanCell(row?.[9]),
-        epic: parseBooleanCell(row?.[10]),
-        legendary: parseBooleanCell(row?.[11]),
-      },
-    }
-
-    return result
-  }, {})
+function parseBlueprintProgressRows(rows = [], existingProgress = {}) {
+  return parseWorkbookBlueprintProgress(rows, existingProgress)
 }
 
 function parseBooleanCell(value) {
