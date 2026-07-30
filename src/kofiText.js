@@ -1,387 +1,374 @@
-const KOFI_DRINKS = [
-  "coffee",
-  "tea",
-  "brew",
-  "drink",
-  "boba tea",
-  "milkshake",
-  "smoothie",
-  "milk tea"
+// ========================================
+// Drinks
+// ========================================
+
+const DRINKS = [
+  { name: "coffee", weight: 5 },
+  { name: "tea", weight: 5 },
+  { name: "brew", weight: 4 },
+  { name: "drink", weight: 2 },
+  { name: "boba tea", weight: 1 },
+  { name: "milkshake", weight: 1 },
+  { name: "smoothie", weight: 1 },
+  { name: "milk tea", weight: 1 }
 ];
 
+// Character Name Pool
+// Used when a phrase needs only the character's name.
+const CHARACTER_NAMES = [
+  "Argon",
+  "Lilu",
+  "Sia",
+  "Yami",
+  "Rudo",
+  "Polonia",
+  "Donovan",
+  "Hemma",
+  "Ashley",
+  "Bjorn",
+  "Malady",
 
-const KOFI_CHARACTERS = [
+  "Wallace",
+  "Julia",
+  "Allan",
+  "Maribel",
+  "Grimar",
+  "Katarina",
+  "Freyja",
+  "Theodore",
+  "Evelyn",
+  "Roxanne",
+  "Sondra",
+  "Mundra",
+  "Yolanda",
+  "Tutu Mano",
+  "Kaipo",
+  "Yohan",
+  "Roland",
+  "Zephyr",
 
-  // Champions
-  {
-    name: "Argon",
-    full: "Champion Argon",
-    type: "Champion"
-  },
-  {
-    name: "Lilu",
-    full: "Champion Lilu",
-    type: "Champion"
-  },
-  {
-    name: "Sia",
-    full: "Champion Sia",
-    type: "Champion"
-  },
-  {
-    name: "Yami",
-    full: "Champion Yami",
-    type: "Champion"
-  },
-  {
-    name: "Rudo",
-    full: "Champion Rudo",
-    type: "Champion"
-  },
-  {
-    name: "Polonia",
-    full: "Champion Polonia",
-    type: "Champion"
-  },
-  {
-    name: "Donovan",
-    full: "Champion Donovan",
-    type: "Champion"
-  },
-  {
-    name: "Hemma",
-    full: "Champion Hemma",
-    type: "Champion"
-  },
-  {
-    name: "Ashley",
-    full: "Champion Ashley",
-    type: "Champion"
-  },
-  {
-    name: "Bjorn",
-    full: "Champion Bjorn",
-    type: "Champion"
-  },
-  {
-    name: "Malady",
-    full: "Champion Malady",
-    type: "Champion"
-  },
+  "Durhan",
+  "Gorza",
+  "Tamas",
+  "Juniper",
+  "Brohm",
+  "Jog",
+  "Ismael",
+  "Beatrice",
+  "Maylee",
+  "Serene",
+  "Zolea",
+  
+  "King Reinhold"
+];
 
-  // Workers
-  {
-    name: "Wallace",
-    role: "Blacksmith",
-    full: "Wallace the Blacksmith",
-    type: "Worker"
-  },
-  {
-    name: "Julia",
-    role: "Tailor",
-    full: "Julia the Tailor",
-    type: "Worker"
-  },
-  {
-    name: "Allan",
-    role: "Carpenter",
-    full: "Allan the Carpenter",
-    type: "Worker"
-  },
-  {
-    name: "Maribel",
-    role: "Herbalist",
-    full: "Maribel the Herbalist",
-    type: "Worker"
-  },
-  {
-    name: "Grimar",
-    role: "Wizard",
-    full: "Grimar the Wizard",
-    type: "Worker"
-  },
-  {
-    name: "Katarina",
-    role: "Jeweler",
-    full: "Katarina the Jeweler",
-    type: "Worker"
-  },
-  {
-    name: "Freyja",
-    role: "Priestess",
-    full: "Freyja the Priestess",
-    type: "Worker"
-  },
-  {
-    name: "Theodore",
-    role: "Master",
-    full: "Theodore the Master",
-    type: "Worker"
-  },
-  {
-    name: "Evelyn",
-    role: "Scholar",
-    full: "Evelyn the Scholar",
-    type: "Worker"
-  },
-  {
-    name: "Roxanne",
-    role: "Engineer",
-    full: "Roxanne the Engineer",
-    type: "Worker"
-  },
-  {
-    name: "Sondra",
-    role: "Sun Dragon",
-    full: "Sondra the Sun Dragon",
-    type: "Worker"
-  },
-  {
-    name: "Mundra",
-    role: "Moon Dragon",
-    full: "Mundra the Moon Dragon",
-    type: "Worker"
-  },
-  {
-    name: "Yolanda",
-    role: "Summoner",
-    full: "Yolanda the Summoner",
-    type: "Worker"
-  },
-  {
-    name: "Tutu Mano",
-    role: "Cook",
-    full: "Tutu Mano the Cook",
-    type: "Worker"
-  },
-  {
-    name: "Kaipo",
-    role: "Baker",
-    full: "Kaipo the Baker",
-    type: "Worker"
-  },
-  {
-    name: "Yohan",
-    role: "Bard",
-    full: "Yohan the Bard",
-    type: "Worker"
-  },
-  {
-    name: "Roland",
-    role: "Veteran",
-    full: "Roland the Veteran",
-    type: "Worker"
-  },
-  {
-    name: "Zephyr",
-    role: "Storm Elemental",
-    full: "Zephyr the Storm Elemental",
-    type: "Worker"
-  },
+// ========================================
+// Character Title Pool
+// Used when a phrase needs a role/title.
+// Capitalization is handled separately.
+// ========================================
 
-  // Special Characters
-  // These do not follow normal naming rules
-  {
-    name: "King Reinhold",
-    references: [
-      "the King",
-      "King Reinhold"
-    ],
-    type: "Special"
-  },
+const CHARACTER_TITLES = [
+  "Blacksmith",
+  "Tailor",
+  "Carpenter",
+  "Herbalist",
+  "Wizard",
+  "Jeweler",
+  "Priestess",
+  "Master",
+  "Scholar",
+  "Engineer",
+  "Sun Dragon",
+  "Moon Dragon",
+  "Summoner",
+  "Cook",
+  "Baker",
+  "Bard",
+  "Veteran",
+  "Storm Elemental",
 
-  {
-    name: "Tamas",
-    references: [
-      "Tamas",
-      "Champion Tamas",
-      "Tamas the Leatherworker",
-    ],
-    type: "Special",
-    eventCharacter: true
-  },
+  "Miner",
+  "Lumberjack",
+  "Tanner",
+  "Gardener",
+  "Smelter",
+  "Ironwood Sawyer",
+  "Weaver",
+  "Oil Presser",
+  "Jewel Curator",
+  "Ether Harvester",
+  "Cryptkeeper",
 
-  // Creator
-  {
+  "King"
+];
+
+// Full Reference Pool
+// Used when the phrase needs the complete character reference.
+
+const CHARACTER_FULL = [
+  "Champion Argon",
+  "Champion Lilu",
+  "Champion Sia",
+  "Champion Yami",
+  "Champion Rudo",
+  "Champion Polonia",
+  "Champion Donovan",
+  "Champion Hemma",
+  "Champion Ashley",
+  "Champion Bjorn",
+  "Champion Malady",
+
+  "Wallace the Blacksmith",
+  "Julia the Tailor",
+  "Allan the Carpenter",
+  "Maribel the Herbalist",
+  "Grimar the Wizard",
+  "Katarina the Jeweler",
+  "Freyja the Priestess",
+  "Theodore the Master",
+  "Evelyn the Scholar",
+  "Roxanne the Engineer",
+  "Sondra the Sun Dragon",
+  "Mundra the Moon Dragon",
+  "Yolanda the Summoner",
+  "Tutu Mano the Cook",
+  "Kaipo the Baker",
+  "Yohan the Bard",
+  "Roland the Veteran",
+  "Zephyr the Storm Elemental",
+
+  "Durhan the Miner",
+  "Gorza the Lumberjack",
+  "Tamas the Tanner",
+  "Juniper the Gardener",
+  "Brohm the Smelter",
+  "Jog the Ironwood Sawyer",
+  "Ismael the Weaver",
+  "Beatrice the Oil Presser",
+  "Maylee the Jewel Curator",
+  "Serene the Ether Harvester",
+  "Zolea the Cryptkeeper",
+
+  "King Reinhold"
+];
+
+// Tamas Day Character Pools
+
+const TAMAS_DAY_CHARACTERS = [
+  "Tamas",
+  
+  "Tamas the Blacksmith",
+  "Tamas the Tailor",
+  "Tamas the Engineer",
+  "Tamas the Miner",
+  "Tamas the Lumberjack",
+  "Tamas the Gardener",
+  "Tamas the Weaver",
+  "Tamas the Jeweler",
+  "Tamas the Summoner",
+  "Tamas the Cook",
+  "Tamas the Baker",
+  "Tamas the Bard",
+  "Tamas the Veteran",
+  "Tamas the Herbalist",
+  "Tamas the Priestess",
+  "Tamas the Scholar",
+
+  "Tamas the Miner",
+  "Tamas the Lumberjack",
+  "Tamas the Tanner",
+  "Tamas the Gardener",
+  "Tamas the Smelter",
+  "Tamas the Ironwood Sawyer",
+  "Tamas the Weaver",
+  "Tamas the Oil Presser",
+  "Tamas the Jewel Curator",
+  "Tamas the Ether Harvester",
+  "Tamas the Cryptkeeper",
+];
+
+// Support Recipients
+// Used by phrases to determine who or what the support is directed toward.
+// "Shopkeeper" refers to the creator/developer of Shopkeeper Companion.
+// "Companion app" refers to the app itself.
+
+const RECIPIENTS = {
+  shopkeeper: {
     name: "Shopkeeper",
-    role: "Shopkeeper",
-    type: "Creator"
+    articleRequired: false
+  },
+
+  app: {
+    name: "Companion app",
+    articleRequired: true
   }
+};
+
+// Phrase Templates
+
+const PHRASES = [
+
+  // Character + drink + Shopkeeper
+  {
+    text: "{character} thinks {recipient} deserves another {drink}.",
+    characterFormat: "name",
+    recipient: "shopkeeper",
+    addRecipientArticle: "random",
+    requiresDrink: true
+  },
+
+  // Character title + app
+  {
+    text: "{character} recommends supporting {recipient}.",
+    characterFormat: "title",
+    recipient: "app",
+    addRecipientArticle: true
+  },
+
+  // Full character + Shopkeeper
+  {
+    text: "Treat {character} to a well-earned {drink}.",
+    characterFormat: "full",
+    recipient: "shopkeeper",
+    addRecipientArticle: true,
+    requiresDrink: true
+  },
+
+  // App-only support
+  {
+    text: "Help keep {recipient} growing.",
+    recipient: "app",
+    addRecipientArticle: true
+  },
+
+  // Development-themed
+  {
+    text: "Help keep the lights on for {recipient}.",
+    recipient: "app",
+    addRecipientArticle: true
+  },
+
+  {
+    text: "Support continued development of {recipient}.",
+    recipient: "app",
+    addRecipientArticle: true
+  }
+
 ];
 
+// ========================================
+// Helpers
+// ========================================
 
-// -------------------------
-// Random Selection
-// -------------------------
-
-function getRandomDrink() {
-  return KOFI_DRINKS[
-    Math.floor(Math.random() * KOFI_DRINKS.length)
-  ];
+function random(array) {
+  return array[Math.floor(Math.random() * array.length)];
 }
 
 
 function isTamasDay() {
   const today = new Date();
 
+  // April 1st
   return today.getMonth() === 3 &&
          today.getDate() === 1;
 }
 
 
-function getRandomCharacter() {
+function getDrink() {
+  return random(DRINKS);
+}
 
-  // Tamas Day override
+
+function formatRecipient(type, articleSetting = "default") {
+  const recipient = RECIPIENTS[type];
+
+  if (!recipient) {
+    return "";
+  }
+
+  // Companion app must always have "the"
+  if (recipient.articleRequired) {
+    return `the ${recipient.name}`;
+  }
+
+  // Shopkeeper can optionally have "the"
+  if (articleSetting === "random") {
+    return Math.random() < 0.5
+      ? `the ${recipient.name}`
+      : recipient.name;
+  }
+
+  if (articleSetting === true) {
+    return `the ${recipient.name}`;
+  }
+
+  return recipient.name;
+}
+
+
+function getCharacter(format = "random") {
+
+  // Tamas Day overrides normal character logic
   if (isTamasDay()) {
-    return KOFI_CHARACTERS.find(
-      character => character.name === "Tamas"
+    return random(TAMAS_DAY_CHARACTERS);
+  }
+
+
+  if (format === "name") {
+    return random(CHARACTER_NAMES);
+  }
+
+  if (format === "title") {
+    return random(CHARACTER_TITLES);
+  }
+
+  if (format === "full") {
+    return random(CHARACTER_FULL);
+  }
+
+
+  // Random fallback if phrase allows multiple formats
+  return random([
+    random(CHARACTER_NAMES),
+    random(CHARACTER_TITLES),
+    random(CHARACTER_FULL)
+  ]);
+}
+
+
+// ========================================
+// Message Generator
+// ========================================
+
+function generateKofiMessage() {
+
+  const phrase = random(PHRASES);
+  let message = phrase.text;
+
+  if (phrase.characterFormat) {
+    message = message.replace(
+      "{character}",
+      getCharacter(phrase.characterFormat)
     );
   }
 
-  return KOFI_CHARACTERS[
-    Math.floor(Math.random() * KOFI_CHARACTERS.length)
-  ];
-}
-
-
-// =========================
-// Character Formatting
-// =========================
-
-function formatRole(role, startsSentence = false) {
-  const article = startsSentence ? "The" : "the";
-
-  return `${article} ${role}`;
-}
-
-
-function getCharacterReference(character, startsSentence = false) {
-
-  const roll = Math.random();
-
-
-  // Special characters
-  if (character.references) {
-
-    let reference = character.references[
-      Math.floor(
-        Math.random() * character.references.length
+  if (phrase.recipient) {
+    message = message.replace(
+      "{recipient}",
+      formatRecipient(
+        phrase.recipient,
+        phrase.addRecipientArticle
       )
-    ];
-
-    if (startsSentence && reference.startsWith("the ")) {
-      reference =
-        "The " + reference.substring(4);
-    }
-
-    return reference;
+    );
   }
 
-
-  switch (character.type) {
-
-    case "Champion":
-      return roll < 0.7
-        ? character.name
-        : character.full;
-
-
-    case "Worker":
-
-      if (roll < 0.5) {
-        return formatRole(
-          character.role,
-          startsSentence
-        );
-      }
-
-      if (roll < 0.8) {
-        return character.name;
-      }
-
-      return character.full;
-
-
-    default:
-      return character.name;
+  if (phrase.requiresDrink) {
+    message = message.replace(
+      "{drink}",
+      getDrink()
+    );
   }
+
+  return message;
 }
-
-const KOFI_PHRASES = [
-
-  // =========================
-  // Character + Drink
-  // =========================
-
-  {
-    text: "Treat {character} to a well-earned {drink}.",
-    allowedFormats: ["name", "title", "full"],
-    needsDrink: true
-  },
-
-  {
-    text: "Send a {drink} to {character}.",
-    allowedFormats: ["name", "title"],
-    needsDrink: true
-  },
-
-  {
-    text: "Grab {character} a {drink}.",
-    allowedFormats: ["name", "title", "full"],
-    needsDrink: true
-  },
-
-  {
-    text: "Keep {character} going with a {drink}.",
-    allowedFormats: ["name", "title"],
-    needsDrink: true
-  },
-
-  {
-    text: "Help {character} take a well-deserved break.",
-    allowedFormats: ["name", "title", "full"]
-  },
-
-  {
-    text: "Give {character} a little extra support.",
-    allowedFormats: ["name", "title", "full"]
-  },
-
-
-  // =========================
-  // Shopkeeper
-  // =========================
-
-  {
-    text: "Help keep the Shopkeeper going with a {drink}.",
-    needsDrink: true
-  },
-
-  {
-    text: "The Shopkeeper could use a {drink} break.",
-    needsDrink: true
-  },
-
-
-  // =========================
-  // Companion App
-  // =========================
-
-  {
-    text: "Help keep the Companion app growing.",
-  },
-
-  {
-    text: "Support continued development of the Companion app."
-  },
-  
-  // =========================
-  // General
-  // =========================
-  {
-    text: "Help keep the lights on."
-  },
-  {
-    text: "Every little bit helps keep this project going."
-  }
-];

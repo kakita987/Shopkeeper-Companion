@@ -1,69 +1,69 @@
 # Shopkeeper Companion - Project Guidelines
-## Project Intent
-Shopkeeper Companion is a utility-focused companion app for Shop Titans players.
-The goal is to help players manage blueprint information, crafting relationships, and personal progress more effectively than the game's built-in tools.
-The app should feel like a companion tool: fast, practical, information-rich, and enjoyable to use.
 
-## Guiding Principles
-When making decisions, prioritize:
-1. **Player Experience:** Preserve the app's purpose, usability, personality, and intentional design choices.
-2. **Data Integrity:** Protect accurate game data, player progress, and existing workflows.
-3. **Technical Quality:** Improve maintainability, reliability, performance, and simplicity where possible.
+## Project Purpose
+Shopkeeper Companion is a utility app for Shop Titans players.
 
-A technical improvement is valuable only if it supports the first two principles.
+The goal is to help players manage blueprint information, crafting relationships, and personal progress with a fast, practical, information-rich companion tool.
 
-Ask for clarification when requirements are unclear or when a change could significantly affect existing behavior.
+Prioritize:
+1. Player experience and existing design intent.
+2. Data accuracy and user data safety.
+3. Maintainable, reliable code.
 
-## Design Philosophy
-Small details that add personality, whimsy, or connection to the game are intentional parts of the experience.
-For example:
-- The Ko-fi tip messages include randomized Shop Titans-themed references because they make supporting the project feel more personal.
+## Content Resources
 
-## Code Documentation
-When modifying existing files:
-- Use comments and notes where they improve understanding.
-- Document why something exists or what purpose it serves, to explain to a future maintainer.
+The files in `content/*.md` are website content resources loaded and displayed by the website.
 
-## Data Separation
-Keep a clear separation between:
-- **Master Game Data:** Imported Shop Titans blueprint data from community sources.
-- **User Progress Data:** Player-specific information such as ownership, inventory, mastery, goals, and saved views.
+Treat these files as read-only.
 
-Do not mix imported game data into player progress information.
+## Data Architecture
+
+Keep these separate:
+
+- **Master Game Data:** Imported Shop Titans blueprint information from community sources.
+- **User Progress Data:** Player-specific information such as owned blueprints, inventory, mastery, goals, and saved views.
+
+Do not store imported game data as user progress data.
 
 ## Import Pipeline
-The source of the blueprints is 'playshoptitans.com/spreadsheet', which then redirects to Google Sheets.
 
-The importer and data transformation pipeline are foundational parts of the application. The accuracy of the imported blueprint data affects every feature built on top of it.
-The importer is responsible for translating Shop Titans data into the application's internal blueprint structure.
-Some data relationships are intentional even when they are not directly represented in the source spreadsheet.
+The blueprint importer and data transformation pipeline are foundational parts of the application.
 
-For example:
-- **Groups** represent broad classifications such as Weapons, Armor, Accessories, and Enchantments.
-- **Categories** are specific item types within Groups, such as Sword, Potion, and other game-defined categories.
-- Group and Category relationships were manually sourced from the game, and are not directly present on the spreadsheet.
-- Enchantments are either **Element** or **Spirit** based on their names. This distinction is intentional for organization and should be preserved.
+Source data comes from:
+`playshoptitans.com/spreadsheet` (Google Sheets)
 
-## User Data & Synchronization
-The application should prioritize:
-- Reliable storage of player progress.
-- Protection against accidental data loss.
-- Reliable synchronization between available storage locations.
-- Compatibility with existing player data.
+The importer should transform external data into the application's internal structure rather than relying on source formatting.
 
-## UI Guidelines
-Shopkeeper Companion should prioritize:
-- Quick access to information.
-- Dense but readable layouts.
-- Efficient filtering and searching.
-- Useful overlays and detail views.
+Important data rules:
+- Groups are broad classifications such as Weapons, Armor, Accessories, and Enchantments.
+- Categories are game-defined item types within Groups, such as Sword, Potion, etc.
+- Group and Category relationships were manually collected from the game and are not directly provided by the spreadsheet.
+- Enchantments are categorized as Element or Spirit based on their names.
 
-Maintain compatibility with:
-- Theme settings.
-- Font preferences.
-- Existing visual systems.
+Preserve these relationships when modifying import or data logic.
 
 ## Blueprint Relationships
+
 Use these terms consistently:
-- **Needed:** This blueprint is required as a crafting component.
-- **Dependent:** This blueprint requires another crafted item as a component.
+
+- **Needed:** A blueprint required as a crafting component.
+- **Dependent:** A blueprint that requires another crafted blueprint as a component.
+
+## UI Guidelines
+
+Maintain the existing design direction:
+- Fast access to information.
+- Dense but readable layouts.
+- Efficient filtering and searching.
+- Useful detail views and overlays.
+- Compatibility with existing themes and font preferences.
+
+Small personality details are intentional, including Shop Titans-themed elements such as randomized Ko-fi messages.
+
+## Code Changes
+
+When modifying code:
+- Prefer simple, maintainable solutions.
+- Avoid unnecessary rewrites or architectural changes.
+- Preserve existing behavior unless a change is intentional.
+- Add comments when they explain why something exists, not obvious implementation details.
