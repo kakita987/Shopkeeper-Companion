@@ -190,8 +190,8 @@ app.innerHTML = `
 
         <section class="settings-section">
           <h3>Google Sync Sign-In</h3>
-          <p class="settings-copy">Sign in to sync your companion data automatically while you use the app.</p>
-          <p class="settings-copy">Your data sheet is created in Google Drive for backup and optional advanced editing.</p>
+          <p class="settings-copy">Sign in to sync your companion progress data automatically while you use the app.</p>
+          <p class="settings-copy">This is separate from the blueprint library import below.</p>
           <div id="google-auth" class="google-auth"></div>
           <details class="attribution-details advanced-sync-details">
             <summary>Advanced: Bulk Edit in Google Sheets</summary>
@@ -202,8 +202,9 @@ app.innerHTML = `
         </section>
 
         <section class="settings-section">
-          <h3>Blueprint Sync</h3>
-          <p class="settings-copy">Download the latest blueprints when you choose, then browse locally.</p>
+          <h3>Blueprint Import</h3>
+          <p class="settings-copy">Import the latest blueprints from the developer spreadsheet when the library needs to be refreshed.</p>
+          <p class="settings-copy">This does not replace your Google user-progress sync.</p>
           <p id="blueprint-version" class="settings-copy blueprint-version"></p>
 
           <form id="import-form" class="import-form compact-form">
@@ -803,17 +804,6 @@ function updateStatus(message, tone = 'info') {
 
 async function importBlueprintData() {
   try {
-    const authState = googleAuth.getState()
-    if (authState?.isAuthenticated && authState?.accessToken) {
-      try {
-        await initializeGoogleSync(authState.accessToken)
-        const remote = await readSyncTables(authState.accessToken, googleSyncState.spreadsheetId)
-        applyRemoteSyncState(remote)
-      } catch (syncError) {
-        console.warn('Google sync refresh failed. Continuing with blueprint download.', syncError)
-      }
-    }
-
     updateStatus('Checking the latest Shop Titans spreadsheet link…')
     const resolvedUrl = await resolveSpreadsheetUrl(DEFAULT_SPREADSHEET_URL)
     const exportUrl = buildExportUrl(resolvedUrl)
@@ -833,10 +823,7 @@ async function importBlueprintData() {
   } catch (error) {
     console.error(error)
     updateStatus(error.message || 'The spreadsheet could not be imported.', 'error')
-    previewEl.innerHTML = ''
-    if (savedViewsContentEl) {
-      savedViewsContentEl.innerHTML = '<p class="empty-state">No blueprint data available yet.</p>'
-    }
+    renderBlueprintEmptyState('The blueprint library could not be imported. Please try again in a moment.')
   }
 }
 
@@ -846,11 +833,8 @@ async function initializeBlueprintDataFromCache() {
   renderBlueprintVersionLabel(blueprintVersionLabel)
 
   if (!cached) {
-    updateStatus('No local blueprint snapshot yet. Open Settings and click Download Blueprints.', 'info')
-    previewEl.innerHTML = '<p class="empty">No blueprint data downloaded yet.</p>'
-    if (savedViewsContentEl) {
-      savedViewsContentEl.innerHTML = '<p class="empty-state">No blueprint data available yet.</p>'
-    }
+    updateStatus('No local blueprint snapshot yet. Click "Download Blueprints" in Settings to restore the blueprint library.', 'info')
+    renderBlueprintEmptyState('No blueprint library loaded yet. Click "Download Blueprints" in Settings to get the library back into the app.')
     return
   }
 
@@ -879,6 +863,16 @@ function renderBlueprintVersionLabel(versionLabel) {
   blueprintVersionEl.innerHTML = versionLabel
     ? `Current data version: <strong>${escapeHtml(versionLabel)}</strong>`
     : 'Current data version: <strong>Not downloaded yet</strong>'
+}
+
+function renderBlueprintEmptyState(message = 'No blueprint data available yet.') {
+  if (previewEl) {
+    previewEl.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`
+  }
+
+  if (savedViewsContentEl) {
+    savedViewsContentEl.innerHTML = `<p class="empty-state">${escapeHtml(message)}</p>`
+  }
 }
 
 async function fetchSpreadsheetVersionLabel(resolvedUrl) {
