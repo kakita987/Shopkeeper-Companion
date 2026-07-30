@@ -34,16 +34,16 @@ test('buildWorkbookPayload creates the requested sheet order and initializes blu
   assert.equal(payload.Weapons[0][0], 'Blueprint Name')
   assert.equal(payload.Weapons[1][0], 'Test Sword')
   assert.equal(payload.Weapons[1][payload.Weapons[0].indexOf('Owned')], 'TRUE')
-  assert.equal(payload.Weapons[1][payload.Weapons[0].indexOf('Inventory Normal')], '2')
+  assert.equal(payload.Weapons[1][payload.Weapons[0].indexOf('Inventory Count')], '2')
   assert.equal(payload.Weapons[1][payload.Weapons[0].indexOf('Collection Book')], 'TRUE')
 })
 
 test('parseWorkbookBlueprintProgress merges workbook rows by blueprint name and preserves existing progress', () => {
   const progress = parseWorkbookBlueprintProgress({
     Weapons: [
-      ['Blueprint Name', 'Owned', 'Inventory Normal', 'Inventory Superior', 'Collection Book'],
-      ['Alpha', 'TRUE', '3', '1', 'TRUE'],
-      ['Beta', 'FALSE', '0', '0', 'FALSE'],
+      ['Blueprint Name', 'Owned', 'Inventory Count', 'Collection Book'],
+      ['Alpha', 'TRUE', '3', 'TRUE'],
+      ['Beta', 'FALSE', '0', 'FALSE'],
     ],
   }, {
     Alpha: { owned: false, inventory: { normal: 1 }, collectionBookComplete: false },
@@ -51,7 +51,6 @@ test('parseWorkbookBlueprintProgress merges workbook rows by blueprint name and 
 
   assert.equal(progress.Alpha.owned, true)
   assert.equal(progress.Alpha.inventory.normal, 3)
-  assert.equal(progress.Alpha.inventory.superior, 1)
   assert.equal(progress.Alpha.collectionBookComplete, true)
   assert.equal(progress.Beta.owned, false)
 })

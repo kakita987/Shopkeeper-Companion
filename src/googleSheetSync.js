@@ -22,12 +22,8 @@ const README_ROWS = [
 ]
 
 const PROGRESS_COLUMNS = [
+  { key: 'inventoryCount', label: 'Inventory Count' },
   { key: 'owned', label: 'Owned' },
-  { key: 'inventoryNormal', label: 'Inventory Normal' },
-  { key: 'inventorySuperior', label: 'Inventory Superior' },
-  { key: 'inventoryFlawless', label: 'Inventory Flawless' },
-  { key: 'inventoryEpic', label: 'Inventory Epic' },
-  { key: 'inventoryLegendary', label: 'Inventory Legendary' },
   { key: 'milestones', label: 'Milestones' },
   { key: 'ascension', label: 'Ascension' },
   { key: 'starforge', label: 'Starforge' },
@@ -38,56 +34,8 @@ const PROGRESS_COLUMNS = [
 const MASTER_BLUEPRINT_COLUMNS = [
   { key: 'blueprintName', label: 'Blueprint Name' },
   { key: 'category', label: 'Category' },
-  { key: 'type', label: 'Type' },
   { key: 'tier', label: 'Tier' },
-  { key: 'unlockPrerequisite', label: 'Unlock Prerequisite' },
-  { key: 'researchScrolls', label: 'Research Scrolls' },
-  { key: 'antiqueTokens', label: 'Antique Tokens' },
-  { key: 'availableAsAntiqueDate', label: 'Available as an Antique starting on (UTC)' },
-  { key: 'value', label: 'Value' },
-  { key: 'craftingTimeSeconds', label: 'Crafting Time (seconds)' },
-  { key: 'valueCraftTimeRatio', label: 'Value / Crafting Time' },
-  { key: 'merchantXp', label: 'Merchant XP' },
-  { key: 'workerXp', label: 'Worker XP' },
-  { key: 'fusionXp', label: 'Fusion XP' },
-  { key: 'favor', label: 'Favor' },
-  { key: 'airshipPower', label: 'Airship Power' },
-  { key: 'discountEnergy', label: 'Discount Energy' },
-  { key: 'surchargeEnergy', label: 'Surcharge Energy' },
-  { key: 'suggestEnergy', label: 'Suggest Energy' },
-  { key: 'speedUpEnergy', label: 'Speed Up Energy' },
-  { key: 'atk', label: 'ATK' },
-  { key: 'def', label: 'DEF' },
-  { key: 'hp', label: 'HP' },
-  { key: 'eva', label: 'EVA' },
-  { key: 'crit', label: 'CRIT' },
-  { key: 'elementalAffinity', label: 'Elemental Affinity' },
-  { key: 'spiritAffinity', label: 'Spirit Affinity' },
-  { key: 'builtInElement', label: 'Built-In Element' },
-  { key: 'builtInSpirit', label: 'Built-In Spirit' },
 ]
-
-const RESOURCE_LABELS = ['Iron', 'Wood', 'Steel', 'Leather', 'Herbs', 'Oils', 'Fabric', 'Gems', 'Mana', 'Essence']
-
-const RESOURCE_COLUMNS = RESOURCE_LABELS.map((label, index) => ({
-  key: `resource${index + 1}`,
-  label,
-}))
-
-const UPGRADE_COLUMNS = Array.from({ length: 5 }, (_, index) => ({
-  key: `upgrade${index + 1}`,
-  label: `Upgrade ${index + 1}`,
-}))
-
-const UPGRADE_COUNT_COLUMNS = Array.from({ length: 5 }, (_, index) => ({
-  key: `upgradeCount${index + 1}`,
-  label: `Upgrade Count ${index + 1}`,
-}))
-
-const WORKER_COLUMNS = Array.from({ length: 3 }, (_, index) => ({
-  key: `worker${index + 1}`,
-  label: `Worker ${index + 1}`,
-}))
 
 function getSyncWorkbookSchemaEntries() {
   return [
@@ -105,10 +53,6 @@ function getBlueprintHeaders() {
   return [
     ...MASTER_BLUEPRINT_COLUMNS.map((column) => column.label),
     ...PROGRESS_COLUMNS.map((column) => column.label),
-    ...RESOURCE_COLUMNS.map((column) => column.label),
-    ...UPGRADE_COLUMNS.map((column) => column.label),
-    ...UPGRADE_COUNT_COLUMNS.map((column) => column.label),
-    ...WORKER_COLUMNS.map((column) => column.label),
   ]
 }
 
@@ -226,27 +170,19 @@ export function parseWorkbookBlueprintProgress(workbookBlueprintProgress = [], e
         ...(currentProgress.inventory || {}),
       }
 
+      const inventoryCountValue = getRowValue(row, headerRow, ['Inventory Count', 'inventoryCount'])
+      if (inventoryCountValue !== '') {
+        nextInventory.normal = toInventoryCount(inventoryCountValue)
+        nextInventory.superior = toInventoryCount(nextInventory.superior)
+        nextInventory.flawless = toInventoryCount(nextInventory.flawless)
+        nextInventory.epic = toInventoryCount(nextInventory.epic)
+        nextInventory.legendary = toInventoryCount(nextInventory.legendary)
+      }
+
       const ownedValue = getRowValue(row, headerRow, ['Owned', 'owned'])
       if (ownedValue !== '') {
         currentProgress.owned = parseBooleanCell(ownedValue)
       }
-
-      const inventoryFields = [
-        ['Inventory Normal', 'normal'],
-        ['Inventory Superior', 'superior'],
-        ['Inventory Flawless', 'flawless'],
-        ['Inventory Epic', 'epic'],
-        ['Inventory Legendary', 'legendary'],
-      ]
-
-      inventoryFields.forEach(([label, key]) => {
-        const rawValue = getRowValue(row, headerRow, [label])
-        if (rawValue === '') {
-          nextInventory[key] = toInventoryCount(nextInventory[key])
-          return
-        }
-        nextInventory[key] = toInventoryCount(rawValue)
-      })
 
       currentProgress.inventory = nextInventory
 
@@ -329,72 +265,16 @@ function buildWorkbookSheetRows(headers = [], rows = []) {
 function buildBlueprintRow(item = {}, progress = {}) {
   const structuredData = item?.structuredData || {}
   const classification = item?.classification || {}
-  const materials = structuredData?.materials || {}
-  const resources = materials?.resources || {}
-  const components = Array.isArray(materials?.components) ? materials.components : []
-  const upgrades = structuredData?.upgrades || {}
-  const workers = Array.isArray(structuredData?.workers) ? structuredData.workers : []
-  const stats = structuredData?.stats || {}
 
   const baseValues = {
     blueprintName: item?.name || '',
     category: classification?.category || '',
-    type: classification?.type || '',
     tier: structuredData?.meta?.tier ?? '',
-    unlockPrerequisite: structuredData?.meta?.unlockPrerequisite || '',
-    researchScrolls: structuredData?.meta?.researchScrolls ?? '',
-    antiqueTokens: structuredData?.meta?.antiqueTokens ?? '',
-    availableAsAntiqueDate: structuredData?.meta?.availableAsAntiqueDate || '',
-    value: structuredData?.economy?.value ?? '',
-    craftingTimeSeconds: structuredData?.economy?.craftingTimeSeconds ?? '',
-    valueCraftTimeRatio: structuredData?.economy?.valueCraftTimeRatio ?? '',
-    merchantXp: structuredData?.economy?.merchantXp ?? '',
-    workerXp: structuredData?.economy?.workerXp ?? '',
-    fusionXp: structuredData?.economy?.fusionXp ?? '',
-    favor: structuredData?.economy?.favor ?? '',
-    airshipPower: structuredData?.economy?.airshipPower ?? '',
-    discountEnergy: structuredData?.economy?.energy?.discount ?? '',
-    surchargeEnergy: structuredData?.economy?.energy?.surcharge ?? '',
-    suggestEnergy: structuredData?.economy?.energy?.suggest ?? '',
-    speedUpEnergy: structuredData?.economy?.energy?.speedUp ?? '',
-    atk: stats?.atk ?? '',
-    def: stats?.def ?? '',
-    hp: stats?.hp ?? '',
-    eva: stats?.eva ?? '',
-    crit: stats?.crit ?? '',
-    elementalAffinity: stats?.elementalAffinity ?? '',
-    spiritAffinity: stats?.spiritAffinity ?? '',
-    builtInElement: stats?.builtInElement ?? '',
-    builtInSpirit: stats?.builtInSpirit ?? '',
   }
 
-  const resourceValues = RESOURCE_COLUMNS.map((column) => resources[column.label] ?? '')
-  const upgradeValues = [
-    ...(Array.isArray(upgrades?.crafting) ? upgrades.crafting : []),
-    ...(Array.isArray(upgrades?.starforged) ? upgrades.starforged : []),
-  ]
-
-  const upgradeRowValues = UPGRADE_COLUMNS.map((_, index) => {
-    const entry = Array.isArray(upgrades?.crafting) ? upgrades.crafting[index] : null
-    return entry?.name || ''
-  })
-  const upgradeCountRowValues = UPGRADE_COUNT_COLUMNS.map((_, index) => {
-    const entry = Array.isArray(upgrades?.crafting) ? upgrades.crafting[index] : null
-    return entry?.count ?? ''
-  })
-
-  const workerRowValues = WORKER_COLUMNS.map((_, index) => {
-    const worker = workers[index]
-    return worker?.name ? `${worker.name}${worker.level ? ` (${worker.level})` : ''}` : ''
-  })
-
   const progressValues = {
+    inventoryCount: formatInventoryCell(progress?.inventory?.normal ?? progress?.inventory?.superior ?? progress?.inventory?.flawless ?? progress?.inventory?.epic ?? progress?.inventory?.legendary ?? 0),
     owned: formatBooleanCell(progress?.owned),
-    inventoryNormal: formatInventoryCell(progress?.inventory?.normal),
-    inventorySuperior: formatInventoryCell(progress?.inventory?.superior),
-    inventoryFlawless: formatInventoryCell(progress?.inventory?.flawless),
-    inventoryEpic: formatInventoryCell(progress?.inventory?.epic),
-    inventoryLegendary: formatInventoryCell(progress?.inventory?.legendary),
     milestones: formatBooleanCell(progress?.milestones),
     ascension: formatBooleanCell(progress?.ascension),
     starforge: formatBooleanCell(progress?.starforge),
@@ -405,10 +285,6 @@ function buildBlueprintRow(item = {}, progress = {}) {
   const rowValues = [
     ...MASTER_BLUEPRINT_COLUMNS.map((column) => baseValues[column.key] ?? ''),
     ...PROGRESS_COLUMNS.map((column) => progressValues[column.key] ?? ''),
-    ...resourceValues,
-    ...upgradeRowValues,
-    ...upgradeCountRowValues,
-    ...workerRowValues,
   ]
 
   return rowValues
