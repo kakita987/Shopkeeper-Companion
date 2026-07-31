@@ -397,7 +397,10 @@ async function requestJsonApi(baseUrl, path, accessToken, options = {}) {
 
   if (!response.ok) {
     const errorText = await response.text()
-    throw new Error(errorText || 'Google API request failed.')
+    const error = new Error(errorText || 'Google API request failed.')
+    error.status = response.status
+    error.responseText = errorText
+    throw error
   }
 
   if (response.status === 204) {
@@ -416,9 +419,31 @@ async function requestSheetsApi(path, accessToken, options = {}) {
   return requestJsonApi(SHEETS_API_BASE, path, accessToken, options)
 }
 
+function parseGoogleApiErrorPayload(error) {
+  try {
+    const message = error?.responseText || error?.message || ''
+    if (!message) {
+      return null
+    }
+
+    const parsed = JSON.parse(message)
+    return parsed?.error || parsed || null
+  } catch {
+    return null
+  }
+}
+
 function getGoogleApiErrorStatus(error) {
   if (typeof error?.status === 'number') {
     return error.status
+  }
+
+  const parsed = parseGoogleApiErrorPayload(error)
+  if (typeof parsed?.code === 'number') {
+    return parsed.code
+  }
+  if (typeof parsed?.status === 'number') {
+    return parsed.status
   }
 
   const message = error?.message || ''
@@ -446,6 +471,36 @@ function getGoogleApiErrorStatus(error) {
 function shouldRecoverSpreadsheet(error) {
   const status = getGoogleApiErrorStatus(error)
   return status === 404 || status === 410
+}
+
+export function getGoogleSyncErrorMessage(error) {
+  const payload = parseGoogleApiErrorPayload(error)
+  const message = payload?.message || error?.message || ''
+  const details = Array.isArray(payload?.details) ? payload.details : []
+  const service = details.find((detail) => detail?.metadata?.service)?.metadata?.service || ''
+  const isDriveApiDisabled = /drive\.googleapis\.com|Google Drive API|accessNotConfigured|SERVICE_DISABLED/i.test(`${message} ${service}`)
+
+  if (isDriveApiDisabled) {
+    return 'Google Drive API is not enabled for this app in the Google Cloud project. Please enable the Google Drive API, wait a minute or two, and try again.'
+  }
+
+  if (/401|unauthorized|invalid credentials/i.test(message)) {
+    return 'Google sign-in has expired or your account permissions were rejected. Please sign in again and try syncing.'
+  }
+
+  if (/403|forbidden|permission denied/i.test(message)) {
+    return 'Google denied access to create or update the sync sheet. Please make sure the app is allowed to access Google Sheets for your account.'
+  }
+
+  if (/429|rate limit|too many requests/i.test(message)) {
+    return 'Google is rate-limiting requests right now. Please try again in a moment.'
+  }
+
+  if (/500|503|service unavailable|temporarily unavailable|timeout/i.test(message)) {
+    return 'Google is temporarily unavailable. Please try again in a moment.'
+  }
+
+  return message || 'Unable to create or update the Google Sync Sheet.'
 }
 
 export function buildSpreadsheetCreationPromptMessage(reason = 'new-user') {

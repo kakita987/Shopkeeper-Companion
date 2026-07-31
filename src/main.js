@@ -2,7 +2,7 @@ import './style.css'
 import { mountAdBanner } from './adBanner.js'
 import { getRandomTavernText } from './kofiText.js'
 import { useGoogleAuth } from './useGoogleAuth.js'
-import { ensureUserSyncSpreadsheet, parseWorkbookBlueprintProgress, readSyncTables, writeSyncTables } from './googleSheetSync.js'
+import { ensureUserSyncSpreadsheet, getGoogleSyncErrorMessage, parseWorkbookBlueprintProgress, readSyncTables, writeSyncTables } from './googleSheetSync.js'
 import { getItem, setItem } from './storage.js'
 import { createIcons, Axe, BadgeAlert, BadgeHelp, BadgeInfo, BowArrow, CakeSlice, Candy, CandyCane, CircleDashed, Clover, Coffee, Crosshair, Diamond, Drumstick, FlaskConical, FlaskRound, Footprints, Gem, Hand, HandMetal, HardHat, HatGlasses, Leaf, MoonStar, Music2, Package, PackageOpen, PartyPopper, PillBottle, Pizza, Salad, ScrollText, Shield, Shirt, Sandwich, Sparkles, Swords, Sword, Target, UtensilsCrossed, Wand, WandSparkles, Apple, Fish, SunMedium, Cherry, Cookie } from 'lucide'
 
@@ -269,6 +269,30 @@ const mobileAdBannerEl = document.querySelector('#mobile-ad-banner')
 const topTabs = Array.from(document.querySelectorAll('.top-tab'))
 const viewPanels = Array.from(document.querySelectorAll('[data-view-panel]'))
 let trackedUpgradeKeys = loadTrackedUpgradeKeys()
+
+function activateView(viewName) {
+  const normalizedViewName = viewName === 'saved-views' ? 'saved-views' : 'blueprints'
+  const targetPanel = document.querySelector(`[data-view-panel="${normalizedViewName}"]`)
+  const targetTab = document.querySelector(`[data-view="${normalizedViewName}"]`)
+
+  if (!targetPanel || !targetTab) {
+    return
+  }
+
+  topTabs.forEach((tab) => {
+    tab.classList.toggle('is-active', tab === targetTab)
+  })
+
+  viewPanels.forEach((panel) => {
+    panel.classList.toggle('is-hidden', panel !== targetPanel)
+  })
+
+  if (normalizedViewName === 'saved-views') {
+    window.location.hash = '#saved-views'
+  } else {
+    window.location.hash = '#blueprints'
+  }
+}
 let blueprintProgressByName = loadBlueprintProgressMap()
 let allBlueprintItems = []
 let savedFilterViews = []
@@ -346,15 +370,22 @@ fontSelect.addEventListener('change', (event) => {
 
 topTabs.forEach((tab) => {
   tab.addEventListener('click', () => {
-    const nextView = tab.dataset.view
-    topTabs.forEach((candidate) => {
-      candidate.classList.toggle('is-active', candidate === tab)
-    })
-    viewPanels.forEach((panel) => {
-      const isActive = panel.dataset.viewPanel === nextView
-      panel.classList.toggle('is-hidden', !isActive)
-    })
+    activateView(tab.dataset.view)
   })
+})
+
+if (window.location.hash === '#saved-views') {
+  activateView('saved-views')
+} else {
+  activateView('blueprints')
+}
+
+window.addEventListener('hashchange', () => {
+  if (window.location.hash === '#saved-views') {
+    activateView('saved-views')
+  } else {
+    activateView('blueprints')
+  }
 })
 
 applyTheme(getStoredTheme())
@@ -521,7 +552,7 @@ async function initializeGoogleSync(accessToken) {
       googleSyncState.lastSyncedAt = new Date().toISOString()
       renderGoogleAuthUi(googleAuth.getState())
     } catch (error) {
-      googleSyncState.error = error?.message || 'Unable to initialize Google Sheet sync.'
+      googleSyncState.error = getGoogleSyncErrorMessage(error)
       googleSyncState.notice = ''
       googleSyncState.isReady = false
       googleSyncState.spreadsheetId = ''
@@ -560,7 +591,7 @@ async function syncFromGoogleSheet() {
     renderGoogleAuthUi(googleAuth.getState())
     updateStatus('Synced user data from Google Sheet.', 'info')
   } catch (error) {
-    googleSyncState.error = error?.message || 'Unable to sync from Google Sheet.'
+    googleSyncState.error = getGoogleSyncErrorMessage(error)
     renderGoogleAuthUi(googleAuth.getState())
     console.error(error)
   } finally {
@@ -674,7 +705,7 @@ async function pushLocalStateToGoogleSheet(accessToken) {
 
     googleSyncState.lastSyncedAt = new Date().toISOString()
   } catch (error) {
-    googleSyncState.error = error?.message || 'Unable to save user data to Google Sheet.'
+    googleSyncState.error = getGoogleSyncErrorMessage(error)
     console.error(error)
   } finally {
     googleSyncState.isSyncing = false

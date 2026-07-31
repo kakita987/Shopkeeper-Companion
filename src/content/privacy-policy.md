@@ -11,7 +11,7 @@ The short version: **I don’t want your data, I don’t track you, and I don't 
 Shopkeeper Companion is designed to keep your data under your control.
 
 - **Community Game Data:** Blueprint information comes from publicly available community sources. Shopkeeper Companion uses this data to provide an interface for organizing and viewing blueprint information.
-- **Your Data Stays With You:** Your settings and player progress data are stored on your device unless you choose to enable Google synchronization.
+- **Your Data Stays Yours:** Your settings and player progress data are stored on your device unless you choose to enable Google synchronization.
 - **No Developer Database:** Shopkeeper Companion does not hold a server-side database of your activity or player data.
 - **No Tracking:** Shopkeeper Companion does not track your browsing activity, fingerprint your device, or collect personal identifiers for advertising or analytics.
 

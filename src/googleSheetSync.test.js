@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   buildSpreadsheetCreationPromptMessage,
   buildWorkbookPayload,
+  getGoogleSyncErrorMessage,
   getSyncWorkbookSchemaEntries,
   parseWorkbookBlueprintProgress,
   resolveUserSyncSpreadsheet,
@@ -60,6 +61,18 @@ test('parseWorkbookBlueprintProgress merges workbook rows by blueprint name and 
 test('buildSpreadsheetCreationPromptMessage explains the new-sheet workflow for new users and recovery', () => {
   assert.match(buildSpreadsheetCreationPromptMessage('new-user'), /Google Drive/i)
   assert.match(buildSpreadsheetCreationPromptMessage('recovery'), /backup sheet/i)
+})
+
+test('getGoogleSyncErrorMessage surfaces the Drive API configuration issue clearly', () => {
+  const error = new Error(JSON.stringify({
+    error: {
+      code: 403,
+      message: 'Google Drive API has not been used in project 123 before or it is disabled.',
+      details: [{ metadata: { service: 'drive.googleapis.com' } }],
+    },
+  }))
+
+  assert.match(getGoogleSyncErrorMessage(error), /Google Drive API is not enabled/i)
 })
 
 test('resolveUserSyncSpreadsheet ignores missing Sheets files and creates a fresh spreadsheet', async () => {
