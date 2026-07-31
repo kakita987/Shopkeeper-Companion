@@ -1318,15 +1318,26 @@ function renderSavedViews(items = []) {
             </label>
             <fieldset class="saved-view-filter saved-view-filter-multiselect">
               <legend>Collection Book</legend>
-              <label class="saved-view-filter saved-view-filter-collection-state">
+              <div class="saved-view-filter saved-view-filter-collection-state">
                 <span>Match</span>
-                <select data-saved-filter="collectionBookState">
-                  ${renderSelectOptions([
+                <div class="saved-view-match-radios" role="radiogroup" aria-label="Collection Book match state">
+                  ${[
                     ['completed', 'Completed'],
                     ['needed', 'Still Needed'],
-                  ], savedViewCriteria.collectionBookState)}
-                </select>
-              </label>
+                  ].map(([value, label]) => `
+                    <label class="saved-view-match-option">
+                      <input
+                        type="radio"
+                        name="collection-book-match"
+                        data-saved-filter="collectionBookState"
+                        value="${value}"
+                        ${savedViewCriteria.collectionBookState === value ? 'checked' : ''}
+                      />
+                      <span>${label}</span>
+                    </label>
+                  `).join('')}
+                </div>
+              </div>
               <p class="collection-book-help">Select qualities to match. Completed checks finished qualities; Still Needed checks missing ones.</p>
               <div class="collection-book-options">
                 ${renderCollectionBookFilterOptions(savedViewCriteria.collectionBook)}
