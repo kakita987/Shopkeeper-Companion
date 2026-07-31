@@ -505,10 +505,10 @@ export function getGoogleSyncErrorMessage(error) {
 
 export function buildSpreadsheetCreationPromptMessage(reason = 'new-user') {
   if (reason === 'recovery') {
-    return 'Your Google Sync Sheet could not be found. A new backup sheet can be created in your Google Drive. Continue?'
+    return 'The previously saved Google Sync Sheet could not be found. You can create a new one for backup and bulk editing, or enter the corrected sheet ID. Continue?'
   }
 
-  return 'This app will create a new Google Sheet in your Google Drive to store your sync data. Continue?'
+  return 'A Google Sync Sheet could not be found. Would you like to create one for backup and bulk editing?'
 }
 
 export async function createUserSyncSpreadsheet(accessToken, title = 'Shopkeeper Companion User Data') {
