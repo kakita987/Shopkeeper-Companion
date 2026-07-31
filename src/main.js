@@ -289,6 +289,7 @@ const googleSyncState = {
   isReady: false,
   isSyncing: false,
   error: '',
+  notice: '',
   lastSyncedAt: '',
 }
 const googleAuth = useGoogleAuth({ clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID })
@@ -432,6 +433,7 @@ function renderGoogleAuthUi(state) {
         <button type="button" class="auth-button auth-button-secondary" data-auth-action="sign-out" ${signOutDisabled ? 'disabled' : ''}>Sign Out</button>
       </div>
       <p class="settings-copy sync-caption">${escapeHtml(syncLabel)}</p>
+      ${googleSyncState.notice ? `<p class="settings-copy sync-caption">${escapeHtml(googleSyncState.notice)}</p>` : ''}
       ${googleSyncState.error ? `<p class="settings-copy sync-caption sync-error">${escapeHtml(googleSyncState.error)}</p>` : ''}
     `
 
@@ -468,6 +470,7 @@ async function handleGoogleAuthStateChange(state) {
   if (!state?.isAuthenticated || !state?.accessToken) {
     googleSyncState.isReady = false
     googleSyncState.error = ''
+    googleSyncState.notice = ''
     googleSyncState.isSyncing = false
     pendingGoogleSyncInitPromise = null
     renderGoogleAuthUi(state)
@@ -489,9 +492,19 @@ async function initializeGoogleSync(accessToken) {
     try {
       googleSyncState.isSyncing = true
       googleSyncState.error = ''
+      googleSyncState.notice = googleSyncState.spreadsheetId
+        ? 'Your Google Sync Sheet could not be found. A new backup sheet can be created in your Google Drive.'
+        : 'This app will create a new Google Sheet in your Google Drive to store your sync data.'
       renderGoogleAuthUi(googleAuth.getState())
 
-      const ensured = await ensureUserSyncSpreadsheet(accessToken, googleSyncState.spreadsheetId)
+      const ensured = await ensureUserSyncSpreadsheet(accessToken, googleSyncState.spreadsheetId, {
+        reason: googleSyncState.spreadsheetId ? 'recovery' : 'new-user',
+        confirmCreate: async (message) => {
+          googleSyncState.notice = message
+          renderGoogleAuthUi(googleAuth.getState())
+          return window.confirm(message)
+        },
+      })
       googleSyncState.spreadsheetId = ensured.spreadsheetId
       googleSyncState.spreadsheetUrl = ensured.spreadsheetUrl
       localStorage.setItem(GOOGLE_SYNC_SPREADSHEET_ID_STORAGE_KEY, ensured.spreadsheetId)
@@ -504,10 +517,12 @@ async function initializeGoogleSync(accessToken) {
       }
 
       googleSyncState.isReady = true
+      googleSyncState.notice = ''
       googleSyncState.lastSyncedAt = new Date().toISOString()
       renderGoogleAuthUi(googleAuth.getState())
     } catch (error) {
       googleSyncState.error = error?.message || 'Unable to initialize Google Sheet sync.'
+      googleSyncState.notice = ''
       googleSyncState.isReady = false
       googleSyncState.spreadsheetId = ''
       googleSyncState.spreadsheetUrl = ''
