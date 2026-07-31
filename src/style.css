@@ -668,7 +668,9 @@ body.theme-dark .overlay-card,
 
 .empty-state {
   margin: 0;
+  padding: 0;
   color: #6b7280;
+  line-height: 1.6;
 }
 
 .blueprint-category > summary,
@@ -751,6 +753,7 @@ body.theme-dark .overlay-card,
 .saved-views-content {
   display: grid;
   gap: 14px;
+  align-content: start;
 }
 
 .saved-views-toolbar,
@@ -1488,6 +1491,10 @@ h2 {
   margin-bottom: 10px;
 }
 
+.preview-header:has(.status:empty) {
+  display: none;
+}
+
 .blueprint-groups {
   display: flex;
   flex-direction: column;
@@ -1803,13 +1810,17 @@ a.top-tab {
 
   .top-tabs {
     grid-area: tabs;
-    width: 100%;
-    margin-top: 0;
-    padding-left: 0;
-    overflow-x: auto;
-    justify-self: stretch;
-    justify-content: center;
+    width: auto;
+    margin: 0 12px 0 0;
+    padding: 0 4px 0 0;
+    overflow-x: visible;
+    justify-self: end;
+    justify-content: flex-end;
     transform: none;
+    position: relative;
+    z-index: 3;
+    display: inline-flex;
+    align-items: flex-end;
   }
 
   .settings-toggle {
@@ -1819,8 +1830,9 @@ a.top-tab {
     margin-top: 0;
   }
 
+  /* Match desktop negative margin so active tab sits flush against the panel body */
   .view-shell {
-    margin-top: 0;
+    margin-top: -22px;
   }
 
   .saved-view-preset {
@@ -1828,10 +1840,26 @@ a.top-tab {
     text-align: left;
   }
 
+  /* Match desktop tab sizing exactly — file-folder tabs, same size on mobile */
   .top-tab {
-    flex: 1 0 auto;
-    font-size: 1.16rem;
-    padding: 10px 18px 12px;
+    flex: none;
+    font-size: 1.32rem;
+    padding: 11px 28px 13px;
+    transform: translateY(0);
+    z-index: 2;
+    min-width: 0;
+    width: auto;
+    margin-right: -8px;
+  }
+
+  .top-tab:not(.is-active) {
+    transform: translateY(12px);
+    z-index: 1;
+  }
+
+  .top-tab.is-active {
+    transform: translateY(0);
+    z-index: 3;
   }
 
   .blueprint-version {

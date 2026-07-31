@@ -732,20 +732,6 @@ function parseSettingsRows(rows = []) {
   }, {})
 }
 
-function buildSavedViewsRows() {
-  ensureSavedFilterViewsLoaded()
-
-  return savedFilterViews.map((view) => ([
-    view.id,
-    view.name,
-    view.criteria?.dependency || 'any',
-    view.criteria?.ownership || 'any',
-    view.criteria?.inventory || 'any',
-    view.criteria?.mastered || 'any',
-    JSON.stringify(view.criteria?.collectionBook || []),
-  ]))
-}
-
 function parseSavedViewsRows(rows = []) {
   return rows
     .map((row) => {
@@ -785,10 +771,6 @@ function parseCollectionBookCriteria(value) {
   }
 }
 
-function buildTrackedUpgradeRows() {
-  return [...trackedUpgradeKeys].map((key) => [key])
-}
-
 function parseTrackedUpgradeRows(settings = {}) {
   if (settings && typeof settings === 'object' && !Array.isArray(settings)) {
     const raw = cleanText(settings['tracked-upgrades'] || settings['trackedUpgrades'])
@@ -807,43 +789,8 @@ function parseTrackedUpgradeRows(settings = {}) {
   return []
 }
 
-function buildBlueprintProgressRows() {
-  return Object.entries(blueprintProgressByName)
-    .map(([blueprintName, progress]) => {
-      const name = cleanText(blueprintName)
-      if (!name) {
-        return null
-      }
-
-      return [
-        name,
-        progress?.owned ? 'TRUE' : 'FALSE',
-        progress?.master ? 'TRUE' : 'FALSE',
-        String(toInventoryCount(progress?.inventory?.normal)),
-        String(toInventoryCount(progress?.inventory?.superior)),
-        String(toInventoryCount(progress?.inventory?.flawless)),
-        String(toInventoryCount(progress?.inventory?.epic)),
-        String(toInventoryCount(progress?.inventory?.legendary)),
-        progress?.collectionBook?.superior ? 'TRUE' : 'FALSE',
-        progress?.collectionBook?.flawless ? 'TRUE' : 'FALSE',
-        progress?.collectionBook?.epic ? 'TRUE' : 'FALSE',
-        progress?.collectionBook?.legendary ? 'TRUE' : 'FALSE',
-      ]
-    })
-    .filter(Boolean)
-}
-
 function parseBlueprintProgressRows(rows = [], existingProgress = {}) {
   return parseWorkbookBlueprintProgress(rows, existingProgress)
-}
-
-function parseBooleanCell(value) {
-  if (typeof value === 'boolean') {
-    return value
-  }
-
-  const normalized = String(value || '').trim().toLowerCase()
-  return normalized === 'true' || normalized === '1' || normalized === 'yes'
 }
 
 function updateStatus(message, tone = 'info') {
@@ -882,7 +829,7 @@ async function initializeBlueprintDataFromCache() {
   renderBlueprintVersionLabel(blueprintVersionLabel)
 
   if (!cached) {
-    updateStatus('No local blueprint snapshot yet. Click "Download Blueprints" in Settings to restore the blueprint library.', 'info')
+    updateStatus('', 'info')
     renderBlueprintEmptyState('No blueprint library loaded yet. Click "Download Blueprints" in Settings to get the library back into the app.')
     return
   }
