@@ -22,13 +22,20 @@ const README_ROWS = [
 ]
 
 const PROGRESS_COLUMNS = [
-  { key: 'inventoryCount', label: 'Inventory Count' },
+  { key: 'inventoryNormal', label: 'Inventory Normal' },
+  { key: 'inventorySuperior', label: 'Inventory Superior' },
+  { key: 'inventoryFlawless', label: 'Inventory Flawless' },
+  { key: 'inventoryEpic', label: 'Inventory Epic' },
+  { key: 'inventoryLegendary', label: 'Inventory Legendary' },
   { key: 'owned', label: 'Owned' },
   { key: 'milestones', label: 'Milestones' },
   { key: 'ascension', label: 'Ascension' },
   { key: 'starforge', label: 'Starforge' },
   { key: 'transcendence', label: 'Transcendence' },
-  { key: 'collectionBook', label: 'Collection Book' },
+  { key: 'collectionSuperior', label: 'Collection Superior' },
+  { key: 'collectionFlawless', label: 'Collection Flawless' },
+  { key: 'collectionEpic', label: 'Collection Epic' },
+  { key: 'collectionLegendary', label: 'Collection Legendary' },
 ]
 
 const MASTER_BLUEPRINT_COLUMNS = [
@@ -99,12 +106,21 @@ function formatInventoryCell(value) {
   return String(toInventoryCount(value))
 }
 
-function hasCollectionBookProgress(progress = {}) {
+function isCollectionBookQualityComplete(progress = {}, quality) {
   if (progress?.collectionBookComplete) {
     return true
   }
 
-  return Boolean(progress?.collectionBook && Object.values(progress.collectionBook).some(Boolean))
+  if (Array.isArray(progress?.collectionBook)) {
+    return progress.collectionBook.some((value) => String(value || '').trim().toLowerCase() === quality)
+  }
+
+  return Boolean(progress?.collectionBook && progress.collectionBook[quality])
+}
+
+function getProgressCount(value) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
 }
 
 function normalizeSheetRows(values = []) {
@@ -170,14 +186,20 @@ export function parseWorkbookBlueprintProgress(workbookBlueprintProgress = [], e
         ...(currentProgress.inventory || {}),
       }
 
-      const inventoryCountValue = getRowValue(row, headerRow, ['Inventory Count', 'inventoryCount'])
-      if (inventoryCountValue !== '') {
-        nextInventory.normal = toInventoryCount(inventoryCountValue)
-        nextInventory.superior = toInventoryCount(nextInventory.superior)
-        nextInventory.flawless = toInventoryCount(nextInventory.flawless)
-        nextInventory.epic = toInventoryCount(nextInventory.epic)
-        nextInventory.legendary = toInventoryCount(nextInventory.legendary)
-      }
+      const inventoryFields = [
+        ['Inventory Normal', 'normal'],
+        ['Inventory Superior', 'superior'],
+        ['Inventory Flawless', 'flawless'],
+        ['Inventory Epic', 'epic'],
+        ['Inventory Legendary', 'legendary'],
+      ]
+
+      inventoryFields.forEach(([label, key]) => {
+        const rawValue = getRowValue(row, headerRow, [label])
+        if (rawValue !== '') {
+          nextInventory[key] = toInventoryCount(rawValue)
+        }
+      })
 
       const ownedValue = getRowValue(row, headerRow, ['Owned', 'owned'])
       if (ownedValue !== '') {
@@ -191,26 +213,40 @@ export function parseWorkbookBlueprintProgress(workbookBlueprintProgress = [], e
         ['Ascension', 'ascension'],
         ['Starforge', 'starforge'],
         ['Transcendence', 'transcendence'],
-        ['Collection Book', 'collectionBookComplete'],
       ]
 
       milestoneFields.forEach(([label, key]) => {
         const rawValue = getRowValue(row, headerRow, [label])
         if (rawValue !== '') {
-          currentProgress[key] = parseBooleanCell(rawValue)
+          currentProgress[key] = getProgressCount(rawValue)
         }
       })
 
-      if (currentProgress.collectionBookComplete) {
-        currentProgress.collectionBook = {
-          superior: true,
-          flawless: true,
-          epic: true,
-          legendary: true,
-        }
-      } else if (!currentProgress.collectionBook || Object.keys(currentProgress.collectionBook).length === 0) {
-        currentProgress.collectionBook = {}
+      const collectionBookFields = [
+        ['Collection Superior', 'superior'],
+        ['Collection Flawless', 'flawless'],
+        ['Collection Epic', 'epic'],
+        ['Collection Legendary', 'legendary'],
+      ]
+
+      const collectionBook = {
+        ...(currentProgress.collectionBook || {}),
       }
+
+      collectionBookFields.forEach(([label, key]) => {
+        const rawValue = getRowValue(row, headerRow, [label])
+        if (rawValue !== '') {
+          collectionBook[key] = parseBooleanCell(rawValue)
+        }
+      })
+
+      currentProgress.collectionBook = collectionBook
+      currentProgress.collectionBookComplete = Boolean(
+        currentProgress.collectionBook?.superior &&
+        currentProgress.collectionBook?.flawless &&
+        currentProgress.collectionBook?.epic &&
+        currentProgress.collectionBook?.legendary
+      )
 
       nextProgress[blueprintName] = currentProgress
     })
@@ -273,13 +309,20 @@ function buildBlueprintRow(item = {}, progress = {}) {
   }
 
   const progressValues = {
-    inventoryCount: formatInventoryCell(progress?.inventory?.normal ?? progress?.inventory?.superior ?? progress?.inventory?.flawless ?? progress?.inventory?.epic ?? progress?.inventory?.legendary ?? 0),
+    inventoryNormal: formatInventoryCell(progress?.inventory?.normal ?? 0),
+    inventorySuperior: formatInventoryCell(progress?.inventory?.superior ?? 0),
+    inventoryFlawless: formatInventoryCell(progress?.inventory?.flawless ?? 0),
+    inventoryEpic: formatInventoryCell(progress?.inventory?.epic ?? 0),
+    inventoryLegendary: formatInventoryCell(progress?.inventory?.legendary ?? 0),
     owned: formatBooleanCell(progress?.owned),
-    milestones: formatBooleanCell(progress?.milestones),
-    ascension: formatBooleanCell(progress?.ascension),
-    starforge: formatBooleanCell(progress?.starforge),
-    transcendence: formatBooleanCell(progress?.transcendence),
-    collectionBook: formatBooleanCell(hasCollectionBookProgress(progress)),
+    milestones: formatInventoryCell(progress?.milestones ?? 0),
+    ascension: formatInventoryCell(progress?.ascension ?? 0),
+    starforge: formatInventoryCell(progress?.starforge ?? 0),
+    transcendence: formatInventoryCell(progress?.transcendence ?? 0),
+    collectionSuperior: formatBooleanCell(isCollectionBookQualityComplete(progress, 'superior')),
+    collectionFlawless: formatBooleanCell(isCollectionBookQualityComplete(progress, 'flawless')),
+    collectionEpic: formatBooleanCell(isCollectionBookQualityComplete(progress, 'epic')),
+    collectionLegendary: formatBooleanCell(isCollectionBookQualityComplete(progress, 'legendary')),
   }
 
   const rowValues = [
