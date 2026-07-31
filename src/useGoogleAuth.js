@@ -1,5 +1,7 @@
 const GOOGLE_IDENTITY_SCRIPT = 'https://accounts.google.com/gsi/client'
-const SHEETS_SCOPE = 'https://www.googleapis.com/auth/drive.file'
+const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets'
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file'
+const GOOGLE_AUTH_SCOPES = `${SHEETS_SCOPE} ${DRIVE_SCOPE}`
 const MISSING_CLIENT_ID_MESSAGE = 'Google sign-in is not configured for this deployment. Set VITE_GOOGLE_CLIENT_ID in your production environment.'
 
 let gisScriptPromise = null
@@ -80,7 +82,7 @@ export function useGoogleAuth({ clientId }) {
 
       tokenClient = window.google.accounts.oauth2.initTokenClient({
         client_id: clientId,
-        scope: SHEETS_SCOPE,
+        scope: GOOGLE_AUTH_SCOPES,
         callback: (response) => {
           state.isAuthenticating = false
 

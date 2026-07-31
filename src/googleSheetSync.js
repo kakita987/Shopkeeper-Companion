@@ -1,4 +1,5 @@
 const SHEETS_API_BASE = 'https://sheets.googleapis.com/v4/spreadsheets'
+const DRIVE_API_BASE = 'https://www.googleapis.com/drive/v3'
 const README_SHEET_TITLE = 'ReadMe'
 const WORKBOOK_SHEET_TITLES = ['ReadMe', 'Weapons', 'Armor', 'Accessories', 'Enchantments', 'Saved Views', 'Settings']
 const BLUEPRINT_CATEGORY_TITLES = ['Weapons', 'Armor', 'Accessories', 'Enchantments']
@@ -385,8 +386,8 @@ function ensureWorkbookOrder(sheetTitles) {
   return WORKBOOK_SHEET_TITLES.filter((title) => sheetTitles.includes(title))
 }
 
-async function requestSheetsApi(path, accessToken, options = {}) {
-  const response = await fetch(`${SHEETS_API_BASE}${path}`, {
+async function requestJsonApi(baseUrl, path, accessToken, options = {}) {
+  const response = await fetch(`${baseUrl}${path}`, {
     ...options,
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -397,7 +398,7 @@ async function requestSheetsApi(path, accessToken, options = {}) {
 
   if (!response.ok) {
     const errorText = await response.text()
-    throw new Error(errorText || `Google Sheets request failed (${response.status}).`)
+    throw new Error(errorText || 'Google API request failed.')
   }
 
   if (response.status === 204) {
@@ -410,6 +411,30 @@ async function requestSheetsApi(path, accessToken, options = {}) {
   }
 
   return response.json()
+}
+
+async function requestSheetsApi(path, accessToken, options = {}) {
+  return requestJsonApi(SHEETS_API_BASE, path, accessToken, options)
+}
+
+async function requestDriveApi(path, accessToken, options = {}) {
+  return requestJsonApi(DRIVE_API_BASE, path, accessToken, options)
+}
+
+export async function createUserSyncSpreadsheet(accessToken, title = 'Shopkeeper Companion User Data') {
+  const createdFile = await requestDriveApi('/files?fields=id,name,webViewLink', accessToken, {
+    method: 'POST',
+    body: JSON.stringify({
+      name: title,
+      mimeType: 'application/vnd.google-apps.spreadsheet',
+    }),
+  })
+
+  if (!createdFile?.id) {
+    throw new Error('Google Drive did not return a spreadsheet ID.')
+  }
+
+  return createdFile
 }
 
 export function buildSpreadsheetUrl(spreadsheetId) {
@@ -428,17 +453,11 @@ export async function ensureUserSyncSpreadsheet(accessToken, preferredSpreadshee
   }
 
   if (!spreadsheet?.spreadsheetId) {
-    spreadsheet = await requestSheetsApi('', accessToken, {
-      method: 'POST',
-      body: JSON.stringify({
-        properties: {
-          title: 'Shopkeeper Companion User Data',
-        },
-        sheets: WORKBOOK_SHEET_TITLES.map((title) => ({
-          properties: { title },
-        })),
-      }),
-    })
+    const createdFile = await createUserSyncSpreadsheet(accessToken, 'Shopkeeper Companion User Data')
+    spreadsheet = {
+      spreadsheetId: createdFile.id,
+      spreadsheetUrl: createdFile.webViewLink || buildSpreadsheetUrl(createdFile.id),
+    }
   }
 
   const readmeSheetId = await ensureSheetsAndHeaders(accessToken, spreadsheet.spreadsheetId)
