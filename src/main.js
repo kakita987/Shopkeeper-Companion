@@ -509,6 +509,9 @@ async function initializeGoogleSync(accessToken) {
     } catch (error) {
       googleSyncState.error = error?.message || 'Unable to initialize Google Sheet sync.'
       googleSyncState.isReady = false
+      googleSyncState.spreadsheetId = ''
+      googleSyncState.spreadsheetUrl = ''
+      localStorage.removeItem(GOOGLE_SYNC_SPREADSHEET_ID_STORAGE_KEY)
       console.error(error)
       renderGoogleAuthUi(googleAuth.getState())
     } finally {
