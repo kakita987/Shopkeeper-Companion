@@ -1,5 +1,4 @@
 const SHEETS_API_BASE = 'https://sheets.googleapis.com/v4/spreadsheets'
-const DRIVE_API_BASE = 'https://www.googleapis.com/drive/v3'
 const README_SHEET_TITLE = 'ReadMe'
 const WORKBOOK_SHEET_TITLES = ['ReadMe', 'Weapons', 'Armor', 'Accessories', 'Enchantments', 'Saved Views', 'Settings']
 const BLUEPRINT_CATEGORY_TITLES = ['Weapons', 'Armor', 'Accessories', 'Enchantments']
@@ -417,41 +416,87 @@ async function requestSheetsApi(path, accessToken, options = {}) {
   return requestJsonApi(SHEETS_API_BASE, path, accessToken, options)
 }
 
-async function requestDriveApi(path, accessToken, options = {}) {
-  return requestJsonApi(DRIVE_API_BASE, path, accessToken, options)
+function getGoogleApiErrorStatus(error) {
+  if (typeof error?.status === 'number') {
+    return error.status
+  }
+
+  const message = error?.message || ''
+  if (/401|unauthorized/i.test(message)) {
+    return 401
+  }
+  if (/403|forbidden/i.test(message)) {
+    return 403
+  }
+  if (/429|rate limit|too many requests/i.test(message)) {
+    return 429
+  }
+  if (/500|503|service unavailable|temporarily unavailable|timeout/i.test(message)) {
+    return 503
+  }
+  if (/404|not found|requested entity was not found|NOT_FOUND/i.test(message)) {
+    return 404
+  }
+  if (/410|gone/i.test(message)) {
+    return 410
+  }
+  return null
 }
 
-function isNotFoundError(error) {
-  const message = error?.message || ''
-  return error?.status === 404 || /not found|requested entity was not found|NOT_FOUND/i.test(message)
+function shouldRecoverSpreadsheet(error) {
+  const status = getGoogleApiErrorStatus(error)
+  return status === 404 || status === 410
+}
+
+export function buildSpreadsheetCreationPromptMessage(reason = 'new-user') {
+  if (reason === 'recovery') {
+    return 'Your Google Sync Sheet could not be found. A new backup sheet can be created in your Google Drive. Continue?'
+  }
+
+  return 'This app will create a new Google Sheet in your Google Drive to store your sync data. Continue?'
 }
 
 export async function createUserSyncSpreadsheet(accessToken, title = 'Shopkeeper Companion User Data') {
-  const createdFile = await requestDriveApi('/files?fields=id,name,webViewLink', accessToken, {
+  const createdSpreadsheet = await requestSheetsApi('', accessToken, {
     method: 'POST',
     body: JSON.stringify({
-      name: title,
-      mimeType: 'application/vnd.google-apps.spreadsheet',
+      properties: {
+        title,
+      },
+      sheets: WORKBOOK_SHEET_TITLES.map((sheetTitle) => ({
+        properties: { title: sheetTitle },
+      })),
     }),
   })
 
-  if (!createdFile?.id) {
-    throw new Error('Google Drive did not return a spreadsheet ID.')
+  if (!createdSpreadsheet?.spreadsheetId) {
+    throw new Error('Google Sheets did not return a spreadsheet ID.')
   }
 
-  return createdFile
+  return createdSpreadsheet
 }
 
 export function buildSpreadsheetUrl(spreadsheetId) {
   return `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`
 }
 
-export async function resolveUserSyncSpreadsheet(accessToken, preferredSpreadsheetId = '') {
+export async function resolveUserSyncSpreadsheet(accessToken, preferredSpreadsheetId = '', options = {}) {
   const createSpreadsheet = async () => {
-    const createdFile = await createUserSyncSpreadsheet(accessToken, 'Shopkeeper Companion User Data')
+    const reason = options?.reason === 'recovery' ? 'recovery' : 'new-user'
+    const message = buildSpreadsheetCreationPromptMessage(reason)
+    const confirmCreate = options?.confirmCreate
+
+    if (typeof confirmCreate === 'function') {
+      const shouldCreate = await confirmCreate(message)
+      if (!shouldCreate) {
+        throw new Error('Google Sync Sheet creation was cancelled.')
+      }
+    }
+
+    const createdSpreadsheet = await createUserSyncSpreadsheet(accessToken, 'Shopkeeper Companion User Data')
     return {
-      spreadsheetId: createdFile.id,
-      spreadsheetUrl: createdFile.webViewLink || buildSpreadsheetUrl(createdFile.id),
+      spreadsheetId: createdSpreadsheet.spreadsheetId,
+      spreadsheetUrl: createdSpreadsheet.spreadsheetUrl || buildSpreadsheetUrl(createdSpreadsheet.spreadsheetId),
     }
   }
 
@@ -460,24 +505,19 @@ export async function resolveUserSyncSpreadsheet(accessToken, preferredSpreadshe
   }
 
   try {
-    const driveFile = await requestDriveApi(
-      `/files/${encodeURIComponent(preferredSpreadsheetId)}?fields=id,name,mimeType,trashed,webViewLink`,
+    const candidate = await requestSheetsApi(
+      `/${preferredSpreadsheetId}?fields=spreadsheetId,spreadsheetUrl,sheets(properties(title))`,
       accessToken
     )
 
-    if (driveFile?.trashed || driveFile?.mimeType !== 'application/vnd.google-apps.spreadsheet') {
-      return createSpreadsheet()
-    }
-
-    const candidate = await requestSheetsApi(`/${preferredSpreadsheetId}?fields=spreadsheetId,sheets(properties(title))`, accessToken)
     if (candidate?.spreadsheetId) {
       return {
         spreadsheetId: candidate.spreadsheetId,
-        spreadsheetUrl: driveFile.webViewLink || buildSpreadsheetUrl(candidate.spreadsheetId),
+        spreadsheetUrl: candidate.spreadsheetUrl || buildSpreadsheetUrl(candidate.spreadsheetId),
       }
     }
   } catch (error) {
-    if (!isNotFoundError(error)) {
+    if (!shouldRecoverSpreadsheet(error)) {
       throw error
     }
   }
@@ -485,8 +525,8 @@ export async function resolveUserSyncSpreadsheet(accessToken, preferredSpreadshe
   return createSpreadsheet()
 }
 
-export async function ensureUserSyncSpreadsheet(accessToken, preferredSpreadsheetId = '') {
-  let spreadsheet = await resolveUserSyncSpreadsheet(accessToken, preferredSpreadsheetId)
+export async function ensureUserSyncSpreadsheet(accessToken, preferredSpreadsheetId = '', options = {}) {
+  let spreadsheet = await resolveUserSyncSpreadsheet(accessToken, preferredSpreadsheetId, options)
 
   try {
     const readmeSheetId = await ensureSheetsAndHeaders(accessToken, spreadsheet.spreadsheetId)
@@ -497,11 +537,11 @@ export async function ensureUserSyncSpreadsheet(accessToken, preferredSpreadshee
       readmeSheetId,
     }
   } catch (error) {
-    if (!isNotFoundError(error)) {
+    if (!shouldRecoverSpreadsheet(error)) {
       throw error
     }
 
-    spreadsheet = await resolveUserSyncSpreadsheet(accessToken, '')
+    spreadsheet = await resolveUserSyncSpreadsheet(accessToken, '', options)
     const readmeSheetId = await ensureSheetsAndHeaders(accessToken, spreadsheet.spreadsheetId)
 
     return {

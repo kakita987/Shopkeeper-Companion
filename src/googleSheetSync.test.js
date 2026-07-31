@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  buildSpreadsheetCreationPromptMessage,
   buildWorkbookPayload,
   getSyncWorkbookSchemaEntries,
   parseWorkbookBlueprintProgress,
@@ -56,28 +57,33 @@ test('parseWorkbookBlueprintProgress merges workbook rows by blueprint name and 
   assert.equal(progress.Beta.owned, false)
 })
 
-test('resolveUserSyncSpreadsheet ignores trashed Drive files and creates a fresh spreadsheet', async () => {
+test('buildSpreadsheetCreationPromptMessage explains the new-sheet workflow for new users and recovery', () => {
+  assert.match(buildSpreadsheetCreationPromptMessage('new-user'), /Google Drive/i)
+  assert.match(buildSpreadsheetCreationPromptMessage('recovery'), /backup sheet/i)
+})
+
+test('resolveUserSyncSpreadsheet ignores missing Sheets files and creates a fresh spreadsheet', async () => {
   const originalFetch = global.fetch
   const calls = []
 
   global.fetch = async (url, options = {}) => {
     calls.push(url)
 
-    if (String(url).includes('/files/deleted-id?fields=id,name,mimeType,trashed,webViewLink')) {
+    if (String(url).includes('/deleted-id?fields=spreadsheetId,spreadsheetUrl,sheets(properties(title))')) {
       return {
-        ok: true,
-        status: 200,
+        ok: false,
+        status: 404,
         headers: { get: () => 'application/json' },
-        json: async () => ({ id: 'deleted-id', mimeType: 'application/vnd.google-apps.spreadsheet', trashed: true, webViewLink: 'https://example.com/deleted' }),
+        text: async () => JSON.stringify({ error: { message: 'Requested entity was not found.', status: 'NOT_FOUND' } }),
       }
     }
 
-    if (String(url).includes('/files?fields=id,name,webViewLink')) {
+    if (String(url).includes('https://sheets.googleapis.com/v4/spreadsheets') && options.method === 'POST') {
       return {
         ok: true,
         status: 200,
         headers: { get: () => 'application/json' },
-        json: async () => ({ id: 'fresh-id', webViewLink: 'https://example.com/fresh' }),
+        json: async () => ({ spreadsheetId: 'fresh-id', spreadsheetUrl: 'https://example.com/fresh' }),
       }
     }
 
