@@ -4,6 +4,7 @@ import {
   buildWorkbookPayload,
   getSyncWorkbookSchemaEntries,
   parseWorkbookBlueprintProgress,
+  resolveUserSyncSpreadsheet,
 } from './googleSheetSync.js'
 
 test('buildWorkbookPayload creates the requested sheet order and initializes blueprint progress defaults', () => {
@@ -53,4 +54,41 @@ test('parseWorkbookBlueprintProgress merges workbook rows by blueprint name and 
   assert.equal(progress.Alpha.inventory.normal, 3)
   assert.equal(progress.Alpha.collectionBook.legendary, true)
   assert.equal(progress.Beta.owned, false)
+})
+
+test('resolveUserSyncSpreadsheet ignores trashed Drive files and creates a fresh spreadsheet', async () => {
+  const originalFetch = global.fetch
+  const calls = []
+
+  global.fetch = async (url, options = {}) => {
+    calls.push(url)
+
+    if (String(url).includes('/files/deleted-id?fields=id,name,mimeType,trashed,webViewLink')) {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ id: 'deleted-id', mimeType: 'application/vnd.google-apps.spreadsheet', trashed: true, webViewLink: 'https://example.com/deleted' }),
+      }
+    }
+
+    if (String(url).includes('/files?fields=id,name,webViewLink')) {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ id: 'fresh-id', webViewLink: 'https://example.com/fresh' }),
+      }
+    }
+
+    throw new Error(`Unexpected fetch ${url}`)
+  }
+
+  try {
+    const spreadsheet = await resolveUserSyncSpreadsheet('token', 'deleted-id')
+    assert.equal(spreadsheet.spreadsheetId, 'fresh-id')
+    assert.equal(calls.length, 2)
+  } finally {
+    global.fetch = originalFetch
+  }
 })

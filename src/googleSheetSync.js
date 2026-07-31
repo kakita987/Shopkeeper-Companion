@@ -421,6 +421,11 @@ async function requestDriveApi(path, accessToken, options = {}) {
   return requestJsonApi(DRIVE_API_BASE, path, accessToken, options)
 }
 
+function isNotFoundError(error) {
+  const message = error?.message || ''
+  return error?.status === 404 || /not found|requested entity was not found|NOT_FOUND/i.test(message)
+}
+
 export async function createUserSyncSpreadsheet(accessToken, title = 'Shopkeeper Companion User Data') {
   const createdFile = await requestDriveApi('/files?fields=id,name,webViewLink', accessToken, {
     method: 'POST',
@@ -441,31 +446,69 @@ export function buildSpreadsheetUrl(spreadsheetId) {
   return `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`
 }
 
-export async function ensureUserSyncSpreadsheet(accessToken, preferredSpreadsheetId = '') {
-  let spreadsheet = null
-
-  if (preferredSpreadsheetId) {
-    try {
-      spreadsheet = await requestSheetsApi(`/${preferredSpreadsheetId}?fields=spreadsheetId,sheets(properties(title))`, accessToken)
-    } catch (error) {
-      spreadsheet = null
-    }
-  }
-
-  if (!spreadsheet?.spreadsheetId) {
+export async function resolveUserSyncSpreadsheet(accessToken, preferredSpreadsheetId = '') {
+  const createSpreadsheet = async () => {
     const createdFile = await createUserSyncSpreadsheet(accessToken, 'Shopkeeper Companion User Data')
-    spreadsheet = {
+    return {
       spreadsheetId: createdFile.id,
       spreadsheetUrl: createdFile.webViewLink || buildSpreadsheetUrl(createdFile.id),
     }
   }
 
-  const readmeSheetId = await ensureSheetsAndHeaders(accessToken, spreadsheet.spreadsheetId)
+  if (!preferredSpreadsheetId) {
+    return createSpreadsheet()
+  }
 
-  return {
-    spreadsheetId: spreadsheet.spreadsheetId,
-    spreadsheetUrl: `${buildSpreadsheetUrl(spreadsheet.spreadsheetId)}#gid=${readmeSheetId}`,
-    readmeSheetId,
+  try {
+    const driveFile = await requestDriveApi(
+      `/files/${encodeURIComponent(preferredSpreadsheetId)}?fields=id,name,mimeType,trashed,webViewLink`,
+      accessToken
+    )
+
+    if (driveFile?.trashed || driveFile?.mimeType !== 'application/vnd.google-apps.spreadsheet') {
+      return createSpreadsheet()
+    }
+
+    const candidate = await requestSheetsApi(`/${preferredSpreadsheetId}?fields=spreadsheetId,sheets(properties(title))`, accessToken)
+    if (candidate?.spreadsheetId) {
+      return {
+        spreadsheetId: candidate.spreadsheetId,
+        spreadsheetUrl: driveFile.webViewLink || buildSpreadsheetUrl(candidate.spreadsheetId),
+      }
+    }
+  } catch (error) {
+    if (!isNotFoundError(error)) {
+      throw error
+    }
+  }
+
+  return createSpreadsheet()
+}
+
+export async function ensureUserSyncSpreadsheet(accessToken, preferredSpreadsheetId = '') {
+  let spreadsheet = await resolveUserSyncSpreadsheet(accessToken, preferredSpreadsheetId)
+
+  try {
+    const readmeSheetId = await ensureSheetsAndHeaders(accessToken, spreadsheet.spreadsheetId)
+
+    return {
+      spreadsheetId: spreadsheet.spreadsheetId,
+      spreadsheetUrl: spreadsheet.spreadsheetUrl || `${buildSpreadsheetUrl(spreadsheet.spreadsheetId)}#gid=${readmeSheetId}`,
+      readmeSheetId,
+    }
+  } catch (error) {
+    if (!isNotFoundError(error)) {
+      throw error
+    }
+
+    spreadsheet = await resolveUserSyncSpreadsheet(accessToken, '')
+    const readmeSheetId = await ensureSheetsAndHeaders(accessToken, spreadsheet.spreadsheetId)
+
+    return {
+      spreadsheetId: spreadsheet.spreadsheetId,
+      spreadsheetUrl: spreadsheet.spreadsheetUrl || `${buildSpreadsheetUrl(spreadsheet.spreadsheetId)}#gid=${readmeSheetId}`,
+      readmeSheetId,
+    }
   }
 }
 
