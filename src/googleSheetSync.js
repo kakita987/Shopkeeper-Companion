@@ -540,6 +540,31 @@ export async function resolveUserSyncSpreadsheet(accessToken, preferredSpreadshe
     const reason = options?.reason === 'recovery' ? 'recovery' : 'new-user'
     const message = buildSpreadsheetCreationPromptMessage(reason)
     const confirmCreate = options?.confirmCreate
+    const promptForSpreadsheet = options?.promptForSpreadsheet
+
+    if (typeof promptForSpreadsheet === 'function' && options?.reason === 'recovery') {
+      const requestedLocation = await promptForSpreadsheet(message)
+      if (typeof requestedLocation === 'string' && requestedLocation.trim()) {
+        const fallbackId = requestedLocation.trim()
+        try {
+          const candidate = await requestSheetsApi(
+            `/${fallbackId}?fields=spreadsheetId,spreadsheetUrl,sheets(properties(title))`,
+            accessToken
+          )
+
+          if (candidate?.spreadsheetId) {
+            return {
+              spreadsheetId: candidate.spreadsheetId,
+              spreadsheetUrl: candidate.spreadsheetUrl || buildSpreadsheetUrl(candidate.spreadsheetId),
+            }
+          }
+        } catch (error) {
+          if (!shouldRecoverSpreadsheet(error)) {
+            throw error
+          }
+        }
+      }
+    }
 
     if (typeof confirmCreate === 'function') {
       const shouldCreate = await confirmCreate(message)

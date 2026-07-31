@@ -67,68 +67,58 @@ export function useGoogleAuth({ clientId }) {
     }
 
     initializePromise = (async () => {
-    if (!clientId) {
-      updateState({
-        isLoading: false,
-        isReady: false,
-        error: MISSING_CLIENT_ID_MESSAGE,
-      })
-      return
-    }
-
-    try {
-      updateState({ isLoading: true, error: null })
-      await loadGoogleIdentityScript()
-
-      tokenClient = window.google.accounts.oauth2.initTokenClient({
-        client_id: clientId,
-        scope: GOOGLE_AUTH_SCOPES,
-        callback: (response) => {
-          state.isAuthenticating = false
-
-          if (!response || response.error) {
-            updateState({
-              isAuthenticated: false,
-              accessToken: null,
-              error: response?.error || 'Google sign-in failed.',
-            })
-            pendingSignIn?.reject(new Error(response?.error || 'Google sign-in failed.'))
-            pendingSignIn = null
-            return
-          }
-
-          updateState({
-            isAuthenticated: true,
-            accessToken: response.access_token,
-            error: null,
-          })
-          pendingSignIn?.resolve(response.access_token)
-          pendingSignIn = null
-        },
-      })
-
-      if (window.google?.accounts?.id?.initialize) {
-        window.google.accounts.id.initialize({
-          client_id: clientId,
-          callback: () => {
-            // OAuth token flow is handled by tokenClient; this keeps GIS button rendering available.
-          },
+      if (!clientId) {
+        updateState({
+          isLoading: false,
+          isReady: false,
+          error: MISSING_CLIENT_ID_MESSAGE,
         })
-        idApiReady = true
+        return
       }
 
-      updateState({
-        isLoading: false,
-        isReady: true,
-        error: null,
-      })
-    } catch (error) {
-      updateState({
-        isLoading: false,
-        isReady: false,
-        error: error?.message || 'Unable to initialize Google Identity Services.',
-      })
-    }
+      try {
+        updateState({ isLoading: true, error: null })
+        await loadGoogleIdentityScript()
+
+        tokenClient = window.google.accounts.oauth2.initTokenClient({
+          client_id: clientId,
+          scope: GOOGLE_AUTH_SCOPES,
+          callback: (response) => {
+            state.isAuthenticating = false
+
+            if (!response || response.error) {
+              updateState({
+                isAuthenticated: false,
+                accessToken: null,
+                error: response?.error || 'Google sign-in failed.',
+              })
+              pendingSignIn?.reject(new Error(response?.error || 'Google sign-in failed.'))
+              pendingSignIn = null
+              return
+            }
+
+            updateState({
+              isAuthenticated: true,
+              accessToken: response.access_token,
+              error: null,
+            })
+            pendingSignIn?.resolve(response.access_token)
+            pendingSignIn = null
+          },
+        })
+
+        updateState({
+          isLoading: false,
+          isReady: true,
+          error: null,
+        })
+      } catch (error) {
+        updateState({
+          isLoading: false,
+          isReady: false,
+          error: error?.message || 'Unable to initialize Google Identity Services.',
+        })
+      }
     })()
 
     await initializePromise
@@ -186,24 +176,12 @@ export function useGoogleAuth({ clientId }) {
   }
 
   function renderSignInButton(container) {
-    if (!container || !window.google?.accounts?.id?.renderButton || !idApiReady) {
+    if (!container) {
       return false
     }
 
     container.innerHTML = ''
-    window.google.accounts.id.renderButton(container, {
-      type: 'standard',
-      theme: 'outline',
-      size: 'large',
-      text: 'signin_with',
-      shape: 'pill',
-      logo_alignment: 'left',
-      click_listener: () => {
-        void signIn()
-      },
-    })
-
-    return true
+    return false
   }
 
   initialize()
