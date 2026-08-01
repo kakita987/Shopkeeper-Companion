@@ -933,143 +933,30 @@ async function loadBlueprintCache() {
   }
 }
 
-function openBlueprintOverlay(item) {
-  const visuals = getBlueprintVisuals(item)
-  const structuredData = item.structuredData || {}
-  const progress = getBlueprintProgressState(item.name)
-  const owned = Boolean(progress.owned)
-  const blueprintState = {
-    own: owned,
-    master: Boolean(progress.master),
-    inventory: progress.inventory || {},
-    collectionBook: progress.collectionBook || {},
-    materials: structuredData.materials || {},
-  }
-  const totalInventory = calculateTotalInventory(blueprintState)
-  const collectionStatus = getCollectionBookStatus(blueprintState)
-  const tierValue = structuredData.meta?.tier ? String(structuredData.meta.tier) : '—'
-  const unlockPrerequisite = structuredData.meta?.unlockPrerequisite ? structuredData.meta.unlockPrerequisite : '—'
-  const overviewStats = buildOverviewStats(structuredData, {
-    owned,
-    unlockPrerequisite,
-  })
-  const statsMarkup = renderStatsCards(overviewStats)
-  const materialsMarkup = renderMaterialsSection(structuredData.materials)
-  const upgradesMarkup = renderUpgradeSection(structuredData.upgrades, item.name, progress, owned)
-  const inventoryMarkup = renderInventorySection(progress)
-  const collectionMarkup = renderCollectionSection(progress, owned)
+function renderOverlaySectionCard(title, bodyMarkup, { hint = '', headerExtra = '', isOpen = true } = {}) {
+  // Each overlay card uses the same wrapper so the sections stay consistent while staying easy to tweak.
+  const hintMarkup = hint ? `<span class="section-hint">${escapeHtml(hint)}</span>` : ''
 
-  blueprintOverlayContent.innerHTML = `
-    <div class="overlay-hero">
-      <div class="overlay-hero-background overlay-hero-symbol" aria-hidden="true">
-        <span class="icon-slot overlay-hero-icon"><i data-lucide="${escapeHtml(getCategoryIconName(visuals.category))}"></i></span>
-      </div>
-      <div class="overlay-hero-content">
-        <div class="overlay-icon-bubble">
-          <span class="icon-slot overlay-item-icon"><i data-lucide="${escapeHtml(getBlueprintItemIconName(item))}"></i></span>
-        </div>
-        <div>
-          <p class="overlay-eyebrow">${escapeHtml(`${visuals.category} > ${visuals.type || 'Blueprint'}`)}</p>
-          <h3 id="blueprint-overlay-title">${escapeHtml(item.name)}</h3>
-          <div class="overlay-meta-row">
-            <span class="overlay-tier-badge">Tier ${escapeHtml(tierValue)}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="overlay-grid">
-      <div class="overlay-card">
-        <details class="overlay-section" open>
-          <summary class="section-summary">
-            <div class="section-summary-title">
-              <h4>Quick look</h4>
-            </div>
-          </summary>
-          <div class="section-body">
-            <ul class="info-list">
-              <li><strong>Total inventory</strong> ${escapeHtml(totalInventory)}</li>
-              <li><strong>Collection</strong> ${escapeHtml(collectionStatus || 'Not started')}</li>
-            </ul>
-          </div>
-        </details>
-      </div>
-      <div class="overlay-card">
-        <details class="overlay-section" open>
-          <summary class="section-summary">
-            <div class="section-summary-title">
-              <h4>Stats</h4>
-            </div>
-          </summary>
-          <div class="section-body">
-            <div class="info-grid">${statsMarkup}</div>
-          </div>
-        </details>
-      </div>
-    </div>
-
+  return `
     <div class="overlay-card">
-      <details class="overlay-section" open>
+      <details class="overlay-section" ${isOpen ? 'open' : ''}>
         <summary class="section-summary">
           <div class="section-summary-title">
-            <h4>Materials</h4>
+            <h4>${escapeHtml(title)}</h4>
           </div>
-          <label class="owned-toggle">
-            <input class="tracking-checkbox owned-checkbox" type="checkbox" data-blueprint-name="${escapeHtml(item.name)}" ${owned ? 'checked' : ''} />
-            <span>Owned</span>
-          </label>
+          ${headerExtra}
+          ${hintMarkup}
         </summary>
         <div class="section-body">
-          <div class="material-grid">${materialsMarkup}</div>
-        </div>
-      </details>
-    </div>
-
-    <div class="overlay-card">
-      <details class="overlay-section" open>
-        <summary class="section-summary">
-          <div class="section-summary-title">
-            <h4>Inventory</h4>
-          </div>
-          <span class="section-hint">Counts</span>
-        </summary>
-        <div class="section-body">
-          <div class="inventory-grid">${inventoryMarkup}</div>
-        </div>
-      </details>
-    </div>
-
-    <div class="overlay-card">
-      <details class="overlay-section" open>
-        <summary class="section-summary">
-          <div class="section-summary-title">
-            <h4>Unlockable upgrades</h4>
-          </div>
-          <span class="section-hint">${owned ? 'Unlocked' : 'Check Owned to Unlock'}</span>
-        </summary>
-        <div class="section-body">
-          <div class="upgrade-grid">${upgradesMarkup}</div>
-        </div>
-      </details>
-    </div>
-
-    <div class="overlay-card">
-      <details class="overlay-section" open>
-        <summary class="section-summary">
-          <div class="section-summary-title">
-            <h4>Collection Book</h4>
-          </div>
-          <span class="section-hint">${owned ? 'Track qualities' : 'Mark blueprint as Owned first'}</span>
-        </summary>
-        <div class="section-body">
-          <div class="collection-grid">${collectionMarkup}</div>
+          ${bodyMarkup}
         </div>
       </details>
     </div>
   `
+}
 
-  renderLucideIcons(blueprintOverlayContent)
-
+function bindBlueprintOverlayInteractions(item) {
+  // Keep the overlay controls wired in one place so the same blueprint can be refreshed after each edit.
   blueprintOverlayContent.querySelectorAll('.owned-toggle input').forEach((control) => {
     control.addEventListener('click', (event) => {
       event.stopPropagation()
@@ -1110,6 +997,87 @@ function openBlueprintOverlay(item) {
       persistBlueprintCollection(item.name, target.dataset.qualityKey, target.checked)
     })
   })
+}
+
+function openBlueprintOverlay(item) {
+  // This is the main blueprint detail view. It gathers the blueprint state and then builds the cards from smaller helpers.
+  const visuals = getBlueprintVisuals(item)
+  const structuredData = item.structuredData || {}
+  const progress = getBlueprintProgressState(item.name)
+  const owned = Boolean(progress.owned)
+  const blueprintState = {
+    own: owned,
+    master: Boolean(progress.master),
+    inventory: progress.inventory || {},
+    collectionBook: progress.collectionBook || {},
+    materials: structuredData.materials || {},
+  }
+  const totalInventory = calculateTotalInventory(blueprintState)
+  const collectionStatus = getCollectionBookStatus(blueprintState)
+  const tierValue = structuredData.meta?.tier ? String(structuredData.meta.tier) : '—'
+  const unlockPrerequisite = structuredData.meta?.unlockPrerequisite ? structuredData.meta.unlockPrerequisite : '—'
+  const overviewStats = buildOverviewStats(structuredData, {
+    owned,
+    unlockPrerequisite,
+  })
+  const statsMarkup = renderStatsCards(overviewStats)
+  const materialsMarkup = renderMaterialsSection(structuredData.materials)
+  const upgradesMarkup = renderUpgradeSection(structuredData.upgrades, item.name, progress, owned)
+  const inventoryMarkup = renderInventorySection(progress)
+  const collectionMarkup = renderCollectionSection(progress, owned)
+
+  const headerMarkup = `
+    <div class="overlay-hero">
+      <div class="overlay-hero-background overlay-hero-symbol" aria-hidden="true">
+        <span class="icon-slot overlay-hero-icon"><i data-lucide="${escapeHtml(getCategoryIconName(visuals.category))}"></i></span>
+      </div>
+      <div class="overlay-hero-content">
+        <div class="overlay-icon-bubble">
+          <span class="icon-slot overlay-item-icon"><i data-lucide="${escapeHtml(getBlueprintItemIconName(item))}"></i></span>
+        </div>
+        <div>
+          <p class="overlay-eyebrow">${escapeHtml(`${visuals.category} > ${visuals.type || 'Blueprint'}`)}</p>
+          <h3 id="blueprint-overlay-title">${escapeHtml(item.name)}</h3>
+          <div class="overlay-meta-row">
+            <span class="overlay-tier-badge">Tier ${escapeHtml(tierValue)}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  `
+
+  const overviewCardsMarkup = `
+    <div class="overlay-grid">
+      ${renderOverlaySectionCard('Quick look', `<ul class="info-list">
+        <li><strong>Total inventory</strong> ${escapeHtml(totalInventory)}</li>
+        <li><strong>Collection</strong> ${escapeHtml(collectionStatus || 'Not started')}</li>
+      </ul>`)}
+      ${renderOverlaySectionCard('Stats', `<div class="info-grid">${statsMarkup}</div>`)}
+    </div>
+  `
+
+  const detailCardsMarkup = [
+    renderOverlaySectionCard('Materials', `<div class="material-grid">${materialsMarkup}</div>`, {
+      headerExtra: `<label class="owned-toggle">
+        <input class="tracking-checkbox owned-checkbox" type="checkbox" data-blueprint-name="${escapeHtml(item.name)}" ${owned ? 'checked' : ''} />
+        <span>Owned</span>
+      </label>`,
+    }),
+    renderOverlaySectionCard('Inventory', `<div class="inventory-grid">${inventoryMarkup}</div>`, {
+      hint: 'Counts',
+    }),
+    renderOverlaySectionCard('Unlockable upgrades', `<div class="upgrade-grid">${upgradesMarkup}</div>`, {
+      hint: owned ? 'Unlocked' : 'Check Owned to Unlock',
+    }),
+    renderOverlaySectionCard('Collection Book', `<div class="collection-grid">${collectionMarkup}</div>`, {
+      hint: owned ? 'Track qualities' : 'Mark blueprint as Owned first',
+    }),
+  ].join('')
+
+  blueprintOverlayContent.innerHTML = `${headerMarkup}${overviewCardsMarkup}${detailCardsMarkup}`
+
+  renderLucideIcons(blueprintOverlayContent)
+  bindBlueprintOverlayInteractions(item)
 
   blueprintOverlay.classList.add('is-open')
   blueprintOverlay.setAttribute('aria-hidden', 'false')
