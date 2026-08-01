@@ -1,4 +1,5 @@
 import './style.css'
+import gearIcon from './assets/gearshape.fill.png'
 
 const THEME_PREFERENCE_STORAGE_KEY = 'shopkeeper-theme'
 const FONT_PREFERENCE_STORAGE_KEY = 'shopkeeper-font-preference'
@@ -6,6 +7,10 @@ const FONT_PREFERENCE_STORAGE_KEY = 'shopkeeper-font-preference'
 const settingsToggle = document.querySelector('#settings-toggle')
 const settingsPanel = document.querySelector('#settings-panel')
 const closeSettingsButton = document.querySelector('#close-settings')
+
+if (settingsToggle) {
+  settingsToggle.innerHTML = `<img class="settings-toggle-icon" src="${gearIcon}" alt="" aria-hidden="true" />`
+}
 const themeInputs = document.querySelectorAll('input[name="theme"]')
 const fontSelect = document.querySelector('#font-select')
 

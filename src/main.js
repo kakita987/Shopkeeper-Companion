@@ -1,4 +1,5 @@
 import './style.css'
+import gearIcon from './assets/gearshape.fill.png'
 import { mountAdBanner } from './adBanner.js'
 import { getRandomTavernText } from './kofiText.js'
 import { useGoogleAuth } from './useGoogleAuth.js'
@@ -144,7 +145,9 @@ app.innerHTML = `
         <button class="top-tab" type="button" data-view="saved-views">Saved Views</button>
       </nav>
 
-      <button id="settings-toggle" class="settings-toggle" type="button" aria-label="Open settings" aria-expanded="false" aria-controls="settings-panel">⚙</button>
+      <button id="settings-toggle" class="settings-toggle" type="button" aria-label="Open settings" aria-expanded="false" aria-controls="settings-panel">
+        <img class="settings-toggle-icon" src="${gearIcon}" alt="" aria-hidden="true" />
+      </button>
     </header>
 
     <div class="view-shell">
