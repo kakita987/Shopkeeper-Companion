@@ -643,12 +643,26 @@ body.theme-dark .overlay-card,
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  cursor: pointer;
+  cursor: default;
   list-style: none;
+}
+
+.section-summary--toggle {
+  cursor: pointer;
 }
 
 .section-summary::-webkit-details-marker {
   display: none;
+}
+
+.saved-view-filter-hint {
+  display: inline-block;
+  transform: rotate(90deg);
+  transition: transform 0.15s ease;
+}
+
+.overlay-section:not([open]) .saved-view-filter-hint {
+  transform: rotate(180deg);
 }
 
 .section-summary-title h4 {
