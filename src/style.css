@@ -157,15 +157,15 @@ body {
 
 .app-header {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   justify-content: stretch;
   align-items: flex-start;
-  gap: 16px;
+  gap: 10px;
   position: relative;
   background: transparent;
   border: 0;
   box-shadow: none;
-  padding: 0 4px;
+  padding: 0 54px 0 2px;
   margin-bottom: 0;
 }
 
@@ -173,12 +173,11 @@ body {
   display: inline-flex;
   align-items: flex-end;
   gap: 0;
-  margin: 14px 0 0;
+  margin: 8px 8px 0 0;
   padding-left: 0;
   position: relative;
-  justify-self: center;
+  justify-self: end;
   z-index: 2;
-  transform: translateX(20px);
 }
 
 body.theme-dark .top-tabs,
@@ -191,7 +190,7 @@ body.theme-dark .top-tabs,
   border: 1px solid #b79f79;
   border-bottom: 0;
   border-radius: 14px 14px 0 0;
-  padding: 11px 28px 13px;
+  padding: 9px 18px 11px;
   background: linear-gradient(180deg, #d9c39f 0%, #c8ae87 100%);
   color: #5c4320;
   font: inherit;
@@ -200,7 +199,7 @@ body.theme-dark .top-tabs,
   cursor: pointer;
   font-family: var(--font-accent);
   position: relative;
-  margin-right: -8px;
+  margin-right: -6px;
   box-shadow: 0 4px 9px rgba(90, 62, 29, 0.12);
   transition: transform 140ms ease, filter 140ms ease;
 }
@@ -272,7 +271,9 @@ body.theme-dark .top-tab.is-active,
 
 .settings-toggle {
   border: none;
-  position: static;
+  position: absolute;
+  top: 8px;
+  right: 8px;
   width: 44px;
   height: 44px;
   display: inline-flex;
@@ -287,8 +288,7 @@ body.theme-dark .top-tab.is-active,
   border-radius: 50%;
   cursor: pointer;
   transition: transform 140ms ease, background 140ms ease;
-  margin-top: 2px;
-  justify-self: end;
+  z-index: 4;
 }
 
 .settings-toggle:hover {
@@ -1545,8 +1545,8 @@ h1 {
 }
 
 .hero-copy h1 {
-  margin: 0;
-  transform: translateY(3px);
+  margin: 0 0 2px;
+  transform: translateY(1px);
   white-space: nowrap;
   font-family: 'Redressed', 'Brush Script MT', cursive;
   font-size: clamp(2.35rem, 4vw, 3.35rem);
@@ -1978,13 +1978,13 @@ a.top-tab {
 
   .app-header {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
-      'title settings'
-      'tabs tabs';
+      'title'
+      'tabs';
     align-items: start;
     gap: 10px 12px;
-    padding-right: 2px;
+    padding: 0 54px 0 2px;
     margin-bottom: 0;
   }
 
@@ -1996,8 +1996,8 @@ a.top-tab {
   .top-tabs {
     grid-area: tabs;
     width: auto;
-    margin: 0 12px 0 0;
-    padding: 0 4px 0 0;
+    margin: 0 8px 0 auto;
+    padding: 0;
     overflow-x: visible;
     justify-self: end;
     justify-content: flex-end;
@@ -2006,13 +2006,6 @@ a.top-tab {
     z-index: 3;
     display: inline-flex;
     align-items: flex-end;
-  }
-
-  .settings-toggle {
-    grid-area: settings;
-    justify-self: end;
-    align-self: start;
-    margin-top: 0;
   }
 
   /* Match desktop negative margin so active tab sits flush against the panel body */
@@ -2029,12 +2022,13 @@ a.top-tab {
   .top-tab {
     flex: none;
     font-size: 1.32rem;
-    padding: 11px 28px 13px;
+    padding: 9px 18px 11px;
     transform: translateY(0);
     z-index: 2;
     min-width: 0;
     width: auto;
-    margin-right: -8px;
+    margin-right: -6px;
+    margin-left: 2px;
   }
 
   .top-tab:not(.is-active) {
