@@ -130,7 +130,13 @@ app.innerHTML = `
     <main class="importer-shell">
     <header class="app-header">
       <div class="hero-copy">
-        <h1>Shopkeeper Companion</h1>
+        <h1 class="hero-title">
+          <span class="hero-title-text">Shopkeeper Companion</span>
+          <span class="hero-title-split" aria-hidden="true">
+            <span>Shopkeeper</span>
+            <span>Companion</span>
+          </span>
+        </h1>
       </div>
 
       <nav class="top-tabs" aria-label="Primary">
@@ -2347,7 +2353,7 @@ function renderPreview(headers, rows, structuredBlueprints = []) {
       typeGroup.items.forEach((item) => {
         const listItem = document.createElement('li')
         listItem.className = 'blueprint-item'
-        const tierText = item.structuredData?.meta?.tier ? `Tier ${item.structuredData.meta.tier}` : 'Tier —'
+        const tierText = item.structuredData?.meta?.tier ? String(item.structuredData.meta.tier) : '—'
         listItem.innerHTML = `
           <div class="item-copy">
             <div class="item-title-row">

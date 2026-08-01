@@ -1554,6 +1554,15 @@ h1 {
   letter-spacing: 0.01em;
 }
 
+.hero-title-text {
+  display: inline;
+}
+
+.hero-title-split {
+  display: none;
+}
+
+
 .settings-title {
   font-family: 'Redressed', 'Brush Script MT', cursive;
   font-size: clamp(2rem, 3.5vw, 2.7rem);
@@ -1913,6 +1922,35 @@ a.top-tab {
     min-height: auto;
     border-radius: 28px;
     padding: 24px;
+  }
+}
+
+@media (max-width: 420px) {
+  .hero-copy h1 {
+    display: flex;
+    align-items: flex-start;
+    white-space: normal;
+  }
+
+  .hero-title-text {
+    display: none;
+  }
+
+  .hero-title-split {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.01em;
+    white-space: normal;
+    line-height: 0.9;
+  }
+
+  .hero-title-split span {
+    display: block;
+  }
+
+  .hero-title-split span:last-child {
+    margin-left: 0.55em;
   }
 }
 
