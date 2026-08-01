@@ -152,10 +152,10 @@ function createDefaultBlueprintProgress() {
       epic: 0,
       legendary: 0,
     },
-    milestones: false,
-    ascension: false,
-    starforge: false,
-    transcendence: false,
+    milestones: 0,
+    ascension: 0,
+    starforge: 0,
+    transcendence: 0,
     collectionBookComplete: false,
   }
 }
@@ -505,10 +505,10 @@ export function getGoogleSyncErrorMessage(error) {
 
 export function buildSpreadsheetCreationPromptMessage(reason = 'new-user') {
   if (reason === 'recovery') {
-    return 'The previously saved Google Sync Sheet could not be found. You can create a new one for backup and bulk editing, or enter the corrected sheet ID. Continue?'
+    return 'The previously saved Google Drive backup sheet could not be found. You can create a new backup sheet for backup and bulk editing, or enter the corrected sheet ID. Continue?'
   }
 
-  return 'A Google Sync Sheet could not be found. Would you like to create one for backup and bulk editing?'
+  return 'A Google Drive sync sheet could not be found. Would you like to create one for backup and bulk editing?'
 }
 
 export async function createUserSyncSpreadsheet(accessToken, title = 'Shopkeeper Companion User Data') {

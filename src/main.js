@@ -4,6 +4,7 @@ import { getRandomTavernText } from './kofiText.js'
 import { useGoogleAuth } from './useGoogleAuth.js'
 import { ensureUserSyncSpreadsheet, getGoogleSyncErrorMessage, parseWorkbookBlueprintProgress, readSyncTables, writeSyncTables } from './googleSheetSync.js'
 import { getItem, setItem } from './storage.js'
+import { getBlueprintStageValue, getBlueprintStageOptions } from './blueprintStageOptions.js'
 import { createIcons, Axe, BadgeAlert, BadgeHelp, BadgeInfo, BowArrow, CakeSlice, Candy, CandyCane, CircleDashed, Clover, Coffee, Crosshair, Diamond, Drumstick, FlaskConical, FlaskRound, Footprints, Gem, Hand, HandMetal, HardHat, HatGlasses, Leaf, MoonStar, Music2, Package, PackageOpen, PartyPopper, PillBottle, Pizza, Salad, ScrollText, Shield, Shirt, Sandwich, Sparkles, Swords, Sword, Target, UtensilsCrossed, Wand, WandSparkles, Apple, Fish, SunMedium, Cherry, Cookie } from 'lucide'
 
 const DEFAULT_SPREADSHEET_URL = 'https://playshoptitans.com/spreadsheet'
@@ -954,7 +955,7 @@ function openBlueprintOverlay(item) {
   })
   const statsMarkup = renderStatsCards(overviewStats)
   const materialsMarkup = renderMaterialsSection(structuredData.materials)
-  const upgradesMarkup = renderUpgradeSection(structuredData.upgrades, item.name, owned)
+  const upgradesMarkup = renderUpgradeSection(structuredData.upgrades, item.name, progress, owned)
   const inventoryMarkup = renderInventorySection(progress)
   const collectionMarkup = renderCollectionSection(progress, owned)
 
@@ -1088,6 +1089,14 @@ function openBlueprintOverlay(item) {
     })
   })
 
+  blueprintOverlayContent.querySelectorAll('.upgrade-stage-select').forEach((select) => {
+    select.addEventListener('change', (event) => {
+      const target = event.currentTarget
+      persistBlueprintStage(item.name, target.dataset.stageKey, Number(target.value))
+      openBlueprintOverlay(item)
+    })
+  })
+
   blueprintOverlayContent.querySelectorAll('.quality-input').forEach((input) => {
     input.addEventListener('input', (event) => {
       const target = event.currentTarget
@@ -1164,44 +1173,45 @@ function renderMaterialsSection(materials = {}) {
   return `${resourceMarkup}${componentMarkup}`
 }
 
-function renderUpgradeSection(upgrades = {}, blueprintName = '', owned = false) {
+function renderUpgradeSection(upgrades = {}, blueprintName = '', progress = {}, owned = false) {
   const groups = [
-    { key: 'crafting', label: 'Milestone' },
-    { key: 'starforged', label: 'Starforge' },
-    { key: 'ascension', label: 'Ascension' },
-    { key: 'transcendence', label: 'Transcendence' },
+    { key: 'crafting', stageKey: 'milestones', label: 'Milestones' },
+    { key: 'starforged', stageKey: 'starforge', label: 'Starforge' },
+    { key: 'ascension', stageKey: 'ascension', label: 'Ascension' },
+    { key: 'transcendence', stageKey: 'transcendence', label: 'Transcendence' },
   ]
+  const stageOrder = ['milestones', 'starforge', 'ascension', 'transcendence']
 
-  const markup = groups.map(({ key, label }) => {
+  const markup = groups.map(({ key, stageKey, label }) => {
     const entries = Array.isArray(upgrades[key]) ? upgrades[key] : []
 
     if (!entries.length) {
       return ''
     }
 
+    const stageValue = getBlueprintStageValue(progress, stageKey)
+    const options = getBlueprintStageOptions(stageKey, progress, entries)
+    const stageIndex = stageOrder.indexOf(stageKey)
+    const previousStageKey = stageIndex > 0 ? stageOrder[stageIndex - 1] : null
+    const previousStageValue = previousStageKey ? getBlueprintStageValue(progress, previousStageKey) : 0
+    const isLocked = !owned || (previousStageKey && previousStageValue < 1)
+
     return `
       <div class="upgrade-group ${owned ? '' : 'is-locked'}">
-        <h5>${escapeHtml(label)}</h5>
-        <ul class="material-list">
-          ${entries.map((entry, index) => {
-            const upgradeKey = `${blueprintName}::${key}::${index}::${entry.name || 'Unlock'}`
-            const isTracked = isTrackedUpgrade(upgradeKey)
-            return `
-              <li class="resource-item tracking-item ${owned ? '' : 'is-locked'}">
-                <label class="tracking-label">
-                  <input class="tracking-checkbox" type="checkbox" data-upgrade-key="${escapeHtml(upgradeKey)}" ${isTracked ? 'checked' : ''} ${owned ? '' : 'disabled'} />
-                  <span>${escapeHtml(entry.name || 'Unlock')}</span>
-                </label>
-                <strong>${escapeHtml(entry.count ? `${entry.count}x` : '')}</strong>
-              </li>
-            `
-          }).join('')}
-        </ul>
+        <div class="upgrade-group-top">
+          <h5>${escapeHtml(label)}</h5>
+          <label class="upgrade-stage-control">
+            <span class="sr-only">${escapeHtml(label)} status</span>
+            <select class="upgrade-stage-select" data-stage-key="${escapeHtml(stageKey)}" data-blueprint-name="${escapeHtml(blueprintName)}" ${owned ? '' : 'disabled'}>
+              ${options.map((option) => `<option value="${option.value}" ${stageValue === option.value ? 'selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}
+            </select>
+          </label>
+        </div>
       </div>
     `
   }).filter(Boolean).join('')
 
-  return markup || '<p class="empty-state">No upgrade milestones listed.</p>'
+  return `<div class="upgrade-groups-grid">${markup}</div>` || '<p class="empty-state">No upgrade milestones listed.</p>'
 }
 
 function renderInventorySection(progress = {}) {
@@ -1269,10 +1279,11 @@ function renderSavedViews(items = []) {
 
     <div class="saved-views-toolbar overlay-card">
       <details class="overlay-section" open>
-        <summary class="section-summary">
+        <summary class="section-summary section-summary--toggle">
           <div class="section-summary-title">
             <h4>Filters</h4>
           </div>
+          <span class="saved-view-filter-hint" aria-label="Filters can be collapsed without losing current selections">▶</span>
         </summary>
         <div class="section-body">
           <div class="saved-view-filters">
@@ -1319,12 +1330,12 @@ function renderSavedViews(items = []) {
             <fieldset class="saved-view-filter saved-view-filter-multiselect">
               <legend>Collection Book</legend>
               <div class="saved-view-filter saved-view-filter-collection-state">
-                <span>Match</span>
+                <span>Select qualities to match</span>
                 <div class="saved-view-match-radios" role="radiogroup" aria-label="Collection Book match state">
                   ${[
-                    ['completed', 'Completed'],
-                    ['needed', 'Still Needed'],
-                  ].map(([value, label]) => `
+                    ['completed', 'Completed', 'Completed checks finished qualities'],
+                    ['needed', 'Still Needed', 'Still Needed checks missing ones'],
+                  ].map(([value, label, description]) => `
                     <label class="saved-view-match-option">
                       <input
                         type="radio"
@@ -1338,7 +1349,9 @@ function renderSavedViews(items = []) {
                   `).join('')}
                 </div>
               </div>
-              <p class="collection-book-help">Select qualities to match. Completed checks finished qualities; Still Needed checks missing ones.</p>
+              <div class="saved-view-match-description">
+                ${getCollectionBookMatchDescription(savedViewCriteria.collectionBookState)}
+              </div>
               <div class="collection-book-options">
                 ${renderCollectionBookFilterOptions(savedViewCriteria.collectionBook)}
               </div>
@@ -1353,17 +1366,17 @@ function renderSavedViews(items = []) {
     </div>
 
     <div class="saved-view-results overlay-card">
-      <details class="overlay-section" open>
-        <summary class="section-summary">
+      <div class="overlay-section">
+        <div class="section-summary">
           <div class="section-summary-title">
             <h4>Results</h4>
           </div>
           <span class="group-count">${filteredItems.length}/${totalCount}</span>
-        </summary>
+        </div>
         <div class="section-body">
           ${renderSavedViewResults(filteredItems, dependencyIndex)}
         </div>
-      </details>
+      </div>
     </div>
   `
 
@@ -1381,47 +1394,71 @@ function renderSavedViewResults(items = [], dependencyIndex) {
   items.forEach((item) => {
     const category = item?.classification?.category || 'Accessories'
     const type = item?.classification?.type || 'Unknown'
-    const categoryTypeKey = `${category}::${type}`
 
-    if (!grouped.has(categoryTypeKey)) {
-      grouped.set(categoryTypeKey, {
+    if (!grouped.has(category)) {
+      grouped.set(category, {
         category,
+        types: new Map(),
+        totalItems: 0,
+      })
+    }
+
+    const categoryGroup = grouped.get(category)
+    categoryGroup.totalItems += 1
+
+    if (!categoryGroup.types.has(type)) {
+      categoryGroup.types.set(type, {
         type,
         items: [],
       })
     }
 
-    grouped.get(categoryTypeKey).items.push(item)
+    categoryGroup.types.get(type).items.push(item)
   })
 
-  return Array.from(grouped.values()).map((group) => {
-    const listMarkup = group.items.map((item) => {
-      const summary = buildBlueprintSummary(item, dependencyIndex)
-      const dependencyText = buildDependencySummaryLine(summary)
-      const collectionText = summary.isCollectionComplete ? 'Collection Complete' : `Collection ${summary.collectionStatus || 'Not started'}`
-      const ownershipText = summary.isOwned ? 'Owned' : 'Not Owned'
+  return Array.from(grouped.values()).map((categoryGroup) => {
+    const typeMarkup = Array.from(categoryGroup.types.values()).map((typeGroup) => {
+      const listMarkup = typeGroup.items.map((item) => {
+        const summary = buildBlueprintSummary(item, dependencyIndex)
+        const dependencyText = buildDependencySummaryLine(summary)
+        const collectionText = summary.isCollectionComplete ? 'Collection Complete' : `Collection ${summary.collectionStatus || 'Not started'}`
+        const ownershipText = summary.isOwned ? 'Owned' : 'Not Owned'
+
+        return `
+          <li class="resource-item dependency-item saved-view-item" data-blueprint-name="${escapeHtml(item.name)}">
+            <span>
+              <strong>${escapeHtml(item.name)}</strong><br>
+              <small>${escapeHtml(`${ownershipText} · Inventory ${summary.totalInventory} · ${collectionText}`)}</small><br>
+              <small>${escapeHtml(dependencyText)}</small>
+            </span>
+          </li>
+        `
+      }).join('')
 
       return `
-        <li class="resource-item dependency-item saved-view-item" data-blueprint-name="${escapeHtml(item.name)}">
-          <span>
-            <strong>${escapeHtml(item.name)}</strong><br>
-            <small>${escapeHtml(`${ownershipText} · Inventory ${summary.totalInventory} · ${collectionText}`)}</small><br>
-            <small>${escapeHtml(dependencyText)}</small>
-          </span>
-        </li>
+        <details class="blueprint-type" open>
+          <summary>
+            <span class="group-summary-title">
+              <span class="icon-slot group-summary-icon" aria-hidden="true"><i data-lucide="${escapeHtml(getTypeIconName(typeGroup.type, categoryGroup.category))}"></i></span>
+              <span>${escapeHtml(typeGroup.type)}</span>
+            </span>
+            <span class="group-count">${typeGroup.items.length}</span>
+          </summary>
+          <ul class="material-list dependency-list">${listMarkup}</ul>
+        </details>
       `
     }).join('')
 
     return `
-      <details class="blueprint-type" open>
+      <details class="blueprint-category" open>
         <summary>
           <span class="group-summary-title">
-            <span class="icon-slot group-summary-icon" aria-hidden="true"><i data-lucide="${escapeHtml(getTypeIconName(group.type, group.category))}"></i></span>
-            <span>${escapeHtml(group.category)} > ${escapeHtml(group.type)}</span>
+            <span class="icon-slot group-summary-icon" aria-hidden="true"><i data-lucide="${escapeHtml(getCategoryIconName(categoryGroup.category))}"></i></span>
+            <span>${escapeHtml(categoryGroup.category)}</span>
           </span>
-          <span class="group-count">${group.items.length}</span>
+          <span class="group-count">${categoryGroup.totalItems}</span>
         </summary>
-        <ul class="material-list dependency-list">${listMarkup}</ul>
+        <div class="category-body">${typeMarkup}</div>
       </details>
     `
   }).join('')
@@ -1589,6 +1626,12 @@ function renderSelectOptions(options = [], selectedValue = 'any') {
   }).join('')
 }
 
+function getCollectionBookMatchDescription(state = 'completed') {
+  return state === 'needed'
+    ? 'Still Needed checks missing ones.'
+    : 'Completed checks finished qualities.'
+}
+
 function renderCollectionBookFilterOptions(selectedValues = []) {
   const normalizedSelected = new Set(Array.isArray(selectedValues) ? selectedValues.map((value) => String(value).toLowerCase()) : [])
   const options = ['superior', 'flawless', 'epic', 'legendary']
@@ -1596,10 +1639,11 @@ function renderCollectionBookFilterOptions(selectedValues = []) {
   return options.map((quality) => {
     const label = formatQualityLabel(quality)
     const isChecked = normalizedSelected.has(quality)
+    const qualityClass = getQualityClass(label)
     return `
-      <label class="collection-book-option">
+      <label class="collection-book-option ${qualityClass}">
         <input type="checkbox" data-saved-filter-book="${escapeHtml(quality)}" ${isChecked ? 'checked' : ''} />
-          <span>${escapeHtml(label)} quality</span>
+          <span>${escapeHtml(label)}</span>
       </label>
     `
   }).join('')
@@ -1921,6 +1965,11 @@ function persistBlueprintCollection(blueprintName, qualityKey, checked) {
   }
   collectionBook[qualityKey] = Boolean(checked)
   saveBlueprintProgressState(blueprintName, { collectionBook })
+}
+
+function persistBlueprintStage(blueprintName, stageKey, value) {
+  const normalizedValue = Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0
+  saveBlueprintProgressState(blueprintName, { [stageKey]: normalizedValue })
 }
 
 function getQualityClass(label) {
