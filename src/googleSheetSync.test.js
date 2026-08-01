@@ -58,6 +58,21 @@ test('parseWorkbookBlueprintProgress merges workbook rows by blueprint name and 
   assert.equal(progress.Beta.owned, false)
 })
 
+test('parseWorkbookBlueprintProgress initializes progression stages as numeric values', () => {
+  const progress = parseWorkbookBlueprintProgress({
+    Weapons: [
+      ['Blueprint Name', 'Milestones', 'Starforge', 'Ascension', 'Transcendence'],
+      ['Alpha', '', '', '', ''],
+    ],
+  }, {})
+
+  assert.equal(progress.Alpha.milestones, 0)
+  assert.equal(progress.Alpha.starforge, 0)
+  assert.equal(progress.Alpha.ascension, 0)
+  assert.equal(progress.Alpha.transcendence, 0)
+  assert.equal(typeof progress.Alpha.milestones, 'number')
+})
+
 test('buildSpreadsheetCreationPromptMessage explains the new-sheet workflow for new users and recovery', () => {
   assert.match(buildSpreadsheetCreationPromptMessage('new-user'), /Google Drive/i)
   assert.match(buildSpreadsheetCreationPromptMessage('recovery'), /backup sheet/i)
