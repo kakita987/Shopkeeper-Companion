@@ -78,13 +78,6 @@ export function useGoogleAuth({ clientId }) {
         updateState({ isLoading: true, error: null })
         await loadGoogleIdentityScript()
 
-        if (window.google?.accounts?.id?.initialize) {
-          window.google.accounts.id.initialize({
-            client_id: clientId,
-            auto_select: false,
-          })
-        }
-
         tokenClient = window.google.accounts.oauth2.initTokenClient({
           client_id: clientId,
           scope: GOOGLE_AUTH_SCOPES,
@@ -187,36 +180,20 @@ export function useGoogleAuth({ clientId }) {
 
     container.innerHTML = ''
 
-    const idApi = window.google?.accounts?.id
-    if (!idApi?.renderButton) {
-      if (!initializePromise) {
-        void initialize()
-      }
-      return false
-    }
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'auth-button'
+    button.textContent = 'Sign in with Google'
+    button.disabled = state.isAuthenticating || state.clientIdMissing
 
-    try {
-      idApi.renderButton(container, {
-        theme: 'outline',
-        size: 'large',
-      })
+    button.addEventListener('click', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      void signIn()
+    })
 
-      const button = container.querySelector?.('[role="button"]')
-      if (button) {
-        button.addEventListener('click', (event) => {
-          event.preventDefault()
-          event.stopPropagation()
-          void signIn()
-        })
-      }
-
-      return true
-    } catch (error) {
-      if (!initializePromise) {
-        void initialize()
-      }
-      return false
-    }
+    container.appendChild(button)
+    return true
   }
 
   initialize()

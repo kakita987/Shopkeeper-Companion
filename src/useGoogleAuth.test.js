@@ -2,8 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { useGoogleAuth } from './useGoogleAuth.js'
 
-test('renderSignInButton uses Google Identity Services button rendering API', async () => {
-  const renderButtonCalls = []
+test('renderSignInButton creates a plain consent button without the profile scope flow', async () => {
   const tokenClient = {
     requestAccessToken() {},
   }
@@ -17,32 +16,39 @@ test('renderSignInButton uses Google Identity Services button rendering API', as
         oauth2: {
           initTokenClient: () => tokenClient,
         },
-        id: {
-          renderButton: (container, options) => {
-            renderButtonCalls.push({ container, options })
-            return true
-          },
-        },
       },
     },
   }
 
   globalThis.document = {
     querySelector: () => null,
-    createElement: () => ({ addEventListener() {}, setAttribute() {} }),
+    createElement: (tagName) => {
+      const element = {
+        tagName: tagName.toUpperCase(),
+        textContent: '',
+        disabled: false,
+        addEventListener() {},
+        appendChild() {},
+      }
+      return element
+    },
     head: { appendChild() {} },
   }
 
   try {
     const auth = useGoogleAuth({ clientId: 'client-id' })
-    const container = { innerHTML: '' }
+    const container = {
+      innerHTML: '',
+      appendChild(element) {
+        this.child = element
+      },
+    }
 
     const rendered = auth.renderSignInButton(container)
 
     assert.equal(rendered, true)
-    assert.equal(renderButtonCalls.length, 1)
-    assert.equal(renderButtonCalls[0].container, container)
-    assert.deepEqual(renderButtonCalls[0].options, { theme: 'outline', size: 'large' })
+    assert.equal(container.child?.tagName, 'BUTTON')
+    assert.equal(container.child?.textContent, 'Sign in with Google')
   } finally {
     if (originalWindow === undefined) {
       delete globalThis.window
