@@ -56,11 +56,13 @@ export function mountAdBanner(rootEl, options = {}) {
   const publisher = options.publisher || 'shopkeepercompanion'
   const kofiUrl = options.kofiUrl || 'https://ko-fi.com/shopkeepercompanion'
   const kofiLabel = getRandomTavernText()
+  const themeHint = options.theme === 'dark' ? 'dark' : options.theme === 'light' ? 'light' : ''
+  const themeAttributeMarkup = themeHint ? ` data-ea-theme="${themeHint}"` : ''
 
   rootEl.innerHTML = `
     <div class="ad-banner-shell" aria-live="polite">
       <p class="ad-banner-label">Sponsored</p>
-      <div class="ad-banner-slot" data-ad-slot data-ea-publisher="${publisher}" data-ea-type="image" data-ea-style="stickybox"></div>
+      <div class="ad-banner-slot" data-ad-slot data-ea-publisher="${publisher}" data-ea-type="image" data-ea-style="stickybox"${themeAttributeMarkup}></div>
       <div class="ad-banner-fallback is-hidden" data-ad-fallback>
         <span class="ad-banner-fallback-copy">Enjoying Shopkeeper Companion?</span>
         <a class="ad-banner-link kofi-link-button" href="${kofiUrl}" target="_blank" rel="noopener noreferrer">

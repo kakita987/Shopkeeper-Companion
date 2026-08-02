@@ -1,4 +1,5 @@
 import './style.css'
+import { initAnalytics, recordView } from './analytics.js'
 import { mountAdBanner } from './adBanner.js'
 import { getRandomTavernText } from './kofiText.js'
 import { useGoogleAuth } from './useGoogleAuth.js'
@@ -214,12 +215,6 @@ function activateView(viewName) {
   viewPanels.forEach((panel) => {
     panel.classList.toggle('is-hidden', panel !== targetPanel)
   })
-
-  if (normalizedViewName === 'saved-views') {
-    window.location.hash = '#saved-views'
-  } else {
-    window.location.hash = '#blueprints'
-  }
 }
 let blueprintProgressByName = loadBlueprintProgressMap()
 let allBlueprintItems = []
@@ -236,6 +231,7 @@ let isApplyingRemoteSyncState = false
 let blueprintVersionLabel = ''
 let disposeDesktopAd = () => {}
 let disposeMobileAd = () => {}
+let hasTrackedAdBannerRefresh = false
 const googleSyncState = {
   spreadsheetId: '',
   spreadsheetUrl: '',
@@ -268,7 +264,11 @@ const { closeSettings } = initSettingsUi({
 
 topTabs.forEach((tab) => {
   tab.addEventListener('click', () => {
-    activateView(tab.dataset.view)
+    if (tab.dataset.view === 'saved-views') {
+      window.location.hash = '#saved-views'
+    } else {
+      window.location.hash = '#blueprints'
+    }
   })
 })
 
@@ -278,12 +278,16 @@ if (window.location.hash === '#saved-views') {
   activateView('blueprints')
 }
 
+initAnalytics({ trackInitialView: true })
+
 window.addEventListener('hashchange', () => {
   if (window.location.hash === '#saved-views') {
     activateView('saved-views')
   } else {
     activateView('blueprints')
   }
+
+  recordView()
 })
 
 applyTheme(getStoredTheme())
@@ -322,15 +326,25 @@ function initializeAdBanners() {
   disposeDesktopAd()
   disposeMobileAd()
 
+  const themeHint = document.body.classList.contains('theme-dark') ? 'dark' : 'light'
+
   disposeDesktopAd = mountAdBanner(desktopAdBannerEl, {
     publisher: KOFI_HANDLE,
     kofiUrl: KOFI_URL,
+    theme: themeHint,
   })
 
   disposeMobileAd = mountAdBanner(mobileAdBannerEl, {
     publisher: KOFI_HANDLE,
     kofiUrl: KOFI_URL,
+    theme: themeHint,
   })
+
+  if (hasTrackedAdBannerRefresh) {
+    recordView()
+  }
+
+  hasTrackedAdBannerRefresh = true
 }
 
 function initializeKofiSupportButton() {

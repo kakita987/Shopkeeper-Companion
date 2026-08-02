@@ -4,7 +4,7 @@
 
 Shopkeeper Companion is a free, local-first web tool for **Shop Titans** players.
 
-The short version: **I don’t want your data, I don’t track you, and I don't even own a server to store your information on.** If I wanted to harvest your data, I would have to rewrite the entire application from scratch.
+The short version: **I don’t want your data, I don’t track you, and I don't even own a server to store your information on.**
 
 ## How Your Data Works
 
@@ -28,7 +28,7 @@ This use of Google APIs follows the [Google API Services User Data Policy](https
 
 ## Analytics
 
-Shopkeeper Companion may track website traffic, such as total page visits or which websites referred visitors (for example, knowing if a visit came from Reddit or a search engine).
+Shopkeeper Companion may track website traffic, such as total page visits, which websites referred visitors (for example, knowing if a visit came from Reddit or a search engine), and in-app view changes like hash-based navigation or ad refreshes.
 
 This information is used to understand overall website performance and traffic trends, not to identify or track individual users.
 
