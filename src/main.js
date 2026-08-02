@@ -170,6 +170,14 @@ app.innerHTML = `
           <button id="close-settings" class="close-settings" type="button" aria-label="Close settings">×</button>
         </div>
 
+        <section class="settings-section">
+          <form id="import-form" class="import-form compact-form">
+            <button type="submit">Import Blueprints</button>
+            <p id="blueprint-version" class="settings-copy blueprint-version"></p>
+          </form>
+          <p class="settings-copy">Bring in the latest blueprint library from the developer spreadsheet whenever it needs a refresh.</p>
+        </section>
+
         <section class="settings-section settings-section--inline">
           <h3>Theme</h3>
           <div class="theme-options">
@@ -200,18 +208,6 @@ app.innerHTML = `
         </section>
 
         <section class="settings-section">
-          <h3>Blueprint Import</h3>
-          <p class="settings-copy">Import the latest blueprints from the developer spreadsheet when the library needs to be refreshed.</p>
-          <p id="blueprint-version" class="settings-copy blueprint-version"></p>
-
-          <form id="import-form" class="import-form compact-form">
-            <button type="submit">Download Blueprints</button>
-          </form>
-        </section>
-
-        <section class="settings-section">
-          <h3>Support</h3>
-          <p class="settings-copy">If this companion helps your shop flow, you can support ongoing updates.</p>
           <a id="kofi-support-button" class="kofi-support-button kofi-link-button" href="https://ko-fi.com/shopkeepercompanion" target="_blank" rel="noopener noreferrer">
             <img class="kofi-link-icon" src="https://storage.ko-fi.com/cdn/cup-border.png" alt="" aria-hidden="true" />
             <span class="kofi-link-text" data-kofi-button-text>Support on Ko-fi</span>
@@ -1152,7 +1148,7 @@ async function initializeBlueprintDataFromCache() {
 
   if (!cached) {
     updateStatus('', 'info')
-    renderBlueprintEmptyState('No blueprint library loaded yet. Click "Download Blueprints" in Settings to get the library back into the app.')
+    renderBlueprintEmptyState('No blueprint library loaded yet. Click "Import Blueprints" in Settings to get the library back into the app.')
     return
   }
 
@@ -1179,9 +1175,14 @@ function renderBlueprintVersionLabel(versionLabel) {
     return
   }
 
-  blueprintVersionEl.innerHTML = versionLabel
-    ? `Current data version: <strong>${escapeHtml(versionLabel)}</strong>`
-    : 'Current data version: <strong>Not downloaded yet</strong>'
+  if (!versionLabel) {
+    blueprintVersionEl.innerHTML = ''
+    blueprintVersionEl.hidden = true
+    return
+  }
+
+  blueprintVersionEl.hidden = false
+  blueprintVersionEl.innerHTML = `<strong>${escapeHtml(versionLabel)}</strong>`
 }
 
 function renderBlueprintEmptyState(message = 'No blueprint data available yet.') {
