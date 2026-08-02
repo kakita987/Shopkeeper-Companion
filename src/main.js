@@ -71,6 +71,7 @@ const BLUEPRINT_PROGRESS_STORAGE_KEY = 'shopkeeper-blueprint-progress'
 const SAVED_FILTER_VIEWS_STORAGE_KEY = 'shopkeeper-saved-filter-views'
 const BLUEPRINT_CACHE_STORAGE_KEY = 'shopkeeper-blueprint-cache-v1'
 const GOOGLE_SYNC_SPREADSHEET_ID_STORAGE_KEY = 'shopkeeper-google-sync-spreadsheet-id'
+const GOOGLE_SYNC_SPREADSHEET_ID_COOKIE_KEY = 'shopkeeper_google_sync_spreadsheet_id'
 const GOOGLE_SYNC_WRITE_DEBOUNCE_MS = 900
 const KOFI_HANDLE = 'shopkeepercompanion'
 const KOFI_URL = 'https://ko-fi.com/shopkeepercompanion'
@@ -318,13 +319,17 @@ let blueprintVersionLabel = ''
 let disposeDesktopAd = () => {}
 let disposeMobileAd = () => {}
 const googleSyncState = {
-  spreadsheetId: localStorage.getItem(GOOGLE_SYNC_SPREADSHEET_ID_STORAGE_KEY) || '',
+  spreadsheetId: '',
   spreadsheetUrl: '',
   isReady: false,
   isSyncing: false,
   error: '',
   notice: '',
   lastSyncedAt: '',
+  setupStep: 'idle',
+  setupInput: '',
+  setupError: '',
+  selectedSpreadsheetId: '',
 }
 const googleAuth = useGoogleAuth({ clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID })
 
@@ -365,7 +370,6 @@ window.addEventListener('hashchange', () => {
 
 applyTheme(getStoredTheme())
 applyFontPreference(getStoredFontPreference())
-initializeGoogleAuthUi()
 initializeAdBanners()
 initializeKofiSupportButton()
 
@@ -376,6 +380,8 @@ form.addEventListener('submit', async (event) => {
 
 async function init() {
   await initializeBlueprintDataFromCache()
+  await hydrateGoogleSyncSpreadsheetId()
+  initializeGoogleAuthUi()
 }
 
 init()
@@ -428,6 +434,96 @@ function renderGoogleAuthUi(state) {
   const signOutDisabled = state.isLoading || state.isAuthenticating || !state.isAuthenticated
 
   if (state.isAuthenticated) {
+    const isSetupStep = googleSyncState.setupStep === 'choose-source' || googleSyncState.setupStep === 'enter-existing'
+    if (!googleSyncState.isReady && isSetupStep) {
+      const setupPrompt = googleSyncState.setupStep === 'choose-source'
+        ? 'Do you already have a Shopkeeper Companion sync sheet from another device?'
+        : 'Paste your Google Sheet share link or file ID to connect your existing sync sheet.'
+
+      const setupInputMarkup = googleSyncState.setupStep === 'enter-existing'
+        ? `
+          <input
+            type="text"
+            class="google-sheet-input"
+            data-auth-sheet-input
+            placeholder="https://docs.google.com/spreadsheets/d/... or file ID"
+            value="${escapeHtml(googleSyncState.setupInput)}"
+          />
+          <div class="auth-controls">
+            <button type="button" class="auth-button" data-auth-action="connect-existing">Connect Existing Sheet</button>
+            <button type="button" class="auth-button auth-button-secondary" data-auth-action="back-to-choice">Back</button>
+          </div>
+        `
+        : `
+          <div class="auth-controls">
+            <button type="button" class="auth-button" data-auth-action="enter-existing">I already have a sync sheet</button>
+            <button type="button" class="auth-button auth-button-secondary" data-auth-action="create-new-sheet">Create new sheet</button>
+          </div>
+        `
+
+      googleAuthContainer.innerHTML = `
+        <p class="settings-copy sync-caption">${escapeHtml(setupPrompt)}</p>
+        ${setupInputMarkup}
+        ${googleSyncState.setupError ? `<p class="settings-copy sync-caption sync-error">${escapeHtml(googleSyncState.setupError)}</p>` : ''}
+        ${googleSyncState.error ? `<p class="settings-copy sync-caption sync-error">${escapeHtml(googleSyncState.error)}</p>` : ''}
+        <div class="auth-controls">
+          <button type="button" class="auth-button auth-button-secondary" data-auth-action="sign-out" ${signOutDisabled ? 'disabled' : ''}>Sign Out</button>
+        </div>
+      `
+
+      const sheetInput = googleAuthContainer.querySelector('[data-auth-sheet-input]')
+      sheetInput?.addEventListener('input', (event) => {
+        googleSyncState.setupInput = event.target.value || ''
+      })
+
+      const enterExistingButton = googleAuthContainer.querySelector('[data-auth-action="enter-existing"]')
+      enterExistingButton?.addEventListener('click', () => {
+        googleSyncState.setupStep = 'enter-existing'
+        googleSyncState.setupError = ''
+        renderGoogleAuthUi(googleAuth.getState())
+      })
+
+      const backToChoiceButton = googleAuthContainer.querySelector('[data-auth-action="back-to-choice"]')
+      backToChoiceButton?.addEventListener('click', () => {
+        googleSyncState.setupStep = 'choose-source'
+        googleSyncState.setupError = ''
+        renderGoogleAuthUi(googleAuth.getState())
+      })
+
+      const connectExistingButton = googleAuthContainer.querySelector('[data-auth-action="connect-existing"]')
+      connectExistingButton?.addEventListener('click', async () => {
+        const spreadsheetId = parseSpreadsheetIdFromInput(googleSyncState.setupInput)
+        if (!spreadsheetId) {
+          googleSyncState.setupError = 'Please paste a valid Google Sheet share link or spreadsheet file ID.'
+          renderGoogleAuthUi(googleAuth.getState())
+          return
+        }
+
+        googleSyncState.setupError = ''
+        googleSyncState.selectedSpreadsheetId = spreadsheetId
+        await persistGoogleSyncSpreadsheetId(spreadsheetId)
+        googleSyncState.setupStep = 'idle'
+        renderGoogleAuthUi(googleAuth.getState())
+        await initializeGoogleSync(state.accessToken, { preferredSpreadsheetId: spreadsheetId, reason: 'recovery' })
+      })
+
+      const createNewSheetButton = googleAuthContainer.querySelector('[data-auth-action="create-new-sheet"]')
+      createNewSheetButton?.addEventListener('click', async () => {
+        googleSyncState.setupError = ''
+        googleSyncState.selectedSpreadsheetId = ''
+        googleSyncState.setupStep = 'idle'
+        renderGoogleAuthUi(googleAuth.getState())
+        await initializeGoogleSync(state.accessToken, { preferredSpreadsheetId: '', reason: 'new-user' })
+      })
+
+      const signOutButton = googleAuthContainer.querySelector('[data-auth-action="sign-out"]')
+      signOutButton?.addEventListener('click', async () => {
+        await googleAuth.signOut()
+      })
+
+      return
+    }
+
     const syncLabel = googleSyncState.lastSyncedAt
       ? `Last sync: ${new Date(googleSyncState.lastSyncedAt).toLocaleString()}`
       : 'Connected. Ready to sync.'
@@ -478,33 +574,60 @@ async function handleGoogleAuthStateChange(state) {
     googleSyncState.error = ''
     googleSyncState.notice = ''
     googleSyncState.isSyncing = false
+    googleSyncState.setupStep = 'idle'
+    googleSyncState.setupInput = ''
+    googleSyncState.setupError = ''
+    googleSyncState.selectedSpreadsheetId = ''
     pendingGoogleSyncInitPromise = null
     renderGoogleAuthUi(state)
     return
   }
 
+  if (!googleSyncState.isReady && !googleSyncState.isSyncing && !googleSyncState.spreadsheetId && googleSyncState.setupStep === 'idle') {
+    googleSyncState.setupStep = 'choose-source'
+    googleSyncState.setupError = ''
+    renderGoogleAuthUi(state)
+    return
+  }
+
+  if (googleSyncState.setupStep === 'choose-source' || googleSyncState.setupStep === 'enter-existing') {
+    return
+  }
+
   if (!googleSyncState.isReady && !googleSyncState.isSyncing) {
-    await initializeGoogleSync(state.accessToken)
+    await initializeGoogleSync(state.accessToken, {
+      preferredSpreadsheetId: googleSyncState.selectedSpreadsheetId || googleSyncState.spreadsheetId,
+      reason: googleSyncState.selectedSpreadsheetId || googleSyncState.spreadsheetId ? 'recovery' : 'new-user',
+    })
   }
 }
 
-async function initializeGoogleSync(accessToken) {
+async function initializeGoogleSync(accessToken, options = {}) {
   if (pendingGoogleSyncInitPromise) {
     await pendingGoogleSyncInitPromise
     return
   }
 
+  const preferredSpreadsheetId = typeof options?.preferredSpreadsheetId === 'string'
+    ? options.preferredSpreadsheetId.trim()
+    : googleSyncState.spreadsheetId
+  const syncReason = options?.reason === 'recovery'
+    ? 'recovery'
+    : preferredSpreadsheetId
+      ? 'recovery'
+      : 'new-user'
+
   pendingGoogleSyncInitPromise = (async () => {
     try {
       googleSyncState.isSyncing = true
       googleSyncState.error = ''
-      googleSyncState.notice = googleSyncState.spreadsheetId
+      googleSyncState.notice = preferredSpreadsheetId
         ? 'Your Google Sync Sheet could not be found. A new backup sheet can be created in your Google Drive.'
         : 'This app will create a new Google Sheet in your Google Drive to store your sync data.'
       renderGoogleAuthUi(googleAuth.getState())
 
-      const ensured = await ensureUserSyncSpreadsheet(accessToken, googleSyncState.spreadsheetId, {
-        reason: googleSyncState.spreadsheetId ? 'recovery' : 'new-user',
+      const ensured = await ensureUserSyncSpreadsheet(accessToken, preferredSpreadsheetId, {
+        reason: syncReason,
         confirmCreate: async (message) => {
           googleSyncState.notice = message
           renderGoogleAuthUi(googleAuth.getState())
@@ -513,12 +636,12 @@ async function initializeGoogleSync(accessToken) {
       })
       googleSyncState.spreadsheetId = ensured.spreadsheetId
       googleSyncState.spreadsheetUrl = ensured.spreadsheetUrl
-      localStorage.setItem(GOOGLE_SYNC_SPREADSHEET_ID_STORAGE_KEY, ensured.spreadsheetId)
+      await persistGoogleSyncSpreadsheetId(ensured.spreadsheetId)
 
       const remote = await readSyncTables(accessToken, ensured.spreadsheetId)
       if (hasRemoteSyncData(remote)) {
         applyRemoteSyncState(remote)
-      } else if (hasLocalUserData()) {
+      } else if (hasLocalUserData() || allBlueprintItems.length) {
         await pushLocalStateToGoogleSheet(accessToken)
       }
 
@@ -532,7 +655,7 @@ async function initializeGoogleSync(accessToken) {
       googleSyncState.isReady = false
       googleSyncState.spreadsheetId = ''
       googleSyncState.spreadsheetUrl = ''
-      localStorage.removeItem(GOOGLE_SYNC_SPREADSHEET_ID_STORAGE_KEY)
+      await clearStoredGoogleSyncSpreadsheetId()
       console.error(error)
       renderGoogleAuthUi(googleAuth.getState())
     } finally {
@@ -546,6 +669,123 @@ async function initializeGoogleSync(accessToken) {
   } finally {
     pendingGoogleSyncInitPromise = null
   }
+}
+
+function parseSpreadsheetIdFromInput(rawValue = '') {
+  const value = String(rawValue || '').trim()
+  if (!value) {
+    return ''
+  }
+
+  const idMatch = value.match(/[-\w]{25,}/)
+  if (!idMatch) {
+    return ''
+  }
+
+  if (/^https?:\/\//i.test(value)) {
+    const fromPath = value.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)
+    if (fromPath?.[1]) {
+      return fromPath[1]
+    }
+  }
+
+  return idMatch[0]
+}
+
+async function hydrateGoogleSyncSpreadsheetId() {
+  const cookieValue = readCookieValue(GOOGLE_SYNC_SPREADSHEET_ID_COOKIE_KEY)
+  let storedValue = ''
+
+  try {
+    storedValue = String(await getItem(GOOGLE_SYNC_SPREADSHEET_ID_STORAGE_KEY) || '').trim()
+  } catch (error) {
+    console.warn('Unable to read Google sync spreadsheet ID from IndexedDB.', error)
+  }
+
+  if (storedValue) {
+    googleSyncState.spreadsheetId = storedValue
+    if (cookieValue !== storedValue) {
+      writeCookieValue(GOOGLE_SYNC_SPREADSHEET_ID_COOKIE_KEY, storedValue)
+    }
+    return
+  }
+
+  if (cookieValue) {
+    googleSyncState.spreadsheetId = cookieValue
+    try {
+      await setItem(GOOGLE_SYNC_SPREADSHEET_ID_STORAGE_KEY, cookieValue)
+    } catch (error) {
+      console.warn('Unable to write Google sync spreadsheet ID to IndexedDB.', error)
+    }
+    return
+  }
+
+  googleSyncState.spreadsheetId = ''
+}
+
+async function persistGoogleSyncSpreadsheetId(spreadsheetId = '') {
+  const normalizedId = String(spreadsheetId || '').trim()
+  if (!normalizedId) {
+    await clearStoredGoogleSyncSpreadsheetId()
+    return
+  }
+
+  try {
+    await setItem(GOOGLE_SYNC_SPREADSHEET_ID_STORAGE_KEY, normalizedId)
+  } catch (error) {
+    console.warn('Unable to write Google sync spreadsheet ID to IndexedDB.', error)
+  }
+
+  writeCookieValue(GOOGLE_SYNC_SPREADSHEET_ID_COOKIE_KEY, normalizedId)
+}
+
+async function clearStoredGoogleSyncSpreadsheetId() {
+  try {
+    await removeItem(GOOGLE_SYNC_SPREADSHEET_ID_STORAGE_KEY)
+  } catch (error) {
+    console.warn('Unable to clear Google sync spreadsheet ID from IndexedDB.', error)
+  }
+
+  clearCookieValue(GOOGLE_SYNC_SPREADSHEET_ID_COOKIE_KEY)
+}
+
+function readCookieValue(name) {
+  const encodedName = encodeURIComponent(String(name || '').trim())
+  if (!encodedName) {
+    return ''
+  }
+
+  const entries = String(document.cookie || '').split(';')
+  for (const entry of entries) {
+    const [rawKey, ...rawValueParts] = entry.trim().split('=')
+    if (rawKey === encodedName) {
+      return decodeURIComponent(rawValueParts.join('=') || '')
+    }
+  }
+
+  return ''
+}
+
+function writeCookieValue(name, value, maxAgeDays = 3650) {
+  const encodedName = encodeURIComponent(String(name || '').trim())
+  if (!encodedName) {
+    return
+  }
+
+  const encodedValue = encodeURIComponent(String(value || '').trim())
+  const maxAgeSeconds = Math.max(0, Number(maxAgeDays) || 0) * 24 * 60 * 60
+  const secureSegment = window.location.protocol === 'https:' ? '; Secure' : ''
+  document.cookie = `${encodedName}=${encodedValue}; Path=/; Max-Age=${maxAgeSeconds}; SameSite=Lax${secureSegment}`
+}
+
+function clearCookieValue(name) {
+  const encodedName = encodeURIComponent(String(name || '').trim())
+  if (!encodedName) {
+    return
+  }
+
+  const secureSegment = window.location.protocol === 'https:' ? '; Secure' : ''
+  document.cookie = `${encodedName}=; Path=/; Max-Age=0; SameSite=Lax${secureSegment}`
 }
 
 async function syncFromGoogleSheet() {
@@ -580,23 +820,36 @@ function hasRemoteSyncData(remote) {
     return false
   }
 
-  return ['settings', 'savedViews', 'trackedUpgrades', 'blueprintProgress']
-    .some((key) => {
-      const value = remote[key]
-      if (Array.isArray(value)) {
-        return value.length > 0
-      }
+  const hasSettingsRows = Array.isArray(remote.settings) && remote.settings.length > 0
+  const hasSavedViewsRows = Array.isArray(remote.savedViews) && remote.savedViews.length > 0
+  const hasBlueprintRows = hasWorkbookBlueprintRows(remote.blueprintProgress)
 
-      if (value && typeof value === 'object' && !Array.isArray(value)) {
-        return Object.keys(value).length > 0
-      }
+  return hasSettingsRows || hasSavedViewsRows || hasBlueprintRows
+}
 
+function hasWorkbookBlueprintRows(blueprintProgressBySheet) {
+  if (!blueprintProgressBySheet || typeof blueprintProgressBySheet !== 'object' || Array.isArray(blueprintProgressBySheet)) {
+    return false
+  }
+
+  return Object.values(blueprintProgressBySheet).some((sheetRows) => {
+    if (!Array.isArray(sheetRows) || sheetRows.length <= 1) {
       return false
+    }
+
+    return sheetRows.slice(1).some((row) => {
+      if (!Array.isArray(row)) {
+        return false
+      }
+
+      return row.some((cell) => String(cell ?? '').trim() !== '')
     })
+  })
 }
 
 function hasLocalUserData() {
   return (
+    Boolean(allBlueprintItems.length) ||
     Boolean(savedFilterViews.length) ||
     Boolean(trackedUpgradeKeys.size) ||
     Boolean(Object.keys(blueprintProgressByName).length) ||
@@ -789,6 +1042,7 @@ async function importBlueprintData() {
 
     renderPreview(headers, rows, structuredBlueprints)
     renderSavedViews(allBlueprintItems)
+    scheduleGoogleSyncWrite()
     updateStatus(`Blueprints downloaded (${allBlueprintItems.length} items).`, 'info')
     closeSettings()
   } catch (error) {
@@ -813,6 +1067,7 @@ async function initializeBlueprintDataFromCache() {
   allBlueprintItems = buildBlueprintItems(headers, [], structuredBlueprints)
   renderPreview(headers, [], structuredBlueprints)
   renderSavedViews(allBlueprintItems)
+  scheduleGoogleSyncWrite()
   updateStatus('', 'info')
 }
 
