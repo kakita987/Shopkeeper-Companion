@@ -182,8 +182,18 @@ export function useGoogleAuth({ clientId }) {
 
     const button = document.createElement('button')
     button.type = 'button'
-    button.className = 'auth-button'
-    button.textContent = 'Sign in with Google'
+    button.className = 'google-signin-button auth-button'
+    button.innerHTML = `
+      <span class="google-signin-button__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+          <path fill="#4285F4" d="M21.6 12.23c0-.79-.07-1.54-.2-2.27H12v4.3h5.38a4.6 4.6 0 0 1-2 3.02v2.5h3.24c1.9-1.75 2.98-4.33 2.98-7.55Z"></path>
+          <path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.61-2.43l-3.24-2.5c-.9.6-2.05.96-3.37.96-2.59 0-4.79-1.75-5.58-4.1H3.07v2.58A10 10 0 0 0 12 22Z"></path>
+          <path fill="#FBBC05" d="M6.42 13.93A6.02 6.02 0 0 1 6.42 10.07V7.49H3.07a10 10 0 0 0 0 12.88l3.35-2.44Z"></path>
+          <path fill="#EA4335" d="M12 6.04c1.46 0 2.78.5 3.82 1.48l2.86-2.86A9.95 9.95 0 0 0 12 2a10 10 0 0 0-8.93 5.49l3.35 2.44C7.21 7.79 9.41 6.04 12 6.04Z"></path>
+        </svg>
+      </span>
+      <span class="google-signin-button__text">Sign in with Google</span>
+    `
     button.disabled = state.isAuthenticating || state.clientIdMissing
 
     button.addEventListener('click', (event) => {

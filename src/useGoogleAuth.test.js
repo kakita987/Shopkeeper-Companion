@@ -26,6 +26,8 @@ test('renderSignInButton creates a plain consent button without the profile scop
       const element = {
         tagName: tagName.toUpperCase(),
         textContent: '',
+        innerHTML: '',
+        className: '',
         disabled: false,
         addEventListener() {},
         appendChild() {},
@@ -48,7 +50,8 @@ test('renderSignInButton creates a plain consent button without the profile scop
 
     assert.equal(rendered, true)
     assert.equal(container.child?.tagName, 'BUTTON')
-    assert.equal(container.child?.textContent, 'Sign in with Google')
+    assert.match(container.child?.className, /google-signin-button/)
+    assert.match(container.child?.innerHTML, /Sign in with Google/)
   } finally {
     if (originalWindow === undefined) {
       delete globalThis.window
