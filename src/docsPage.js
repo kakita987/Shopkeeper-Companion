@@ -5,6 +5,7 @@ import { renderMarkdown } from './markdownRenderer.js'
 import { SETTINGS_GEAR_ICON_MARKUP } from './settingsGearIcon.js'
 
 let disposeDocsAd = () => {}
+const ADS_VISIBLE = import.meta.env.VITE_SHOW_ADS === 'true'
 
 function getCurrentThemeHint() {
   return document.body.classList.contains('theme-dark') ? 'dark' : 'light'
@@ -27,6 +28,8 @@ function mountDocsAdBanner() {
 }
 
 export function mountDocsPage({ markdown, contentSelector = '#content-markdown' } = {}) {
+  document.body.classList.add('docs-page')
+
   const settingsToggle = document.querySelector('#settings-toggle')
   const settingsPanel = document.querySelector('#settings-panel')
   const closeSettingsButton = document.querySelector('#close-settings')
