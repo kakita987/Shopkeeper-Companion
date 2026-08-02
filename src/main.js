@@ -1033,6 +1033,30 @@ function buildSettingsRows() {
   ]
 }
 
+function buildSavedViewsRows() {
+  return savedFilterViews
+    .map((view) => {
+      const id = cleanText(view?.id)
+      const name = cleanText(view?.name)
+      if (!id || !name) {
+        return null
+      }
+
+      const criteria = normalizeSavedViewCriteria(view?.criteria || {})
+
+      return [
+        id,
+        name,
+        criteria.dependency || 'any',
+        criteria.ownership || 'any',
+        criteria.inventory || 'any',
+        criteria.mastered || 'any',
+        JSON.stringify(criteria.collectionBook || []),
+      ]
+    })
+    .filter(Boolean)
+}
+
 function parseSettingsRows(rows = []) {
   return rows.reduce((result, row) => {
     const key = cleanText(row?.[0]).toLowerCase()
