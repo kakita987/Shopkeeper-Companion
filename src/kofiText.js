@@ -73,12 +73,8 @@ const CHARACTER_TITLES = [
   "Master",
   "Scholar",
   "Engineer",
-  "Sun Dragon",
-  "Moon Dragon",
-  "Summoner",
   "Cook",
   "Baker",
-  "Bard",
   "Veteran",
   "Storm Elemental",
 
@@ -148,10 +144,10 @@ const CHARACTER_FULL = [
 ];
 
 // Tamas Day Character Pools
+// April 1st is Tamas Day.
+// Every option in this pool includes the name Tamas so the special-day gag stays consistent.
 
-const TAMAS_DAY_CHARACTERS = [
-  "Tamas",
-  
+const TAMAS_DAY_CHARACTERS = [  
   "Tamas the Blacksmith",
   "Tamas the Tailor",
   "Tamas the Engineer",
@@ -215,6 +211,7 @@ const PHRASES = [
   {
     text: "{character} recommends supporting {recipient}.",
     characterFormat: "title",
+    characterArticle: "sentence",
     recipient: "app",
     addRecipientArticle: true
   },
@@ -256,10 +253,16 @@ function random(array) {
 }
 
 
+export function formatCharacterTitle(title, articleStyle = 'lower') {
+  const article = articleStyle === 'sentence' ? 'The' : 'the'
+  return `${article} ${title}`
+}
+
+
 function isTamasDay() {
   const today = new Date();
 
-  // April 1st
+  // Tamas Day is fixed to April 1st.
   return today.getMonth() === 3 &&
          today.getDate() === 1;
 }
@@ -297,9 +300,9 @@ function formatRecipient(type, articleSetting = "default") {
 }
 
 
-function getCharacter(format = "random") {
+function getCharacter(format = "random", articleStyle = 'lower') {
 
-  // Tamas Day overrides normal character logic
+  // On Tamas Day, ignore the normal pools and only return Tamas-based NPC names.
   if (isTamasDay()) {
     return random(TAMAS_DAY_CHARACTERS);
   }
@@ -310,7 +313,7 @@ function getCharacter(format = "random") {
   }
 
   if (format === "title") {
-    return random(CHARACTER_TITLES);
+    return formatCharacterTitle(random(CHARACTER_TITLES), articleStyle);
   }
 
   if (format === "full") {
@@ -336,7 +339,7 @@ export function getRandomTavernText() {
   if (phrase.characterFormat) {
     message = message.replace(
       "{character}",
-      getCharacter(phrase.characterFormat)
+      getCharacter(phrase.characterFormat, phrase.characterArticle)
     );
   }
 
