@@ -12,6 +12,37 @@ export function initSettingsUi({
   onEscape,
 } = {}) {
   const resolvedThemeInputs = Array.from(themeInputs || [])
+  const settingsCard = settingsPanel ? settingsPanel.querySelector('.settings-card') : null
+  const mobileLayoutQuery = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    ? window.matchMedia('(max-width: 700px)')
+    : null
+
+  // Shifts the card so the close button lands exactly where the gear icon is on screen.
+  // Skipped on narrow viewports, where the panel is intentionally centered instead.
+  function alignCardWithToggle() {
+    if (!settingsCard || !settingsToggle || !closeSettingsButton) {
+      return
+    }
+
+    if (mobileLayoutQuery && mobileLayoutQuery.matches) {
+      settingsCard.style.transform = ''
+      return
+    }
+
+    // Clear any previous offset first so the rects below reflect the card's natural position.
+    settingsCard.style.transform = ''
+
+    const toggleRect = settingsToggle.getBoundingClientRect()
+    const closeRect = closeSettingsButton.getBoundingClientRect()
+
+    if (toggleRect.width === 0 || closeRect.width === 0) {
+      return
+    }
+
+    const deltaX = toggleRect.right - closeRect.right
+    const deltaY = toggleRect.top - closeRect.top
+    settingsCard.style.transform = `translate(${deltaX}px, ${deltaY}px)`
+  }
 
   function openSettings() {
     if (!settingsPanel || !settingsToggle) {
@@ -22,6 +53,7 @@ export function initSettingsUi({
     settingsPanel.setAttribute('aria-hidden', 'false')
     settingsToggle.setAttribute('aria-expanded', 'true')
     document.body.classList.add('settings-open')
+    alignCardWithToggle()
   }
 
   function closeSettings() {
@@ -59,6 +91,12 @@ export function initSettingsUi({
         closeSettings()
       } else if (typeof onEscape === 'function') {
         onEscape()
+      }
+    })
+
+    window.addEventListener('resize', () => {
+      if (settingsPanel.classList.contains('is-open')) {
+        alignCardWithToggle()
       }
     })
   }
