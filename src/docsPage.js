@@ -1,7 +1,7 @@
 import './style.css'
-import gearIcon from './assets/gearshape.fill.png'
 import { initSettingsUi, applyTheme, applyFontPreference, getStoredTheme, getStoredFontPreference } from './settingsUi.js'
 import { renderMarkdown } from './markdownRenderer.js'
+import { SETTINGS_GEAR_ICON_MARKUP } from './settingsGearIcon.js'
 
 export function mountDocsPage({ markdown, contentSelector = '#content-markdown' } = {}) {
   const settingsToggle = document.querySelector('#settings-toggle')
@@ -12,7 +12,7 @@ export function mountDocsPage({ markdown, contentSelector = '#content-markdown' 
   const contentEl = document.querySelector(contentSelector)
 
   if (settingsToggle) {
-    settingsToggle.innerHTML = `<img class="settings-toggle-icon" src="${gearIcon}" alt="" aria-hidden="true" />`
+    settingsToggle.innerHTML = SETTINGS_GEAR_ICON_MARKUP
   }
 
   initSettingsUi({
