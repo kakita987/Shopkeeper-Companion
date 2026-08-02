@@ -28,7 +28,7 @@ This use of Google APIs follows the [Google API Services User Data Policy](https
 
 ## Analytics
 
-Shopkeeper Companion may track website traffic, such as total page visits or which websites referred visitors (for example, knowing if a visit came from Reddit or a search engine).
+Shopkeeper Companion may track website traffic, such as total page visits, which websites referred visitors (for example, knowing if a visit came from Reddit or a search engine), and in-app view changes like hash-based navigation or ad refreshes.
 
 This information is used to understand overall website performance and traffic trends, not to identify or track individual users.
 

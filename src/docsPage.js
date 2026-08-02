@@ -1,7 +1,30 @@
 import './style.css'
+import { mountAdBanner } from './adBanner.js'
 import { initSettingsUi, applyTheme, applyFontPreference, getStoredTheme, getStoredFontPreference } from './settingsUi.js'
 import { renderMarkdown } from './markdownRenderer.js'
 import { SETTINGS_GEAR_ICON_MARKUP } from './settingsGearIcon.js'
+
+let disposeDocsAd = () => {}
+
+function getCurrentThemeHint() {
+  return document.body.classList.contains('theme-dark') ? 'dark' : 'light'
+}
+
+function mountDocsAdBanner() {
+  const docsAdBannerEl = document.querySelector('#docs-ad-banner')
+
+  disposeDocsAd()
+
+  if (!docsAdBannerEl) {
+    return
+  }
+
+  disposeDocsAd = mountAdBanner(docsAdBannerEl, {
+    publisher: 'shopkeepercompanion',
+    kofiUrl: 'https://ko-fi.com/shopkeepercompanion',
+    theme: getCurrentThemeHint(),
+  })
+}
 
 export function mountDocsPage({ markdown, contentSelector = '#content-markdown' } = {}) {
   const settingsToggle = document.querySelector('#settings-toggle')
@@ -21,7 +44,10 @@ export function mountDocsPage({ markdown, contentSelector = '#content-markdown' 
     closeSettingsButton,
     themeInputs,
     fontSelect,
-    onThemeChange: (nextTheme) => applyTheme(nextTheme, { themeInputs }),
+    onThemeChange: (nextTheme) => {
+      applyTheme(nextTheme, { themeInputs })
+      mountDocsAdBanner()
+    },
     onFontChange: (nextFont) => applyFontPreference(nextFont, { fontSelect }),
   })
 
@@ -31,4 +57,6 @@ export function mountDocsPage({ markdown, contentSelector = '#content-markdown' 
   if (contentEl) {
     contentEl.innerHTML = renderMarkdown(markdown)
   }
+
+  mountDocsAdBanner()
 }
