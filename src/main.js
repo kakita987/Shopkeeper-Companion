@@ -9,7 +9,10 @@ import { getBlueprintStageValue, getBlueprintStageOptions } from './blueprintSta
 import { initSettingsUi, applyTheme as applySharedTheme, applyFontPreference as applySharedFontPreference, getStoredTheme as getSharedStoredTheme, getStoredFontPreference as getSharedStoredFontPreference } from './settingsUi.js'
 import { SETTINGS_GEAR_ICON_MARKUP } from './settingsGearIcon.js'
 import { escapeHtml, cleanText } from './textUtils.js'
-import { createIcons, Axe, BadgeAlert, BadgeHelp, BadgeInfo, BowArrow, CakeSlice, CircleDashed, Crosshair, Diamond, Drumstick, FlaskConical, FlaskRound, Footprints, Gem, Hand, HandMetal, HardHat, HatGlasses, Leaf, MoonStar, Music2, PillBottle, Pizza, Salad, ScrollText, Shield, Shirt, Sparkles, Swords, Sword, Target, UtensilsCrossed, Wand, WandSparkles } from 'lucide'
+import { getBlueprintItemIconName, getCategoryIconName, getTypeIconName } from './blueprintIcons.js'
+import { buildBlueprintItems, convertBlueprintRowToObject } from './blueprintParsing.js'
+import { DEFAULT_SAVED_VIEW_CRITERIA, STARTER_VIEW_PRESETS, SAVED_FILTER_VIEWS_STORAGE_KEY, buildSavedViewsRows, getCollectionBookMatchDescription, hasActiveSavedViewFilters, loadSavedFilterViews, normalizeSavedViewCriteria, parseSavedViewsRows } from './savedViews.js'
+import { buildBlueprintSummary, buildDependencySummaryLine, getBlueprintVisuals, renderCollectionSection, renderInventorySection, renderLucideIcons, renderMaterialsSection, renderOverlaySectionCard, renderPreview, renderStatsCards, renderUpgradeSection } from './blueprintView.js'
 
 const DEFAULT_SPREADSHEET_URL = 'https://playshoptitans.com/spreadsheet'
 const FALLBACK_GOOGLE_SHEET_URL = import.meta.env.VITE_BLUEPRINT_SHEET_URL || 'https://docs.google.com/spreadsheets/d/1WLa7X8h3O0-aGKxeAlCL7bnN8-FhGd3t7pz2RCzSg8c/edit'
@@ -34,87 +37,19 @@ const CATEGORY_DEFINITIONS = [
   },
 ]
 
-const CATEGORY_TYPE_LOOKUP = new Map(
-  CATEGORY_DEFINITIONS.flatMap((definition) => definition.types.map((type) => [normalizeTypeKey(type), { category: definition.title, type }]))
-)
-
 const app = document.querySelector('#app')
 const RESOURCE_LABELS = ['Iron', 'Wood', 'Steel', 'Leather', 'Herbs', 'Oils', 'Fabric', 'Gems', 'Mana', 'Essence']
 const QUALITY_LABELS = ['Normal', 'Superior', 'Flawless', 'Epic', 'Legendary']
 const INVENTORY_QUALITY_KEYS = ['normal', 'superior', 'flawless', 'epic', 'legendary']
 const COLLECTION_BOOK_QUALITY_ORDER = ['legendary', 'epic', 'flawless', 'superior']
-const DEFAULT_SAVED_VIEW_CRITERIA = {
-  dependency: 'any',
-  ownership: 'any',
-  inventory: 'any',
-  mastered: 'any',
-  collectionBookState: 'completed',
-  collectionBook: [],
-}
-const STARTER_VIEW_PRESETS = [
-  {
-    id: 'parent-dependencies',
-    label: 'Dependent',
-    criteria: {
-      ...DEFAULT_SAVED_VIEW_CRITERIA,
-      dependency: 'parent',
-    },
-  },
-  {
-    id: 'child-dependencies',
-    label: 'Needed',
-    criteria: {
-      ...DEFAULT_SAVED_VIEW_CRITERIA,
-      dependency: 'child',
-    },
-  },
-]
 const TRACKED_UPGRADES_STORAGE_KEY = 'shopkeeper-tracked-upgrades'
 const BLUEPRINT_PROGRESS_STORAGE_KEY = 'shopkeeper-blueprint-progress'
-const SAVED_FILTER_VIEWS_STORAGE_KEY = 'shopkeeper-saved-filter-views'
 const BLUEPRINT_CACHE_STORAGE_KEY = 'shopkeeper-blueprint-cache-v1'
 const GOOGLE_SYNC_SPREADSHEET_ID_STORAGE_KEY = 'shopkeeper-google-sync-spreadsheet-id'
 const GOOGLE_SYNC_SPREADSHEET_ID_COOKIE_KEY = 'shopkeeper_google_sync_spreadsheet_id'
 const GOOGLE_SYNC_WRITE_DEBOUNCE_MS = 900
 const KOFI_HANDLE = 'shopkeepercompanion'
 const KOFI_URL = 'https://ko-fi.com/shopkeepercompanion'
-
-const LUCIDE_ICONS = {
-  Axe,
-  BadgeAlert,
-  BadgeHelp,
-  BadgeInfo,
-  BowArrow,
-  CakeSlice,
-  CircleDashed,
-  Crosshair,
-  Diamond,
-  Drumstick,
-  FlaskConical,
-  FlaskRound,
-  Footprints,
-  Gem,
-  Hand,
-  HandMetal,
-  HardHat,
-  HatGlasses,
-  Leaf,
-  MoonStar,
-  Music2,
-  PillBottle,
-  Pizza,
-  Salad,
-  ScrollText,
-  Shield,
-  Shirt,
-  Sparkles,
-  Swords,
-  Sword,
-  Target,
-  UtensilsCrossed,
-  Wand,
-  WandSparkles,
-}
 
 app.innerHTML = `
   <div class="app-layout">
@@ -1014,30 +949,6 @@ function buildSettingsRows() {
   ]
 }
 
-function buildSavedViewsRows() {
-  return savedFilterViews
-    .map((view) => {
-      const id = cleanText(view?.id)
-      const name = cleanText(view?.name)
-      if (!id || !name) {
-        return null
-      }
-
-      const criteria = normalizeSavedViewCriteria(view?.criteria || {})
-
-      return [
-        id,
-        name,
-        criteria.dependency || 'any',
-        criteria.ownership || 'any',
-        criteria.inventory || 'any',
-        criteria.mastered || 'any',
-        JSON.stringify(criteria.collectionBook || []),
-      ]
-    })
-    .filter(Boolean)
-}
-
 function parseSettingsRows(rows = []) {
   return rows.reduce((result, row) => {
     const key = cleanText(row?.[0]).toLowerCase()
@@ -1047,45 +958,6 @@ function parseSettingsRows(rows = []) {
     }
     return result
   }, {})
-}
-
-function parseSavedViewsRows(rows = []) {
-  return rows
-    .map((row) => {
-      const id = cleanText(row?.[0])
-      const name = cleanText(row?.[1])
-
-      if (!id || !name) {
-        return null
-      }
-
-      return {
-        id,
-        name,
-        criteria: {
-          dependency: cleanText(row?.[2]) || 'any',
-          ownership: cleanText(row?.[3]) || 'any',
-          inventory: cleanText(row?.[4]) || 'any',
-          mastered: cleanText(row?.[5]) || 'any',
-          collectionBook: parseCollectionBookCriteria(row?.[6]),
-        },
-      }
-    })
-    .filter(Boolean)
-}
-
-function parseCollectionBookCriteria(value) {
-  const raw = cleanText(value)
-  if (!raw) {
-    return []
-  }
-
-  try {
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return raw.split(',').map((entry) => cleanText(entry.toLowerCase())).filter(Boolean)
-  }
 }
 
 function parseTrackedUpgradeRows(settings = {}) {
@@ -1129,7 +1001,14 @@ async function importBlueprintData() {
     allBlueprintItems = buildBlueprintItems(headers, rows, structuredBlueprints)
     renderBlueprintVersionLabel(blueprintVersionLabel)
 
-    renderPreview(headers, rows, structuredBlueprints)
+    renderPreview(allBlueprintItems, {
+      previewEl,
+      blueprintOverlay,
+      categoryDefinitions: CATEGORY_DEFINITIONS,
+      onOpenBlueprintOverlay: openBlueprintOverlay,
+      onCloseBlueprintOverlay: closeBlueprintOverlay,
+      renderLucideIcons,
+    })
     renderSavedViews(allBlueprintItems)
     scheduleGoogleSyncWrite()
     updateStatus(`Blueprints downloaded (${allBlueprintItems.length} items).`, 'info')
@@ -1154,7 +1033,14 @@ async function initializeBlueprintDataFromCache() {
 
   const { headers = [], structuredBlueprints = [] } = cached
   allBlueprintItems = buildBlueprintItems(headers, [], structuredBlueprints)
-  renderPreview(headers, [], structuredBlueprints)
+  renderPreview(allBlueprintItems, {
+    previewEl,
+    blueprintOverlay,
+    categoryDefinitions: CATEGORY_DEFINITIONS,
+    onOpenBlueprintOverlay: openBlueprintOverlay,
+    onCloseBlueprintOverlay: closeBlueprintOverlay,
+    renderLucideIcons,
+  })
   renderSavedViews(allBlueprintItems)
   scheduleGoogleSyncWrite()
   updateStatus('', 'info')
@@ -1260,29 +1146,6 @@ async function loadBlueprintCache() {
   }
 }
 
-function renderOverlaySectionCard(title, bodyMarkup, { hint = '', headerExtra = '', isOpen = true, cardClass = '' } = {}) {
-  // Each overlay card uses the same wrapper so the sections stay consistent while staying easy to tweak.
-  const hintMarkup = hint ? `<span class="section-hint">${escapeHtml(hint)}</span>` : ''
-  const cardClassName = cardClass ? ` ${escapeHtml(cardClass)}` : ''
-
-  return `
-    <div class="overlay-card${cardClassName}">
-      <details class="overlay-section" ${isOpen ? 'open' : ''}>
-        <summary class="section-summary">
-          <div class="section-summary-title">
-            <h4>${escapeHtml(title)}</h4>
-          </div>
-          ${headerExtra}
-          ${hintMarkup}
-        </summary>
-        <div class="section-body">
-          ${bodyMarkup}
-        </div>
-      </details>
-    </div>
-  `
-}
-
 function bindBlueprintOverlayInteractions(item) {
   // Keep the overlay controls wired in one place so the same blueprint can be refreshed after each edit.
   blueprintOverlayContent.querySelectorAll('.owned-toggle input').forEach((control) => {
@@ -1348,11 +1211,27 @@ function openBlueprintOverlay(item) {
     owned,
     unlockPrerequisite,
   })
-  const statsMarkup = renderStatsCards(overviewStats)
-  const materialsMarkup = renderMaterialsSection(structuredData.materials)
-  const upgradesMarkup = renderUpgradeSection(structuredData.upgrades, item.name, progress, owned)
-  const inventoryMarkup = renderInventorySection(progress)
-  const collectionMarkup = renderCollectionSection(progress, owned)
+  const statsMarkup = renderStatsCards(overviewStats, {
+    formatStatLabel,
+    formatValue,
+  })
+  const materialsMarkup = renderMaterialsSection(structuredData.materials, {
+    formatMaterialLabel,
+    formatValue,
+  })
+  const upgradesMarkup = renderUpgradeSection(structuredData.upgrades, item.name, progress, owned, {
+    getBlueprintStageValue,
+    getBlueprintStageOptions,
+    escapeHtml,
+  })
+  const inventoryMarkup = renderInventorySection(progress, {
+    getQualityClass,
+    escapeHtml,
+  })
+  const collectionMarkup = renderCollectionSection(progress, owned, {
+    getQualityClass,
+    escapeHtml,
+  })
 
   const headerMarkup = `
     <div class="overlay-top-layout">
@@ -1425,133 +1304,6 @@ function openBlueprintOverlay(item) {
   blueprintOverlay.classList.add('is-open')
   blueprintOverlay.setAttribute('aria-hidden', 'false')
   document.body.classList.add('blueprint-overlay-open')
-}
-
-function renderStatsCards(stats = {}) {
-  const entries = Object.entries(stats || {})
-
-  if (!entries.length) {
-    return '<p class="empty-state">No stats listed for this blueprint.</p>'
-  }
-
-  return entries.map(([key, value]) => `
-    <div class="info-pill">
-      <span>${escapeHtml(formatStatLabel(key))}</span>
-      <strong>${escapeHtml(formatValue(value))}</strong>
-    </div>
-  `).join('')
-}
-
-function renderMaterialsSection(materials = {}) {
-  const resources = Object.entries(materials.resources || {})
-  const components = Array.isArray(materials.components) ? materials.components : []
-
-  const resourceMarkup = resources.length
-    ? `
-      <div class="material-column">
-        <h5>Resources</h5>
-        <ul class="material-list">
-          ${resources.map(([key, value]) => `
-            <li class="resource-item">
-              <span>${escapeHtml(formatMaterialLabel(key))}</span>
-              <strong>${escapeHtml(formatValue(value))}</strong>
-            </li>
-          `).join('')}
-        </ul>
-      </div>
-    `
-    : ''
-
-  const componentMarkup = components.length
-    ? `
-      <div class="material-column">
-        <h5>Components</h5>
-        <ul class="material-list">
-          ${components.map((component) => `
-            <li class="resource-item">
-              <span>${escapeHtml(component.name || 'Component')}</span>
-              <strong>${escapeHtml(component.count ? `${component.count}x` : '')}${component.quality ? ` · ${component.quality}` : ''}</strong>
-            </li>
-          `).join('')}
-        </ul>
-      </div>
-    `
-    : ''
-
-  if (!resourceMarkup && !componentMarkup) {
-    return '<p class="empty-state">No material requirements listed.</p>'
-  }
-
-  return `${resourceMarkup}${componentMarkup}`
-}
-
-function renderUpgradeSection(upgrades = {}, blueprintName = '', progress = {}, owned = false) {
-  const groups = [
-    { key: 'crafting', stageKey: 'milestones', label: 'Milestones' },
-    { key: 'starforged', stageKey: 'starforge', label: 'Starforge' },
-    { key: 'ascension', stageKey: 'ascension', label: 'Ascension' },
-    { key: 'transcendence', stageKey: 'transcendence', label: 'Transcendence' },
-  ]
-
-  const markup = groups.map(({ key, stageKey, label }) => {
-    const entries = Array.isArray(upgrades[key]) ? upgrades[key] : []
-
-    if (!entries.length) {
-      return ''
-    }
-
-    const stageValue = getBlueprintStageValue(progress, stageKey)
-    const options = getBlueprintStageOptions(stageKey, progress, entries)
-
-    return `
-      <div class="upgrade-group ${owned ? '' : 'is-locked'}">
-        <div class="upgrade-group-top">
-          <h5>${escapeHtml(label)}</h5>
-          <label class="upgrade-stage-control">
-            <span class="sr-only">${escapeHtml(label)} status</span>
-            <select class="upgrade-stage-select" data-stage-key="${escapeHtml(stageKey)}" data-blueprint-name="${escapeHtml(blueprintName)}" ${owned ? '' : 'disabled'}>
-              ${options.map((option) => `<option value="${option.value}" ${stageValue === option.value ? 'selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}
-            </select>
-          </label>
-        </div>
-      </div>
-    `
-  }).filter(Boolean).join('')
-
-  return `<div class="upgrade-groups-grid">${markup}</div>` || '<p class="empty-state">No upgrade milestones listed.</p>'
-}
-
-function renderInventorySection(progress = {}) {
-  return QUALITY_LABELS.map((label) => {
-    const key = label.toLowerCase()
-    const value = progress.inventory?.[key] ?? 0
-    const qualityClass = getQualityClass(label)
-    return `
-      <label class="inventory-field inventory-color-only ${qualityClass}" title="${escapeHtml(label)}">
-        <input class="quality-input" aria-label="${escapeHtml(label)} quality inventory" type="number" min="0" step="1" value="${value}" data-quality-key="${escapeHtml(key)}" />
-      </label>
-    `
-  }).join('')
-}
-
-function renderCollectionSection(progress = {}, isOwned = false) {
-  const qualities = ['superior', 'flawless', 'epic', 'legendary']
-  const collectionValues = progress.collectionBook || {}
-
-  return `
-    <div class="collection-notice">${isOwned ? 'Checked = complete in your collection book.' : 'Set Owned to enable this section.'}</div>
-    <div class="inventory-grid">
-      ${qualities.map((key) => {
-        const label = key.charAt(0).toUpperCase() + key.slice(1)
-        const qualityClass = getQualityClass(label)
-        return `
-          <label class="inventory-field collection-toggle-field ${qualityClass}" title="${escapeHtml(label)}">
-            <input class="collection-input" aria-label="${escapeHtml(label)} collection status" type="checkbox" data-quality-key="${escapeHtml(key)}" ${collectionValues[key] ? 'checked' : ''} ${isOwned ? '' : 'disabled'} />
-          </label>
-        `
-      }).join('')}
-    </div>
-  `
 }
 
 function renderSavedViews(items = []) {
@@ -1727,7 +1479,14 @@ function renderSavedViewResults(items = [], dependencyIndex) {
   return Array.from(grouped.values()).map((categoryGroup) => {
     const typeMarkup = Array.from(categoryGroup.types.values()).map((typeGroup) => {
       const listMarkup = typeGroup.items.map((item) => {
-        const summary = buildBlueprintSummary(item, dependencyIndex)
+        const summary = buildBlueprintSummary(item, dependencyIndex, {
+          getBlueprintProgressState,
+          calculateTotalInventory,
+          getCollectionBookStatus,
+          getBlueprintMilestoneKeys,
+          isTrackedUpgrade,
+          getBlueprintMaterials,
+        })
         const dependencyText = buildDependencySummaryLine(summary)
         const collectionText = summary.isCollectionComplete ? 'Collection Complete' : `Collection ${summary.collectionStatus || 'Not started'}`
         const ownershipText = summary.isOwned ? 'Owned' : 'Not Owned'
@@ -1966,12 +1725,6 @@ function renderSelectOptions(options = [], selectedValue = 'any') {
   }).join('')
 }
 
-function getCollectionBookMatchDescription(state = 'completed') {
-  return state === 'needed'
-    ? 'Still Needed checks missing qualities.'
-    : 'Completed checks finished qualities.'
-}
-
 function renderCollectionBookFilterOptions(selectedValues = []) {
   const normalizedSelected = new Set(Array.isArray(selectedValues) ? selectedValues.map((value) => String(value).toLowerCase()) : [])
   const options = ['superior', 'flawless', 'epic', 'legendary']
@@ -1987,32 +1740,6 @@ function renderCollectionBookFilterOptions(selectedValues = []) {
       </label>
     `
   }).join('')
-}
-
-function normalizeSavedViewCriteria(criteria = {}) {
-  const collectionBook = Array.isArray(criteria.collectionBook)
-    ? criteria.collectionBook
-    : typeof criteria.collection === 'string' && criteria.collection !== 'any'
-      ? [criteria.collection]
-      : []
-
-  return {
-    dependency: ['any', 'parent', 'child'].includes(criteria.dependency) ? criteria.dependency : 'any',
-    ownership: ['owned', 'not-owned', 'any'].includes(criteria.ownership) ? criteria.ownership : 'any',
-    inventory: ['any', 'has', 'superior-or-better'].includes(criteria.inventory) ? criteria.inventory : 'any',
-    mastered: ['any', 'mastered', 'not-mastered'].includes(criteria.mastered) ? criteria.mastered : 'any',
-    collectionBookState: ['completed', 'needed'].includes(criteria.collectionBookState) ? criteria.collectionBookState : 'completed',
-    collectionBook: collectionBook.filter((value) => ['superior', 'flawless', 'epic', 'legendary'].includes(String(value).toLowerCase())),
-  }
-}
-
-function hasActiveSavedViewFilters(criteria = {}) {
-  const normalizedCriteria = normalizeSavedViewCriteria(criteria)
-  return normalizedCriteria.dependency !== 'any'
-    || normalizedCriteria.ownership !== 'any'
-    || normalizedCriteria.inventory !== 'any'
-    || normalizedCriteria.mastered !== 'any'
-    || normalizedCriteria.collectionBook.length > 0
 }
 
 function buildDependencyIndex(items = []) {
@@ -2044,7 +1771,14 @@ function filterBlueprintItems(items = [], criteria = {}, dependencyIndex) {
   const normalizedCriteria = normalizeSavedViewCriteria(criteria)
 
   return items.filter((item) => {
-    const summary = buildBlueprintSummary(item, dependencyIndex)
+    const summary = buildBlueprintSummary(item, dependencyIndex, {
+      getBlueprintProgressState,
+      calculateTotalInventory,
+      getCollectionBookStatus,
+      getBlueprintMilestoneKeys,
+      isTrackedUpgrade,
+      getBlueprintMaterials,
+    })
 
     if (normalizedCriteria.dependency === 'parent' && !summary.isParentDependency) {
       return false
@@ -2090,94 +1824,6 @@ function filterBlueprintItems(items = [], criteria = {}, dependencyIndex) {
 
     return true
   })
-}
-
-function buildBlueprintSummary(item, dependencyIndex) {
-  const progress = getBlueprintProgressState(item.name)
-  const craftingMilestones = Array.isArray(item?.structuredData?.upgrades?.crafting) ? item.structuredData.upgrades.crafting : []
-  const blueprintState = {
-    own: Boolean(progress.owned),
-    master: Boolean(progress.master),
-    inventory: progress.inventory || {},
-    collectionBook: progress.collectionBook || {},
-    materials: getBlueprintMaterials(item),
-  }
-
-  const normalizedName = normalizeBlueprintName(item.name)
-  const dependentSet = dependencyIndex?.dependentsByComponent?.get(normalizedName)
-  const dependentNames = dependentSet ? [...dependentSet] : []
-  const totalInventory = calculateTotalInventory(blueprintState)
-  const collectionStatus = getCollectionBookStatus(blueprintState)
-  const isMastered = Boolean(progress.owned) && craftingMilestones.length >= 5 && getBlueprintMilestoneKeys(item.name, craftingMilestones.slice(0, 5)).every((key) => isTrackedUpgrade(key))
-  const collectionBookQualities = Object.entries(progress.collectionBook || {})
-    .filter(([, checked]) => Boolean(checked))
-    .map(([quality]) => quality)
-  const allCollectionQualities = ['superior', 'flawless', 'epic', 'legendary']
-  const collectionBookNeededQualities = allCollectionQualities.filter((quality) => !collectionBookQualities.includes(quality))
-
-  const hasSuperiorOrBetterInventory = INVENTORY_QUALITY_KEYS.slice(1).some((qualityKey) => toInventoryCount(blueprintState.inventory?.[qualityKey]) > 0)
-
-  return {
-    isOwned: Boolean(progress.owned),
-    isMastered,
-    isParentDependency: hasCraftingComponents(item),
-    isChildDependency: dependentNames.length > 0,
-    dependentNames,
-    hasInventory: totalInventory > 0,
-    hasSuperiorOrBetterInventory,
-    totalInventory,
-    isCollectionComplete: collectionStatus === '✅ Complete',
-    collectionStatus,
-    collectionBookQualities,
-    collectionBookNeededQualities,
-  }
-}
-
-function buildDependencySummaryLine(summary = {}) {
-  const parts = []
-
-  if (summary.isParentDependency) {
-    parts.push('Dependent')
-  }
-
-  if (summary.isChildDependency) {
-    const dependentCount = summary.dependentNames?.length || 0
-    parts.push(`Needed (${dependentCount})`)
-  }
-
-  if (!parts.length) {
-    return 'No dependency relation'
-  }
-
-  return parts.join(' · ')
-}
-
-function loadSavedFilterViews() {
-  try {
-    const stored = JSON.parse(localStorage.getItem(SAVED_FILTER_VIEWS_STORAGE_KEY) || '[]')
-    if (!Array.isArray(stored)) {
-      return []
-    }
-
-    return stored
-      .map((entry) => {
-        const id = cleanText(entry?.id)
-        const name = cleanText(entry?.name)
-        if (!id || !name) {
-          return null
-        }
-
-        return {
-          id,
-          name,
-          criteria: normalizeSavedViewCriteria(entry.criteria || {}),
-        }
-      })
-      .filter(Boolean)
-  } catch (error) {
-    console.warn('Unable to load saved filter views.', error)
-    return []
-  }
 }
 
 function ensureSavedFilterViewsLoaded() {
@@ -2497,16 +2143,6 @@ function closeBlueprintOverlay() {
   blueprintOverlayContent.innerHTML = ''
 }
 
-function getBlueprintVisuals(item) {
-  const category = item?.classification?.category || 'Accessories'
-  const type = item?.classification?.type || item?.structuredData?.meta?.type || ''
-
-  return {
-    category,
-    type,
-  }
-}
-
 function applyTheme(theme, options = {}) {
   const skipSync = Boolean(options.skipSync)
   applySharedTheme(theme, { themeInputs })
@@ -2634,644 +2270,4 @@ async function importGoogleSheet(exportUrl) {
   }
 }
 
-function renderLucideIcons(root = document) {
-  createIcons({
-    icons: LUCIDE_ICONS,
-    root,
-  })
-}
 
-function renderPreview(headers, rows, structuredBlueprints = []) {
-  const openDrawerKeys = new Set(
-    Array.from(previewEl.querySelectorAll('details[data-drawer-key][open]')).map((node) => node.dataset.drawerKey)
-  )
-
-  previewEl.innerHTML = ''
-
-  if (!headers.length && !rows.length) {
-    previewEl.innerHTML = '<p class="empty-state">No rows were returned from the sheet.</p>'
-    return
-  }
-
-  const groups = buildBlueprintGroups(headers, rows, structuredBlueprints)
-  const container = document.createElement('div')
-  container.className = 'blueprint-groups'
-
-  groups.forEach((group) => {
-    const details = document.createElement('details')
-    details.className = 'blueprint-category'
-    const categoryDrawerKey = `category::${group.title}`
-    details.dataset.drawerKey = categoryDrawerKey
-    details.open = openDrawerKeys.has(categoryDrawerKey)
-
-    const summary = document.createElement('summary')
-    summary.innerHTML = `
-      <span class="group-summary-title">
-        <span class="icon-slot group-summary-icon" aria-hidden="true"><i data-lucide="${escapeHtml(getCategoryIconName(group.title))}"></i></span>
-        <span>${escapeHtml(group.title)}</span>
-      </span>
-      <span class="group-count">${group.totalItems}</span>
-    `
-    details.appendChild(summary)
-
-    const body = document.createElement('div')
-    body.className = 'category-body'
-
-    group.types.forEach((typeGroup) => {
-      if (!typeGroup.items.length) {
-        return
-      }
-
-      const subDetails = document.createElement('details')
-      subDetails.className = 'blueprint-type'
-      const typeDrawerKey = `type::${group.title}::${typeGroup.title}`
-      subDetails.dataset.drawerKey = typeDrawerKey
-      subDetails.open = openDrawerKeys.has(typeDrawerKey)
-
-      const subSummary = document.createElement('summary')
-      subSummary.innerHTML = `
-        <span class="group-summary-title">
-          <span class="icon-slot group-summary-icon" aria-hidden="true"><i data-lucide="${escapeHtml(getTypeIconName(typeGroup.title, group.title))}"></i></span>
-          <span>${escapeHtml(typeGroup.title)}</span>
-        </span>
-        <span class="group-count">${typeGroup.items.length}</span>
-      `
-      subDetails.appendChild(subSummary)
-
-      const list = document.createElement('ul')
-      list.className = 'blueprint-items'
-
-      typeGroup.items.forEach((item) => {
-        const listItem = document.createElement('li')
-        listItem.className = 'blueprint-item'
-        const tierText = item.structuredData?.meta?.tier ? String(item.structuredData.meta.tier) : '—'
-        listItem.innerHTML = `
-          <div class="item-copy">
-            <div class="item-title-row">
-              <span class="icon-slot item-card-icon" aria-hidden="true"><i data-lucide="${escapeHtml(getBlueprintItemIconName(item))}"></i></span>
-              <span class="item-name">${escapeHtml(item.name)}</span>
-              <span class="item-tier-badge">${escapeHtml(tierText)}</span>
-            </div>
-          </div>
-        `
-        listItem.addEventListener('click', () => openBlueprintOverlay(item))
-        list.appendChild(listItem)
-      })
-
-      subDetails.appendChild(list)
-      body.appendChild(subDetails)
-    })
-
-    details.appendChild(body)
-    container.appendChild(details)
-  })
-
-  const groupNodes = Array.from(container.querySelectorAll('.blueprint-category'))
-  const categoryNodes = Array.from(container.querySelectorAll('.blueprint-type'))
-
-  groupNodes.forEach((node) => {
-    node.addEventListener('toggle', () => {
-      if (!node.open) {
-        return
-      }
-
-      groupNodes.forEach((otherNode) => {
-        if (otherNode !== node) {
-          otherNode.open = false
-        }
-      })
-
-      categoryNodes.forEach((categoryNode) => {
-        categoryNode.open = false
-      })
-    })
-  })
-
-  categoryNodes.forEach((node) => {
-    node.addEventListener('toggle', () => {
-      if (!node.open) {
-        return
-      }
-
-      categoryNodes.forEach((otherNode) => {
-        if (otherNode !== node) {
-          otherNode.open = false
-        }
-      })
-    })
-  })
-
-  blueprintOverlay.querySelectorAll('[data-close-overlay="true"]').forEach((node) => {
-    node.addEventListener('click', closeBlueprintOverlay)
-  })
-
-  previewEl.appendChild(container)
-  renderLucideIcons(container)
-}
-
-function buildBlueprintGroups(headers, rows, structuredBlueprints = []) {
-  const items = buildBlueprintItems(headers, rows, structuredBlueprints)
-
-  const categoryMaps = CATEGORY_DEFINITIONS.map((definition) => ({
-    title: definition.title,
-    typeOrder: definition.types.map((type) => type.toLowerCase()),
-    typeGroups: new Map(),
-  }))
-
-  items.forEach((item) => {
-    const group = categoryMaps.find((entry) => entry.title === item.classification.category)
-
-    if (!group) {
-      return
-    }
-
-    const normalizedType = item.classification.type || 'Unknown'
-    const typeKey = normalizedType.toLowerCase()
-    let typeGroup = group.typeGroups.get(typeKey)
-
-    if (!typeGroup) {
-      typeGroup = {
-        title: normalizedType,
-        items: [],
-      }
-      group.typeGroups.set(typeKey, typeGroup)
-    }
-
-    typeGroup.items.push(item)
-  })
-
-  return categoryMaps.map((group) => {
-    const orderedTypes = []
-
-    group.typeOrder.forEach((typeKey) => {
-      const matchingGroup = group.typeGroups.get(typeKey)
-      if (matchingGroup) {
-        orderedTypes.push(matchingGroup)
-      }
-    })
-
-    group.typeGroups.forEach((typeGroup, typeKey) => {
-      if (!orderedTypes.some((entry) => entry.title.toLowerCase() === typeKey)) {
-        orderedTypes.push(typeGroup)
-      }
-    })
-
-    return {
-      title: group.title,
-      totalItems: orderedTypes.reduce((count, typeGroup) => count + typeGroup.items.length, 0),
-      types: orderedTypes,
-    }
-  }).filter((group) => group.totalItems > 0)
-}
-
-function buildBlueprintItems(headers, rows, structuredBlueprints = []) {
-  if (!rows.length && structuredBlueprints.length) {
-    // If we're loading from cache, we only have structured data
-    return structuredBlueprints.map((structuredData) => {
-      const name = structuredData.meta?.name || 'Unknown'
-      const type = structuredData.meta?.type || 'Unknown'
-      const tier = structuredData.meta?.tier
-
-      const classification = classifyBlueprint(type, name)
-      return {
-        name,
-        meta: tier ? `Tier ${tier}` : 'No tier',
-        structuredData,
-        classification,
-      }
-    })
-  }
-
-  const nameIndex = getColumnIndex(headers, 'Name', 'Item Name', 'Blueprint Name')
-  const typeIndex = getColumnIndex(headers, 'Type', 'Item Type', 'Category')
-  const tierIndex = getColumnIndex(headers, 'Tier', 'Rank', 'Level')
-
-  const resolvedNameIndex = nameIndex >= 0 ? nameIndex : 0
-  const resolvedTypeIndex = typeIndex >= 0 ? typeIndex : 1
-  const resolvedTierIndex = tierIndex >= 0 ? tierIndex : -1
-
-  const items = []
-
-  rows.forEach((row, rowIndex) => {
-    const name = getCellValue(row, resolvedNameIndex)
-    const type = getCellValue(row, resolvedTypeIndex)
-    const tier = getCellValue(row, resolvedTierIndex)
-    const structuredData = structuredBlueprints[rowIndex] || {}
-
-    if (!name) {
-      return
-    }
-
-    const classification = classifyBlueprint(type, name)
-    items.push({
-      name,
-      meta: tier ? `Tier ${tier}` : 'No tier',
-      structuredData,
-      classification,
-    })
-  })
-
-  return items
-}
-
-function convertBlueprintRowToObject(headers, row) {
-  const blueprint = {
-    meta: {},
-    economy: {},
-    workers: [],
-    materials: {
-      resources: {},
-      components: [],
-    },
-    stats: {},
-    upgrades: {
-      crafting: [],
-      starforged: [],
-      ascension: [],
-      transcendence: [],
-    },
-  }
-
-  const addMeta = (label, key, parser = (value) => value) => {
-    const value = parser(getCellValue(row, getColumnIndex(headers, label)))
-    if (value !== undefined && value !== '' && value !== '---') {
-      blueprint.meta[key] = value
-    }
-  }
-
-  const addEconomy = (label, key, parser = (value) => value) => {
-    const value = parser(getCellValue(row, getColumnIndex(headers, label)))
-    if (value !== undefined && value !== '' && value !== '---') {
-      blueprint.economy[key] = value
-    }
-  }
-
-  addMeta('Name', 'name', (value) => cleanText(value))
-  addMeta('Type', 'type', (value) => cleanText(value))
-  addMeta('Tier', 'tier', (value) => parseNumericValue(value))
-  addMeta('Unlock Prerequisite', 'unlockPrerequisite', (value) => cleanText(value))
-  addMeta('Research Scrolls', 'researchScrolls', (value) => parseNumericValue(value))
-  addMeta('Antique Tokens', 'antiqueTokens', (value) => parseNumericValue(value))
-  addMeta('Available as an Antique starting on (UTC)', 'availableAsAntiqueDate', (value) => cleanText(value))
-
-  addEconomy('Value', 'value', (value) => parseNumericValue(value))
-  addEconomy('Crafting Time (seconds)', 'craftingTimeSeconds', (value) => parseNumericValue(value))
-  addEconomy('Value / Crafting Time', 'valueCraftTimeRatio', (value) => parseNumericValue(value))
-  addEconomy('Merchant XP', 'merchantXp', (value) => parseNumericValue(value))
-  addEconomy('Worker XP', 'workerXp', (value) => parseNumericValue(value))
-  addEconomy('Fusion XP', 'fusionXp', (value) => parseNumericValue(value))
-  addEconomy('Favor', 'favor', (value) => parseNumericValue(value))
-  addEconomy('Airship Power', 'airshipPower', (value) => parseNumericValue(value))
-
-  const energyLabels = [
-    ['Discount Energy', 'discount'],
-    ['Surcharge Energy', 'surcharge'],
-    ['Suggest Energy', 'suggest'],
-    ['Speed Up Energy', 'speedUp'],
-  ]
-  energyLabels.forEach(([label, key]) => {
-    addEconomy(label, `energy${capitalize(key)}`, (value) => parseNumericValue(value))
-  })
-  if (Object.keys(blueprint.economy).length) {
-    blueprint.economy.energy = {}
-    Object.entries(blueprint.economy)
-      .filter(([key]) => key.startsWith('energy'))
-      .forEach(([key, value]) => {
-        blueprint.economy.energy[key.replace(/^energy/, '').toLowerCase()] = value
-        delete blueprint.economy[key]
-      })
-  }
-
-  const workerNameIndexes = findColumnIndexes(headers, ['Required Worker'])
-  const workerLevelIndexes = findColumnIndexes(headers, ['Worker Level'])
-
-  workerNameIndexes.forEach((nameIndex, index) => {
-    const levelIndex = workerLevelIndexes[index]
-    const nameValue = cleanText(getCellValue(row, nameIndex))
-    const levelValue = parseNumericValue(getCellValue(row, levelIndex))
-
-    if (nameValue && nameValue !== '---') {
-      blueprint.workers.push({
-        name: nameValue,
-        level: levelValue ?? undefined,
-      })
-    }
-  })
-
-  const componentIndexes = findColumnIndexes(headers, ['Component'])
-  componentIndexes.forEach((componentIndex) => {
-    const nameValue = cleanText(getCellValue(row, componentIndex))
-    const qualityValue = cleanText(getCellValue(row, componentIndex + 1))
-    const countValue = parseNumericValue(getCellValue(row, componentIndex + 2))
-
-    if (nameValue && nameValue !== '---') {
-      blueprint.materials.components.push({
-        name: nameValue,
-        quality: qualityValue || undefined,
-        count: countValue ?? undefined,
-      })
-    }
-  })
-
-  const workerBoundary = Math.max(...workerLevelIndexes, ...workerNameIndexes, 0)
-  const materialsStart = workerBoundary + 1
-  const materialsEnd = componentIndexes[0] ?? headers.length
-  const resourceValues = []
-  for (let index = materialsStart; index < materialsEnd; index += 1) {
-    const value = getCellValue(row, index)
-    if (!isMeaningfulValue(value)) {
-      continue
-    }
-    resourceValues.push(value)
-  }
-
-  if (resourceValues.length) {
-    resourceValues.forEach((value, index) => {
-      const parsedValue = parseNumericValue(value)
-      const normalizedValue = parsedValue ?? cleanText(value)
-      if (normalizedValue !== undefined && normalizedValue !== '' && normalizedValue !== '---') {
-        const resourceLabel = RESOURCE_LABELS[index] || `Resource ${index + 1}`
-        blueprint.materials.resources[resourceLabel] = normalizedValue
-      }
-    })
-  }
-
-  const addStat = (label, key) => {
-    const value = getCellValue(row, getColumnIndex(headers, label))
-    const parsedValue = parseNumericValue(value)
-    if (parsedValue !== undefined) {
-      blueprint.stats[key] = parsedValue
-    } else if (isMeaningfulValue(value)) {
-      blueprint.stats[key] = cleanText(value)
-    }
-  }
-
-  addStat('ATK', 'atk')
-  addStat('DEF', 'def')
-  addStat('HP', 'hp')
-  addStat('EVA', 'eva')
-  addStat('CRIT', 'crit')
-  addStat('Elemental Affinity', 'elementalAffinity')
-  addStat('Spirit Affinity', 'spiritAffinity')
-  addStat('Built-In Element', 'builtInElement')
-  addStat('Built-In Spirit', 'builtInSpirit')
-
-  const upgradeGroups = [
-    { key: 'crafting', labelPrefix: 'Crafting Upgrade' },
-    { key: 'starforged', labelPrefix: 'Starforged Milestone' },
-    { key: 'ascension', labelPrefix: 'Ascension Upgrade' },
-    { key: 'transcendence', labelPrefix: 'Transcendence Upgrade' },
-  ]
-
-  upgradeGroups.forEach(({ key, labelPrefix }) => {
-    for (let index = 1; index <= 5; index += 1) {
-      const upgradeIndex = getColumnIndex(headers, `${labelPrefix} ${index}`)
-      const countIndex = upgradeIndex + 1
-      const upgradeValue = cleanText(getCellValue(row, upgradeIndex))
-      const countValue = parseNumericValue(getCellValue(row, countIndex))
-
-      if (upgradeValue || countValue !== undefined) {
-        blueprint.upgrades[key].push({
-          name: upgradeValue || undefined,
-          count: countValue ?? undefined,
-        })
-      }
-    }
-  })
-
-  return blueprint
-}
-
-function isMeaningfulValue(value) {
-  if (value === null || value === undefined) {
-    return false
-  }
-
-  const text = String(value).trim()
-  return Boolean(text) && text !== '---'
-}
-
-function parseNumericValue(value) {
-  if (value === null || value === undefined) {
-    return undefined
-  }
-
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : undefined
-  }
-
-  if (typeof value === 'string') {
-    const trimmed = value.trim()
-    if (!trimmed || trimmed === '---') {
-      return undefined
-    }
-
-    const normalized = trimmed.replace(/,/g, '')
-    const parsed = Number(normalized)
-    return Number.isNaN(parsed) ? undefined : parsed
-  }
-
-  return undefined
-}
-
-function findColumnIndexes(headers, labels) {
-  const targetLabels = labels.map((label) => label.toLowerCase().trim())
-
-  return headers.reduce((matches, header, index) => {
-    if (targetLabels.includes(header.toLowerCase().trim())) {
-      matches.push(index)
-    }
-    return matches
-  }, [])
-}
-
-function capitalize(value) {
-  return value.charAt(0).toUpperCase() + value.slice(1)
-}
-
-function getColumnIndex(headers, ...labels) {
-  for (const label of labels) {
-    const index = headers.findIndex((header) => (header || '').toString().trim().toLowerCase() === label.toLowerCase())
-    if (index !== -1) {
-      return index
-    }
-  }
-
-  return -1
-}
-
-function getCellValue(row, index) {
-  if (!Array.isArray(row) || index < 0) {
-    return ''
-  }
-
-  const cell = row[index]
-
-  if (typeof cell === 'string' || typeof cell === 'number' || typeof cell === 'boolean') {
-    return cell
-  }
-
-  if (cell && typeof cell === 'object') {
-    return cell.v ?? ''
-  }
-
-  return ''
-}
-
-function classifyBlueprint(type, name) {
-  const normalizedType = (type || '').toString().trim()
-  const normalizedName = (name || '').toString().trim()
-  const haystack = `${normalizedType} ${normalizedName}`.toLowerCase()
-  const normalizedTypeKey = normalizeTypeKey(normalizedType)
-
-  if (normalizedTypeKey === 'potion' && /herbal|remedy/.test(haystack)) {
-    return { category: 'Accessories', type: 'Herbal Remedy' }
-  }
-
-  if (normalizedTypeKey === 'enchantment' || normalizedTypeKey === 'enchantments') {
-    return { category: 'Enchantments', type: resolveEnchantmentType(normalizedName) }
-  }
-
-  const directMatch = CATEGORY_TYPE_LOOKUP.get(normalizedTypeKey)
-  if (directMatch) {
-    return directMatch
-  }
-
-  if (/enchant|spirit|element/i.test(haystack)) {
-    return { category: 'Enchantments', type: resolveEnchantmentType(normalizedName) }
-  }
-
-  if (/sword|axe|dagger|mace|spear|bow|wand|staff|gun|crossbow|instrument|dual wield|catalyst|weapon/i.test(haystack)) {
-    return { category: 'Weapons', type: resolveCanonicalType('Weapons', normalizedType, normalizedName) }
-  }
-
-  if (/herbal|potion|spell|shield|cloak|ring|amulet|familiar|idol|quiver|aura|meal|dessert|remedy|accessory/i.test(haystack)) {
-    return { category: 'Accessories', type: resolveCanonicalType('Accessories', normalizedType, normalizedName) }
-  }
-
-  if (/armor|helmet|hat|glove|gauntlet|footwear|heavy armor|light armor|clothes|robe|boot|shoe/i.test(haystack)) {
-    return { category: 'Armor', type: resolveCanonicalType('Armor', normalizedType, normalizedName) }
-  }
-
-  return { category: 'Accessories', type: resolveCanonicalType('Accessories', normalizedType, normalizedName) }
-}
-
-function normalizeTypeKey(value) {
-  return (value || '').toString().toLowerCase().replace(/[^a-z0-9]/g, '')
-}
-
-function resolveEnchantmentType(name) {
-  return /spirit/i.test(name) ? 'Spirit' : 'Element'
-}
-
-function resolveCanonicalType(category, type, name) {
-  const haystack = `${type || ''} ${name || ''}`.toLowerCase()
-
-  if (category === 'Weapons') {
-    if (/dual\s*wield/.test(haystack)) return 'Dual Wield'
-    if (/crossbow/.test(haystack)) return 'Crossbow'
-    if (/instrument/.test(haystack)) return 'Instrument'
-    if (/catalyst/.test(haystack)) return 'Catalyst'
-    if (/sword/.test(haystack)) return 'Sword'
-    if (/axe/.test(haystack)) return 'Axe'
-    if (/dagger/.test(haystack)) return 'Dagger'
-    if (/mace/.test(haystack)) return 'Mace'
-    if (/spear/.test(haystack)) return 'Spear'
-    if (/bow/.test(haystack)) return 'Bow'
-    if (/wand/.test(haystack)) return 'Wand'
-    if (/staff/.test(haystack)) return 'Staff'
-    if (/gun/.test(haystack)) return 'Gun'
-    return 'Sword'
-  }
-
-  if (category === 'Armor') {
-    if (/heavy\s*armor|heavyarmor|plate|mail|cuirass/.test(haystack)) return 'Heavy Armor'
-    if (/light\s*armor|lightarmor/.test(haystack)) return 'Light Armor'
-    if (/clothes|robe/.test(haystack)) return 'Clothes'
-    if (/rogue/.test(haystack)) return 'Rogue Hat'
-    if (/magician|mage|wizard|sorcer/.test(haystack)) return 'Magician Hat'
-    if (/helmet|helm/.test(haystack)) return 'Helmet'
-    if (/gauntlet/.test(haystack)) return 'Gauntlets'
-    if (/glove/.test(haystack)) return 'Gloves'
-    if (/heavy\s*footwear|heavy\s*boot|heavy\s*shoe/.test(haystack)) return 'Heavy Footwear'
-    if (/light\s*footwear|light\s*boot|light\s*shoe|footwear|boot|shoe/.test(haystack)) return 'Light Footwear'
-    return 'Heavy Armor'
-  }
-
-  if (category === 'Accessories') {
-    if (/herbal\s*remedy|herbal|remedy/.test(haystack)) return 'Herbal Remedy'
-    if (/potion/.test(haystack)) return 'Potion'
-    if (/spell/.test(haystack)) return 'Spell'
-    if (/shield/.test(haystack)) return 'Shield'
-    if (/cloak/.test(haystack)) return 'Cloak'
-    if (/ring/.test(haystack)) return 'Ring'
-    if (/amulet/.test(haystack)) return 'Amulet'
-    if (/familiar/.test(haystack)) return 'Familiar'
-    if (/aura\s*song|aurasong/.test(haystack)) return 'Aurasong'
-    if (/quiver/.test(haystack)) return 'Quiver'
-    if (/idol/.test(haystack)) return 'Idol'
-    if (/meal/.test(haystack)) return 'Meal'
-    if (/dessert/.test(haystack)) return 'Dessert'
-    return 'Potion'
-  }
-
-  return type || 'Unknown'
-}
-
-function getCategoryIconName(category) {
-  switch (category) {
-    case 'Weapons':
-      return 'Swords'
-    case 'Armor':
-      return 'Shield'
-    case 'Accessories':
-      return 'Gem'
-    case 'Enchantments':
-      return 'Sparkles'
-    default:
-      return 'CircleDashed'
-  }
-}
-
-function getTypeIconName(type, category) {
-  const haystack = `${type || ''}`.toLowerCase()
-
-  if (/sword/.test(haystack)) return 'Sword'
-  if (/axe/.test(haystack)) return 'Axe'
-  if (/dagger|mace|spear/.test(haystack)) return 'Swords'
-  if (/bow|crossbow/.test(haystack)) return 'BowArrow'
-  if (/gun/.test(haystack)) return 'Crosshair'
-  if (/wand/.test(haystack)) return 'Wand'
-  if (/staff|catalyst/.test(haystack)) return 'WandSparkles'
-  if (/instrument/.test(haystack)) return 'Music2'
-  if (/dual wield/.test(haystack)) return 'Swords'
-  if (/heavy armor|light armor/.test(haystack)) return 'Shield'
-  if (/clothes/.test(haystack)) return 'Shirt'
-  if (/helmet/.test(haystack)) return 'HardHat'
-  if (/rogue hat/.test(haystack)) return 'HatGlasses'
-  if (/magician hat/.test(haystack)) return 'Sparkles'
-  if (/gauntlets/.test(haystack)) return 'HandMetal'
-  if (/gloves/.test(haystack)) return 'Hand'
-  if (/heavy footwear|light footwear/.test(haystack)) return 'Footprints'
-  if (/herbal remedy/.test(haystack)) return 'Leaf'
-  if (/potion/.test(haystack)) return 'PillBottle'
-  if (/spell/.test(haystack)) return 'ScrollText'
-  if (/shield/.test(haystack)) return 'Shield'
-  if (/cloak/.test(haystack)) return 'Shirt'
-  if (/ring/.test(haystack)) return 'Gem'
-  if (/amulet/.test(haystack)) return 'Diamond'
-  if (/familiar/.test(haystack)) return 'CircleDashed'
-  if (/aurasong/.test(haystack)) return 'Music2'
-  if (/quiver/.test(haystack)) return 'Target'
-  if (/idol/.test(haystack)) return 'BadgeInfo'
-  if (/meal/.test(haystack)) return 'UtensilsCrossed'
-  if (/dessert/.test(haystack)) return 'CakeSlice'
-  if (/element/.test(haystack)) return 'Sparkles'
-  if (/spirit/.test(haystack)) return 'MoonStar'
-
-  return getCategoryIconName(category)
-}
-
-function getBlueprintItemIconName(item) {
-  return getTypeIconName(item?.classification?.type, item?.classification?.category)
-}

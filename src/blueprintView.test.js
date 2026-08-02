@@ -1,0 +1,57 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { buildBlueprintSummary, buildDependencySummaryLine, getBlueprintVisuals } from './blueprintView.js'
+
+test('getBlueprintVisuals prefers classification data and falls back to structured meta type', () => {
+  assert.deepEqual(getBlueprintVisuals({ classification: { category: 'Armor', type: 'Helmet' } }), {
+    category: 'Armor',
+    type: 'Helmet',
+  })
+
+  assert.deepEqual(getBlueprintVisuals({ structuredData: { meta: { type: 'Dagger' } } }), {
+    category: 'Accessories',
+    type: 'Dagger',
+  })
+})
+
+test('buildDependencySummaryLine summarizes parent and child relationships', () => {
+  assert.equal(buildDependencySummaryLine({}), 'No dependency relation')
+  assert.equal(buildDependencySummaryLine({ isParentDependency: true }), 'Dependent')
+  assert.equal(buildDependencySummaryLine({ isChildDependency: true, dependentNames: ['Alpha', 'Beta'] }), 'Needed (2)')
+})
+
+test('buildBlueprintSummary combines progress, inventory, and dependency state', () => {
+  const summary = buildBlueprintSummary(
+    {
+      name: 'Alpha',
+      structuredData: {
+        upgrades: {
+          crafting: [{ name: 'Step 1' }, { name: 'Step 2' }, { name: 'Step 3' }, { name: 'Step 4' }, { name: 'Step 5' }],
+        },
+      },
+    },
+    { dependentsByComponent: new Map([['alpha', new Set(['Beta'])]]) },
+    {
+      getBlueprintProgressState: () => ({
+        owned: true,
+        master: true,
+        inventory: { superior: 2 },
+        collectionBook: { superior: true },
+      }),
+      calculateTotalInventory: () => 2,
+      getCollectionBookStatus: () => '✅ Complete',
+      getBlueprintMilestoneKeys: (blueprintName, entries) => entries.map((entry, index) => `${blueprintName}::crafting::${index}::${entry.name || 'Unlock'}`),
+      isTrackedUpgrade: () => true,
+      getBlueprintMaterials: () => ({ components: [{ name: 'Shard' }] }),
+    },
+  )
+
+  assert.equal(summary.isOwned, true)
+  assert.equal(summary.isMastered, true)
+  assert.equal(summary.isParentDependency, true)
+  assert.equal(summary.isChildDependency, true)
+  assert.equal(summary.totalInventory, 2)
+  assert.equal(summary.hasSuperiorOrBetterInventory, true)
+  assert.equal(summary.isCollectionComplete, true)
+  assert.equal(summary.collectionStatus, '✅ Complete')
+})

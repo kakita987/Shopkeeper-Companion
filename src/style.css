@@ -1646,9 +1646,14 @@ body.theme-dark .ad-banner-fallback,
 
 body.theme-dark .ad-banner-link,
 :root[data-theme='dark'] .ad-banner-link {
-  background: #dbc9a4;
-  border-color: rgba(203, 183, 141, 0.5);
-  color: #1f2937;
+  background: linear-gradient(180deg, #253242 0%, #1d2a3a 100%);
+  border-color: rgba(148, 163, 184, 0.45);
+  color: #e5e7eb;
+}
+
+body.theme-dark .ad-banner-link .kofi-link-text,
+:root[data-theme='dark'] .ad-banner-link .kofi-link-text {
+  color: #e5e7eb !important;
 }
 
 body.theme-dark .panel,

@@ -144,10 +144,10 @@ const CHARACTER_FULL = [
 ];
 
 // Tamas Day Character Pools
+// April 1st is Tamas Day.
+// Every option in this pool includes the name Tamas so the special-day gag stays consistent.
 
-const TAMAS_DAY_CHARACTERS = [
-  "Tamas",
-  
+const TAMAS_DAY_CHARACTERS = [  
   "Tamas the Blacksmith",
   "Tamas the Tailor",
   "Tamas the Engineer",
@@ -262,7 +262,7 @@ export function formatCharacterTitle(title, articleStyle = 'lower') {
 function isTamasDay() {
   const today = new Date();
 
-  // April 1st
+  // Tamas Day is fixed to April 1st.
   return today.getMonth() === 3 &&
          today.getDate() === 1;
 }
@@ -302,7 +302,7 @@ function formatRecipient(type, articleSetting = "default") {
 
 function getCharacter(format = "random", articleStyle = 'lower') {
 
-  // Tamas Day overrides normal character logic
+  // On Tamas Day, ignore the normal pools and only return Tamas-based NPC names.
   if (isTamasDay()) {
     return random(TAMAS_DAY_CHARACTERS);
   }
