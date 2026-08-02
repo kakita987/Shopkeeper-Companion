@@ -4,13 +4,15 @@ import { mountAdBanner } from './adBanner.js'
 import { getRandomTavernText } from './kofiText.js'
 import { useGoogleAuth } from './useGoogleAuth.js'
 import { ensureUserSyncSpreadsheet, getGoogleSyncErrorMessage, parseWorkbookBlueprintProgress, readSyncTables, writeSyncTables } from './googleSheetSync.js'
-import { getItem, setItem } from './storage.js'
+import { pickFolderFromDrive, pickSpreadsheetFromDrive } from './googleDrivePicker.js'
+import { getItem, setItem, removeItem } from './storage.js'
 import { getBlueprintStageValue, getBlueprintStageOptions } from './blueprintStageOptions.js'
 import { initSettingsUi, applyTheme as applySharedTheme, applyFontPreference as applySharedFontPreference, getStoredTheme as getSharedStoredTheme, getStoredFontPreference as getSharedStoredFontPreference } from './settingsUi.js'
 import { createIcons, Axe, BadgeAlert, BadgeHelp, BadgeInfo, BowArrow, CakeSlice, Candy, CandyCane, CircleDashed, Clover, Coffee, Crosshair, Diamond, Drumstick, FlaskConical, FlaskRound, Footprints, Gem, Hand, HandMetal, HardHat, HatGlasses, Leaf, MoonStar, Music2, Package, PackageOpen, PartyPopper, PillBottle, Pizza, Salad, ScrollText, Shield, Shirt, Sandwich, Sparkles, Swords, Sword, Target, UtensilsCrossed, Wand, WandSparkles, Apple, Fish, SunMedium, Cherry, Cookie } from 'lucide'
 
 const DEFAULT_SPREADSHEET_URL = 'https://playshoptitans.com/spreadsheet'
 const FALLBACK_GOOGLE_SHEET_URL = import.meta.env.VITE_BLUEPRINT_SHEET_URL || 'https://docs.google.com/spreadsheets/d/1WLa7X8h3O0-aGKxeAlCL7bnN8-FhGd3t7pz2RCzSg8c/edit'
+const GOOGLE_PICKER_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY || ''
 
 const CATEGORY_DEFINITIONS = [
   {
@@ -435,9 +437,9 @@ function renderGoogleAuthUi(state) {
 
   if (state.isAuthenticated) {
     const isSetupStep = googleSyncState.setupStep === 'choose-source' || googleSyncState.setupStep === 'enter-existing'
-    if (!googleSyncState.isReady && isSetupStep) {
+    if (isSetupStep) {
       const setupPrompt = googleSyncState.setupStep === 'choose-source'
-        ? 'Do you already have a Shopkeeper Companion sync sheet from another device?'
+        ? 'Choose where to connect your Shopkeeper Companion sync sheet from Google Drive.'
         : 'Paste your Google Sheet share link or file ID to connect your existing sync sheet.'
 
       const setupInputMarkup = googleSyncState.setupStep === 'enter-existing'
@@ -456,8 +458,10 @@ function renderGoogleAuthUi(state) {
         `
         : `
           <div class="auth-controls">
-            <button type="button" class="auth-button" data-auth-action="enter-existing">I already have a sync sheet</button>
-            <button type="button" class="auth-button auth-button-secondary" data-auth-action="create-new-sheet">Create new sheet</button>
+            <button type="button" class="auth-button" data-auth-action="pick-existing-sheet">Pick existing sheet</button>
+            <button type="button" class="auth-button auth-button-secondary" data-auth-action="enter-existing">Paste share link / file ID</button>
+            <button type="button" class="auth-button" data-auth-action="create-new-sheet">Create new sheet</button>
+            <button type="button" class="auth-button auth-button-secondary" data-auth-action="create-new-in-folder">Create new sheet in chosen folder</button>
           </div>
         `
 
@@ -481,6 +485,35 @@ function renderGoogleAuthUi(state) {
         googleSyncState.setupStep = 'enter-existing'
         googleSyncState.setupError = ''
         renderGoogleAuthUi(googleAuth.getState())
+      })
+
+      const pickExistingSheetButton = googleAuthContainer.querySelector('[data-auth-action="pick-existing-sheet"]')
+      pickExistingSheetButton?.addEventListener('click', async () => {
+        try {
+          googleSyncState.setupError = ''
+          googleSyncState.isSyncing = true
+          renderGoogleAuthUi(googleAuth.getState())
+
+          const pickedSheet = await pickSpreadsheetFromDrive({
+            accessToken: state.accessToken,
+            developerKey: GOOGLE_PICKER_API_KEY,
+          })
+
+          if (!pickedSheet?.id) {
+            return
+          }
+
+          googleSyncState.selectedSpreadsheetId = pickedSheet.id
+          await persistGoogleSyncSpreadsheetId(pickedSheet.id)
+          googleSyncState.setupStep = 'idle'
+          renderGoogleAuthUi(googleAuth.getState())
+          await initializeGoogleSync(state.accessToken, { preferredSpreadsheetId: pickedSheet.id, reason: 'recovery' })
+        } catch (error) {
+          googleSyncState.setupError = error?.message || 'Unable to open Google Drive Picker right now.'
+        } finally {
+          googleSyncState.isSyncing = false
+          renderGoogleAuthUi(googleAuth.getState())
+        }
       })
 
       const backToChoiceButton = googleAuthContainer.querySelector('[data-auth-action="back-to-choice"]')
@@ -516,6 +549,38 @@ function renderGoogleAuthUi(state) {
         await initializeGoogleSync(state.accessToken, { preferredSpreadsheetId: '', reason: 'new-user' })
       })
 
+      const createNewInFolderButton = googleAuthContainer.querySelector('[data-auth-action="create-new-in-folder"]')
+      createNewInFolderButton?.addEventListener('click', async () => {
+        try {
+          googleSyncState.setupError = ''
+          googleSyncState.isSyncing = true
+          renderGoogleAuthUi(googleAuth.getState())
+
+          const pickedFolder = await pickFolderFromDrive({
+            accessToken: state.accessToken,
+            developerKey: GOOGLE_PICKER_API_KEY,
+          })
+
+          if (!pickedFolder?.id) {
+            return
+          }
+
+          googleSyncState.selectedSpreadsheetId = ''
+          googleSyncState.setupStep = 'idle'
+          renderGoogleAuthUi(googleAuth.getState())
+          await initializeGoogleSync(state.accessToken, {
+            preferredSpreadsheetId: '',
+            reason: 'new-user',
+            targetFolderId: pickedFolder.id,
+          })
+        } catch (error) {
+          googleSyncState.setupError = error?.message || 'Unable to open Google Drive folder picker right now.'
+        } finally {
+          googleSyncState.isSyncing = false
+          renderGoogleAuthUi(googleAuth.getState())
+        }
+      })
+
       const signOutButton = googleAuthContainer.querySelector('[data-auth-action="sign-out"]')
       signOutButton?.addEventListener('click', async () => {
         await googleAuth.signOut()
@@ -532,6 +597,7 @@ function renderGoogleAuthUi(state) {
     googleAuthContainer.innerHTML = `
       <div class="auth-controls">
         <button type="button" class="auth-button" data-auth-action="sync-now" ${syncDisabled ? 'disabled' : ''}>${googleSyncState.isSyncing ? 'Syncing…' : 'Sync Now'}</button>
+        <button type="button" class="auth-button auth-button-secondary" data-auth-action="change-sync-sheet" ${googleSyncState.isSyncing ? 'disabled' : ''}>Change Sync Sheet</button>
         <button type="button" class="auth-button auth-button-secondary" data-auth-action="sign-out" ${signOutDisabled ? 'disabled' : ''}>Sign Out</button>
       </div>
       <p class="settings-copy sync-caption">${escapeHtml(syncLabel)}</p>
@@ -542,6 +608,14 @@ function renderGoogleAuthUi(state) {
     const syncNowButton = googleAuthContainer.querySelector('[data-auth-action="sync-now"]')
     syncNowButton?.addEventListener('click', async () => {
       await syncFromGoogleSheet()
+    })
+
+    const changeSyncSheetButton = googleAuthContainer.querySelector('[data-auth-action="change-sync-sheet"]')
+    changeSyncSheetButton?.addEventListener('click', () => {
+      googleSyncState.setupStep = 'choose-source'
+      googleSyncState.setupInput = ''
+      googleSyncState.setupError = ''
+      renderGoogleAuthUi(googleAuth.getState())
     })
 
     const signOutButton = googleAuthContainer.querySelector('[data-auth-action="sign-out"]')
@@ -616,18 +690,20 @@ async function initializeGoogleSync(accessToken, options = {}) {
     : preferredSpreadsheetId
       ? 'recovery'
       : 'new-user'
+  const targetFolderId = typeof options?.targetFolderId === 'string'
+    ? options.targetFolderId.trim()
+    : ''
 
   pendingGoogleSyncInitPromise = (async () => {
     try {
       googleSyncState.isSyncing = true
       googleSyncState.error = ''
-      googleSyncState.notice = preferredSpreadsheetId
-        ? 'Your Google Sync Sheet could not be found. A new backup sheet can be created in your Google Drive.'
-        : 'This app will create a new Google Sheet in your Google Drive to store your sync data.'
+      googleSyncState.notice = ''
       renderGoogleAuthUi(googleAuth.getState())
 
       const ensured = await ensureUserSyncSpreadsheet(accessToken, preferredSpreadsheetId, {
         reason: syncReason,
+        targetFolderId,
         confirmCreate: async (message) => {
           googleSyncState.notice = message
           renderGoogleAuthUi(googleAuth.getState())
@@ -795,9 +871,17 @@ async function syncFromGoogleSheet() {
   }
 
   try {
-    await initializeGoogleSync(authState.accessToken)
+    if (!googleSyncState.isReady || !googleSyncState.spreadsheetId) {
+      await initializeGoogleSync(authState.accessToken)
+    }
+
+    if (!googleSyncState.spreadsheetId) {
+      throw new Error('Google Sync Sheet is not connected yet.')
+    }
+
     googleSyncState.isSyncing = true
     googleSyncState.error = ''
+    googleSyncState.notice = ''
     renderGoogleAuthUi(authState)
 
     const remote = await readSyncTables(authState.accessToken, googleSyncState.spreadsheetId)

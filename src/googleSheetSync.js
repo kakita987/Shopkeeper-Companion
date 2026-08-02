@@ -1,4 +1,5 @@
 const SHEETS_API_BASE = 'https://sheets.googleapis.com/v4/spreadsheets'
+const DRIVE_API_BASE = 'https://www.googleapis.com/drive/v3/files'
 const README_SHEET_TITLE = 'ReadMe'
 const WORKBOOK_SHEET_TITLES = ['ReadMe', 'Weapons', 'Armor', 'Accessories', 'Enchantments', 'Saved Views', 'Settings']
 const BLUEPRINT_CATEGORY_TITLES = ['Weapons', 'Armor', 'Accessories', 'Enchantments']
@@ -418,6 +419,10 @@ async function requestSheetsApi(path, accessToken, options = {}) {
   return requestJsonApi(SHEETS_API_BASE, path, accessToken, options)
 }
 
+async function requestDriveApi(path, accessToken, options = {}) {
+  return requestJsonApi(DRIVE_API_BASE, path, accessToken, options)
+}
+
 function parseGoogleApiErrorPayload(error) {
   try {
     const message = error?.responseText || error?.message || ''
@@ -530,6 +535,34 @@ export async function createUserSyncSpreadsheet(accessToken, title = 'Shopkeeper
   return createdSpreadsheet
 }
 
+async function moveSpreadsheetToFolder(accessToken, spreadsheetId, folderId) {
+  const targetFolderId = String(folderId || '').trim()
+  if (!targetFolderId) {
+    return
+  }
+
+  const fileMetadata = await requestDriveApi(`/${spreadsheetId}?fields=id,parents`, accessToken)
+  const parents = Array.isArray(fileMetadata?.parents) ? fileMetadata.parents : []
+  const removeParents = parents.filter((parentId) => parentId !== targetFolderId).join(',')
+
+  const query = new URLSearchParams()
+  query.set('addParents', targetFolderId)
+  if (removeParents) {
+    query.set('removeParents', removeParents)
+  }
+  query.set('fields', 'id,parents')
+
+  await requestDriveApi(`/${spreadsheetId}?${query.toString()}`, accessToken, {
+    method: 'PATCH',
+  })
+}
+
+export async function createUserSyncSpreadsheetInFolder(accessToken, folderId, title = 'Shopkeeper Companion User Data') {
+  const createdSpreadsheet = await createUserSyncSpreadsheet(accessToken, title)
+  await moveSpreadsheetToFolder(accessToken, createdSpreadsheet.spreadsheetId, folderId)
+  return createdSpreadsheet
+}
+
 export function buildSpreadsheetUrl(spreadsheetId) {
   return `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`
 }
@@ -572,7 +605,10 @@ export async function resolveUserSyncSpreadsheet(accessToken, preferredSpreadshe
       }
     }
 
-    const createdSpreadsheet = await createUserSyncSpreadsheet(accessToken, 'Shopkeeper Companion User Data')
+    const targetFolderId = typeof options?.targetFolderId === 'string' ? options.targetFolderId.trim() : ''
+    const createdSpreadsheet = targetFolderId
+      ? await createUserSyncSpreadsheetInFolder(accessToken, targetFolderId, 'Shopkeeper Companion User Data')
+      : await createUserSyncSpreadsheet(accessToken, 'Shopkeeper Companion User Data')
     return {
       spreadsheetId: createdSpreadsheet.spreadsheetId,
       spreadsheetUrl: createdSpreadsheet.spreadsheetUrl || buildSpreadsheetUrl(createdSpreadsheet.spreadsheetId),
