@@ -1571,6 +1571,22 @@ body.theme-dark .item-name,
   align-items: center;
 }
 
+.google-sheet-input {
+  width: min(100%, 540px);
+  border: 1px solid rgba(15, 23, 42, 0.2);
+  border-radius: 10px;
+  padding: 9px 11px;
+  font: inherit;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+body.theme-dark .google-sheet-input,
+:root[data-theme='dark'] .google-sheet-input {
+  border-color: rgba(203, 213, 225, 0.3);
+  background: rgba(15, 23, 42, 0.6);
+}
+
 .auth-button {
   border: none;
   border-radius: 999px;

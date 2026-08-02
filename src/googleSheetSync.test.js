@@ -35,10 +35,37 @@ test('buildWorkbookPayload creates the requested sheet order and initializes blu
   assert.equal(getSyncWorkbookSchemaEntries()[0].title, 'ReadMe')
   assert.ok(Array.isArray(payload.Weapons))
   assert.equal(payload.Weapons[0][0], 'Blueprint Name')
+  assert.equal(payload.Weapons[0][1], 'Type')
   assert.equal(payload.Weapons[1][0], 'Test Sword')
+  assert.equal(payload.Weapons[1][1], 'Sword')
   assert.equal(payload.Weapons[1][payload.Weapons[0].indexOf('Owned')], 'TRUE')
   assert.equal(payload.Weapons[1][payload.Weapons[0].indexOf('Inventory Normal')], '2')
   assert.equal(payload.Weapons[1][payload.Weapons[0].indexOf('Collection Legendary')], 'TRUE')
+})
+
+test('buildWorkbookPayload includes imported blueprints even without any saved progress', () => {
+  const payload = buildWorkbookPayload({
+    settingsRows: [],
+    savedViewRows: [],
+    blueprintItems: [
+      {
+        name: 'Starter Sword',
+        classification: { category: 'Weapons', type: 'Sword' },
+        structuredData: { meta: { name: 'Starter Sword', type: 'Sword', tier: 1 } },
+      },
+      {
+        name: 'Wooden Shield',
+        classification: { category: 'Armor', type: 'Shield' },
+        structuredData: { meta: { name: 'Wooden Shield', type: 'Shield', tier: 1 } },
+      },
+    ],
+    blueprintProgressByName: {},
+  })
+
+  assert.equal(payload.Weapons.length, 2)
+  assert.equal(payload.Weapons[1][0], 'Starter Sword')
+  assert.equal(payload.Armor.length, 2)
+  assert.equal(payload.Armor[1][0], 'Wooden Shield')
 })
 
 test('parseWorkbookBlueprintProgress merges workbook rows by blueprint name and preserves existing progress', () => {
