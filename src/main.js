@@ -1,5 +1,4 @@
 import './style.css'
-import gearIcon from './assets/gearshape.fill.png'
 import { mountAdBanner } from './adBanner.js'
 import { getRandomTavernText } from './kofiText.js'
 import { useGoogleAuth } from './useGoogleAuth.js'
@@ -8,7 +7,9 @@ import { pickFolderFromDrive, pickSpreadsheetFromDrive } from './googleDrivePick
 import { getItem, setItem, removeItem } from './storage.js'
 import { getBlueprintStageValue, getBlueprintStageOptions } from './blueprintStageOptions.js'
 import { initSettingsUi, applyTheme as applySharedTheme, applyFontPreference as applySharedFontPreference, getStoredTheme as getSharedStoredTheme, getStoredFontPreference as getSharedStoredFontPreference } from './settingsUi.js'
-import { createIcons, Axe, BadgeAlert, BadgeHelp, BadgeInfo, BowArrow, CakeSlice, Candy, CandyCane, CircleDashed, Clover, Coffee, Crosshair, Diamond, Drumstick, FlaskConical, FlaskRound, Footprints, Gem, Hand, HandMetal, HardHat, HatGlasses, Leaf, MoonStar, Music2, Package, PackageOpen, PartyPopper, PillBottle, Pizza, Salad, ScrollText, Shield, Shirt, Sandwich, Sparkles, Swords, Sword, Target, UtensilsCrossed, Wand, WandSparkles, Apple, Fish, SunMedium, Cherry, Cookie } from 'lucide'
+import { SETTINGS_GEAR_ICON_MARKUP } from './settingsGearIcon.js'
+import { escapeHtml, cleanText } from './textUtils.js'
+import { createIcons, Axe, BadgeAlert, BadgeHelp, BadgeInfo, BowArrow, CakeSlice, CircleDashed, Crosshair, Diamond, Drumstick, FlaskConical, FlaskRound, Footprints, Gem, Hand, HandMetal, HardHat, HatGlasses, Leaf, MoonStar, Music2, PillBottle, Pizza, Salad, ScrollText, Shield, Shirt, Sparkles, Swords, Sword, Target, UtensilsCrossed, Wand, WandSparkles } from 'lucide'
 
 const DEFAULT_SPREADSHEET_URL = 'https://playshoptitans.com/spreadsheet'
 const FALLBACK_GOOGLE_SHEET_URL = import.meta.env.VITE_BLUEPRINT_SHEET_URL || 'https://docs.google.com/spreadsheets/d/1WLa7X8h3O0-aGKxeAlCL7bnN8-FhGd3t7pz2RCzSg8c/edit'
@@ -85,11 +86,7 @@ const LUCIDE_ICONS = {
   BadgeInfo,
   BowArrow,
   CakeSlice,
-  Candy,
-  CandyCane,
   CircleDashed,
-  Clover,
-  Coffee,
   Crosshair,
   Diamond,
   Drumstick,
@@ -104,16 +101,12 @@ const LUCIDE_ICONS = {
   Leaf,
   MoonStar,
   Music2,
-  Package,
-  PackageOpen,
-  PartyPopper,
   PillBottle,
   Pizza,
   Salad,
   ScrollText,
   Shield,
   Shirt,
-  Sandwich,
   Sparkles,
   Swords,
   Sword,
@@ -121,11 +114,6 @@ const LUCIDE_ICONS = {
   UtensilsCrossed,
   Wand,
   WandSparkles,
-  Apple,
-  Fish,
-  SunMedium,
-  Cherry,
-  Cookie,
 }
 
 app.innerHTML = `
@@ -148,7 +136,7 @@ app.innerHTML = `
       </nav>
 
       <button id="settings-toggle" class="settings-toggle" type="button" aria-label="Open settings" aria-expanded="false" aria-controls="settings-panel">
-        <img class="settings-toggle-icon" src="${gearIcon}" alt="" aria-hidden="true" />
+        ${SETTINGS_GEAR_ICON_MARKUP}
       </button>
     </header>
 
@@ -1270,12 +1258,13 @@ async function loadBlueprintCache() {
   }
 }
 
-function renderOverlaySectionCard(title, bodyMarkup, { hint = '', headerExtra = '', isOpen = true } = {}) {
+function renderOverlaySectionCard(title, bodyMarkup, { hint = '', headerExtra = '', isOpen = true, cardClass = '' } = {}) {
   // Each overlay card uses the same wrapper so the sections stay consistent while staying easy to tweak.
   const hintMarkup = hint ? `<span class="section-hint">${escapeHtml(hint)}</span>` : ''
+  const cardClassName = cardClass ? ` ${escapeHtml(cardClass)}` : ''
 
   return `
-    <div class="overlay-card">
+    <div class="overlay-card${cardClassName}">
       <details class="overlay-section" ${isOpen ? 'open' : ''}>
         <summary class="section-summary">
           <div class="section-summary-title">
@@ -1364,42 +1353,57 @@ function openBlueprintOverlay(item) {
   const collectionMarkup = renderCollectionSection(progress, owned)
 
   const headerMarkup = `
-    <div class="overlay-hero">
-      <div class="overlay-hero-background overlay-hero-symbol" aria-hidden="true">
-        <span class="icon-slot overlay-hero-icon"><i data-lucide="${escapeHtml(getCategoryIconName(visuals.category))}"></i></span>
-      </div>
-      <div class="overlay-hero-content">
-        <div class="overlay-icon-bubble">
-          <span class="icon-slot overlay-item-icon"><i data-lucide="${escapeHtml(getBlueprintItemIconName(item))}"></i></span>
+    <div class="overlay-top-layout">
+      <div class="overlay-hero">
+        <div class="overlay-hero-background overlay-hero-symbol" aria-hidden="true">
+          <span class="icon-slot overlay-hero-icon"><i data-lucide="${escapeHtml(getCategoryIconName(visuals.category))}"></i></span>
         </div>
-        <div>
-          <p class="overlay-eyebrow">${escapeHtml(`${visuals.category} > ${visuals.type || 'Blueprint'}`)}</p>
-          <h3 id="blueprint-overlay-title">${escapeHtml(item.name)}</h3>
-          <div class="overlay-meta-row">
-            <span class="overlay-tier-badge">Tier ${escapeHtml(tierValue)}</span>
+        <div class="overlay-hero-content">
+          <div class="overlay-visual-strip" aria-hidden="true">
+            <div class="overlay-visual-tile overlay-visual-category">
+              <span class="icon-slot overlay-visual-icon"><i data-lucide="${escapeHtml(getCategoryIconName(visuals.category))}"></i></span>
+            </div>
+            <div class="overlay-visual-tile overlay-visual-item">
+              <span class="icon-slot overlay-item-icon"><i data-lucide="${escapeHtml(getBlueprintItemIconName(item))}"></i></span>
+            </div>
           </div>
+          <div class="overlay-title-block">
+            <p class="overlay-eyebrow">${escapeHtml(visuals.category)} / ${escapeHtml(visuals.type || 'Blueprint')}</p>
+            <h3 id="blueprint-overlay-title">${escapeHtml(item.name)}</h3>
+            <div class="overlay-meta-row">
+              <span class="overlay-tier-badge">Tier ${escapeHtml(tierValue)}</span>
+              <span class="overlay-group-badge">${escapeHtml(visuals.category)}</span>
+            </div>
+          </div>
+          <label class="owned-toggle overlay-owned-toggle">
+            <input class="tracking-checkbox owned-checkbox" type="checkbox" data-blueprint-name="${escapeHtml(item.name)}" ${owned ? 'checked' : ''} />
+            <span>Owned</span>
+          </label>
         </div>
       </div>
     </div>
   `
 
   const overviewCardsMarkup = `
-    <div class="overlay-grid">
+    <div class="overlay-top-panels">
       ${renderOverlaySectionCard('Quick look', `<ul class="info-list">
+        <li><strong>Status</strong> ${owned ? 'Owned' : 'Not owned'}</li>
         <li><strong>Total inventory</strong> ${escapeHtml(totalInventory)}</li>
         <li><strong>Collection</strong> ${escapeHtml(collectionStatus || 'Not started')}</li>
-      </ul>`)}
-      ${renderOverlaySectionCard('Stats', `<div class="info-grid">${statsMarkup}</div>`)}
+        <li><strong>Unlock requirement</strong> ${escapeHtml(unlockPrerequisite || '—')}</li>
+      </ul>`, {
+        cardClass: 'overlay-card-quick-look',
+      })}
+      ${renderOverlaySectionCard('Stats', `<div class="info-grid">${statsMarkup}</div>`, {
+        cardClass: 'overlay-card-stats',
+      })}
+      ${renderOverlaySectionCard('Materials', `<div class="material-grid">${materialsMarkup}</div>`, {
+        cardClass: 'overlay-card-materials',
+      })}
     </div>
   `
 
   const detailCardsMarkup = [
-    renderOverlaySectionCard('Materials', `<div class="material-grid">${materialsMarkup}</div>`, {
-      headerExtra: `<label class="owned-toggle">
-        <input class="tracking-checkbox owned-checkbox" type="checkbox" data-blueprint-name="${escapeHtml(item.name)}" ${owned ? 'checked' : ''} />
-        <span>Owned</span>
-      </label>`,
-    }),
     renderOverlaySectionCard('Inventory', `<div class="inventory-grid">${inventoryMarkup}</div>`, {
       hint: 'Counts',
     }),
@@ -1418,6 +1422,7 @@ function openBlueprintOverlay(item) {
 
   blueprintOverlay.classList.add('is-open')
   blueprintOverlay.setAttribute('aria-hidden', 'false')
+  document.body.classList.add('blueprint-overlay-open')
 }
 
 function renderStatsCards(stats = {}) {
@@ -2486,6 +2491,7 @@ function formatValue(value) {
 function closeBlueprintOverlay() {
   blueprintOverlay.classList.remove('is-open')
   blueprintOverlay.setAttribute('aria-hidden', 'true')
+  document.body.classList.remove('blueprint-overlay-open')
   blueprintOverlayContent.innerHTML = ''
 }
 
@@ -2497,15 +2503,6 @@ function getBlueprintVisuals(item) {
     category,
     type,
   }
-}
-
-function escapeHtml(value) {
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
 }
 
 function applyTheme(theme, options = {}) {
@@ -3041,19 +3038,6 @@ function convertBlueprintRowToObject(headers, row) {
   })
 
   return blueprint
-}
-
-function cleanText(value) {
-  if (value === null || value === undefined) {
-    return ''
-  }
-
-  const text = String(value).trim()
-  if (!text || text === '---') {
-    return ''
-  }
-
-  return text
 }
 
 function isMeaningfulValue(value) {

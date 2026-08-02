@@ -1,3 +1,5 @@
+import { cleanText } from './textUtils.js'
+
 const SHEETS_API_BASE = 'https://sheets.googleapis.com/v4/spreadsheets'
 const DRIVE_API_BASE = 'https://www.googleapis.com/drive/v3/files'
 const README_SHEET_TITLE = 'ReadMe'
@@ -75,19 +77,6 @@ function toInventoryCount(value) {
   }
 
   return parsed
-}
-
-function cleanText(value) {
-  if (value === null || value === undefined) {
-    return ''
-  }
-
-  const text = String(value).trim()
-  if (!text || text === '---') {
-    return ''
-  }
-
-  return text
 }
 
 function parseBooleanCell(value) {
@@ -612,6 +601,7 @@ export async function resolveUserSyncSpreadsheet(accessToken, preferredSpreadshe
     return {
       spreadsheetId: createdSpreadsheet.spreadsheetId,
       spreadsheetUrl: createdSpreadsheet.spreadsheetUrl || buildSpreadsheetUrl(createdSpreadsheet.spreadsheetId),
+      created: true,
     }
   }
 
@@ -629,6 +619,7 @@ export async function resolveUserSyncSpreadsheet(accessToken, preferredSpreadshe
       return {
         spreadsheetId: candidate.spreadsheetId,
         spreadsheetUrl: candidate.spreadsheetUrl || buildSpreadsheetUrl(candidate.spreadsheetId),
+        created: false,
       }
     }
   } catch (error) {
@@ -644,7 +635,9 @@ export async function ensureUserSyncSpreadsheet(accessToken, preferredSpreadshee
   let spreadsheet = await resolveUserSyncSpreadsheet(accessToken, preferredSpreadsheetId, options)
 
   try {
-    const readmeSheetId = await ensureSheetsAndHeaders(accessToken, spreadsheet.spreadsheetId)
+    const readmeSheetId = await ensureSheetsAndHeaders(accessToken, spreadsheet.spreadsheetId, {
+      trimUnusedColumns: Boolean(spreadsheet?.created),
+    })
 
     return {
       spreadsheetId: spreadsheet.spreadsheetId,
@@ -657,7 +650,9 @@ export async function ensureUserSyncSpreadsheet(accessToken, preferredSpreadshee
     }
 
     spreadsheet = await resolveUserSyncSpreadsheet(accessToken, '', options)
-    const readmeSheetId = await ensureSheetsAndHeaders(accessToken, spreadsheet.spreadsheetId)
+    const readmeSheetId = await ensureSheetsAndHeaders(accessToken, spreadsheet.spreadsheetId, {
+      trimUnusedColumns: Boolean(spreadsheet?.created),
+    })
 
     return {
       spreadsheetId: spreadsheet.spreadsheetId,
@@ -667,9 +662,68 @@ export async function ensureUserSyncSpreadsheet(accessToken, preferredSpreadshee
   }
 }
 
-export async function ensureSheetsAndHeaders(accessToken, spreadsheetId) {
+function getWorkbookTargetColumnCounts() {
+  const schemaEntries = getSyncWorkbookSchemaEntries()
+  const countsByTitle = {
+    [README_SHEET_TITLE]: 1,
+  }
+
+  schemaEntries.forEach((schema) => {
+    if (!schema?.title || schema.title === README_SHEET_TITLE) {
+      return
+    }
+
+    countsByTitle[schema.title] = Array.isArray(schema.headers) && schema.headers.length
+      ? schema.headers.length
+      : 1
+  })
+
+  return countsByTitle
+}
+
+async function trimWorkbookColumns(accessToken, spreadsheetId, sheets = []) {
+  const targetColumnCounts = getWorkbookTargetColumnCounts()
+  const requests = sheets
+    .map((sheet) => {
+      const title = sheet?.properties?.title
+      const sheetId = sheet?.properties?.sheetId
+      const currentColumnCount = sheet?.properties?.gridProperties?.columnCount
+      const targetColumnCount = targetColumnCounts[title]
+
+      if (typeof sheetId !== 'number' || typeof targetColumnCount !== 'number' || typeof currentColumnCount !== 'number') {
+        return null
+      }
+
+      if (currentColumnCount <= targetColumnCount) {
+        return null
+      }
+
+      return {
+        deleteDimension: {
+          range: {
+            sheetId,
+            dimension: 'COLUMNS',
+            startIndex: targetColumnCount,
+            endIndex: currentColumnCount,
+          },
+        },
+      }
+    })
+    .filter(Boolean)
+
+  if (!requests.length) {
+    return
+  }
+
+  await requestSheetsApi(`/${spreadsheetId}:batchUpdate`, accessToken, {
+    method: 'POST',
+    body: JSON.stringify({ requests }),
+  })
+}
+
+export async function ensureSheetsAndHeaders(accessToken, spreadsheetId, options = {}) {
   const spreadsheet = await requestSheetsApi(
-    `/${spreadsheetId}?fields=sheets(properties(sheetId,title,index))`,
+    `/${spreadsheetId}?fields=sheets(properties(sheetId,title,index,gridProperties(columnCount)))`,
     accessToken
   )
   const sheets = spreadsheet?.sheets || []
@@ -693,7 +747,7 @@ export async function ensureSheetsAndHeaders(accessToken, spreadsheetId) {
   }
 
   const refreshedSpreadsheet = await requestSheetsApi(
-    `/${spreadsheetId}?fields=sheets(properties(sheetId,title,index))`,
+    `/${spreadsheetId}?fields=sheets(properties(sheetId,title,index,gridProperties(columnCount)))`,
     accessToken
   )
   const refreshedSheets = refreshedSpreadsheet?.sheets || []
@@ -771,6 +825,10 @@ export async function ensureSheetsAndHeaders(accessToken, spreadsheetId) {
       )
     }
   }))
+
+  if (options?.trimUnusedColumns) {
+    await trimWorkbookColumns(accessToken, spreadsheetId, refreshedSheets)
+  }
 
   return readmeSheetId
 }
