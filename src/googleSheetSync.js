@@ -348,7 +348,6 @@ function buildBlueprintWorkbookRows(blueprintItems = [], blueprintProgressByName
 function buildWorkbookPayload(options = {}) {
   const settingsRows = Array.isArray(options?.settingsRows) ? options.settingsRows : []
   const savedViewRows = Array.isArray(options?.savedViewRows) ? options.savedViewRows : []
-  const trackedUpgradeRows = Array.isArray(options?.trackedUpgradeRows) ? options.trackedUpgradeRows : []
   const blueprintItems = Array.isArray(options?.blueprintItems) ? options.blueprintItems : []
   const blueprintProgressByName = options?.blueprintProgressByName && typeof options.blueprintProgressByName === 'object'
     ? options.blueprintProgressByName
@@ -784,7 +783,6 @@ export async function writeSyncTables(accessToken, spreadsheetId, tablesByKey) {
   const workbookPayload = buildWorkbookPayload({
     settingsRows: Array.isArray(tablesByKey?.settings) ? tablesByKey.settings : [],
     savedViewRows: Array.isArray(tablesByKey?.savedViews) ? tablesByKey.savedViews : [],
-    trackedUpgradeRows: Array.isArray(tablesByKey?.trackedUpgrades) ? tablesByKey.trackedUpgrades : [],
     blueprintItems: Array.isArray(tablesByKey?.blueprintItems) ? tablesByKey.blueprintItems : [],
     blueprintProgressByName: tablesByKey?.blueprintProgressByName && typeof tablesByKey.blueprintProgressByName === 'object'
       ? tablesByKey.blueprintProgressByName
