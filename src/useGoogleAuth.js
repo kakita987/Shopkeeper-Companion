@@ -1,7 +1,6 @@
 const GOOGLE_IDENTITY_SCRIPT = 'https://accounts.google.com/gsi/client'
-const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets'
 const DRIVE_FILE_SCOPE = 'https://www.googleapis.com/auth/drive.file'
-const GOOGLE_AUTH_SCOPES = `${SHEETS_SCOPE} ${DRIVE_FILE_SCOPE}`
+const GOOGLE_AUTH_SCOPES = DRIVE_FILE_SCOPE
 const MISSING_CLIENT_ID_MESSAGE = 'Google sign-in is not configured for this deployment. Set VITE_GOOGLE_CLIENT_ID in your production environment.'
 
 let gisScriptPromise = null
