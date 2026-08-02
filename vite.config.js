@@ -75,7 +75,8 @@ export default defineConfig({
 
             res.statusCode = response.status
             response.headers.forEach((value, key) => {
-              if (key === 'content-length') {
+              // fetch() already decompresses the body, so drop headers describing the original transfer encoding.
+              if (key === 'content-length' || key === 'content-encoding' || key === 'transfer-encoding') {
                 return
               }
               res.setHeader(key, value)

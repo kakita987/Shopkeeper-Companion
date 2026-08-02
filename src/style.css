@@ -1712,8 +1712,20 @@ body.theme-dark .item-name,
   font-size: 1rem;
 }
 
+.settings-section--inline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.settings-section--inline h3 {
+  margin: 0;
+  flex-shrink: 0;
+}
+
 .font-select {
-  width: 100%;
+  width: auto;
   border: 1px solid #cbd5e1;
   border-radius: 12px;
   padding: 9px 38px 9px 12px;
@@ -2237,6 +2249,27 @@ body.theme-dark .group-count,
   cursor: pointer;
   font-weight: 700;
   color: #374151;
+}
+
+.advanced-sync-details > summary {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+}
+
+.advanced-sync-details {
+  margin-top: 14px;
+}
+
+.advanced-sync-toggle-icon {
+  display: inline-block;
+  transform: rotate(180deg);
+  transition: transform 0.15s ease;
+}
+
+.advanced-sync-details[open] > summary .advanced-sync-toggle-icon {
+  transform: rotate(90deg);
 }
 
 .inline-link {

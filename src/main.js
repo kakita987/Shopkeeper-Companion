@@ -170,7 +170,7 @@ app.innerHTML = `
           <button id="close-settings" class="close-settings" type="button" aria-label="Close settings">×</button>
         </div>
 
-        <section class="settings-section">
+        <section class="settings-section settings-section--inline">
           <h3>Theme</h3>
           <div class="theme-options">
             <label><input type="radio" name="theme" value="light" /> Light</label>
@@ -179,7 +179,7 @@ app.innerHTML = `
           </div>
         </section>
 
-        <section class="settings-section">
+        <section class="settings-section settings-section--inline">
           <h3>Font</h3>
           <select id="font-select" class="font-select" aria-label="Font style">
             <option value="default">Aesthetic (Default)</option>
@@ -189,22 +189,19 @@ app.innerHTML = `
         </section>
 
         <section class="settings-section">
-          <h3>Google Sync Sign-In</h3>
-          <p class="settings-copy">Sign in to sync your companion progress data automatically while you use the app.</p>
-          <p class="settings-copy">This is separate from the blueprint library import below.</p>
+          <h3>Sync your progress with Google Sheets</h3>
           <div id="google-auth" class="google-auth"></div>
           <details class="attribution-details advanced-sync-details">
-            <summary>Advanced: Bulk Edit in Google Sheets</summary>
-            <p class="settings-copy">The app is the primary experience. If you want spreadsheet-style bulk edits, open Google Drive and find the file named <strong>Shopkeeper Companion User Data</strong>.</p>
-            <p class="settings-copy">Edit values in the data tabs, then use <strong>Sync Now</strong> in this Settings panel to load those changes back into the app.</p>
-            <p class="settings-copy">Keep data-tab headers unchanged so sync can parse rows correctly.</p>
+            <summary>Why Google Sheets? <span class="advanced-sync-toggle-icon" aria-hidden="true">▶</span></summary>
+            <p class="settings-copy">Your progress is stored in a Google Sheet named <strong>Shopkeeper Companion User Data</strong> in your Drive, so it's always yours and easy to back up or inspect.</p>
+            <p class="settings-copy">As a bonus, you can edit values directly in the sheet, then hit <strong>Sync Now</strong> to bring those changes into the app.</p>
+            <p class="settings-copy"><a class="inline-link" href="/bulk-edit.html" target="_blank" rel="noopener noreferrer">Read the full Google Sync guide</a></p>
           </details>
         </section>
 
         <section class="settings-section">
           <h3>Blueprint Import</h3>
           <p class="settings-copy">Import the latest blueprints from the developer spreadsheet when the library needs to be refreshed.</p>
-          <p class="settings-copy">This does not replace your Google user-progress sync.</p>
           <p id="blueprint-version" class="settings-copy blueprint-version"></p>
 
           <form id="import-form" class="import-form compact-form">
@@ -1199,7 +1196,11 @@ function renderBlueprintEmptyState(message = 'No blueprint data available yet.')
 
 async function fetchSpreadsheetVersionLabel(resolvedUrl) {
   try {
-    const response = await fetch(resolvedUrl, { redirect: 'follow' })
+    // Fetching docs.google.com directly from the browser is blocked by CORS, so route through the dev proxy.
+    const requestUrl = import.meta.env.DEV
+      ? `/api/spreadsheet?url=${encodeURIComponent(resolvedUrl)}`
+      : resolvedUrl
+    const response = await fetch(requestUrl, { redirect: 'follow' })
     if (!response.ok) {
       return ''
     }
