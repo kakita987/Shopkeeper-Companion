@@ -39,7 +39,6 @@ export function useGoogleAuth({ clientId }) {
   const listeners = new Set()
   let tokenClient = null
   let pendingSignIn = null
-  let idApiReady = false
   let initializePromise = null
 
   const state = {

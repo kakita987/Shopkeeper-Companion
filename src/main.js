@@ -1,10 +1,12 @@
 import './style.css'
+import gearIcon from './assets/gearshape.fill.png'
 import { mountAdBanner } from './adBanner.js'
 import { getRandomTavernText } from './kofiText.js'
 import { useGoogleAuth } from './useGoogleAuth.js'
 import { ensureUserSyncSpreadsheet, getGoogleSyncErrorMessage, parseWorkbookBlueprintProgress, readSyncTables, writeSyncTables } from './googleSheetSync.js'
 import { getItem, setItem } from './storage.js'
 import { getBlueprintStageValue, getBlueprintStageOptions } from './blueprintStageOptions.js'
+import { initSettingsUi, applyTheme as applySharedTheme, applyFontPreference as applySharedFontPreference, getStoredTheme as getSharedStoredTheme, getStoredFontPreference as getSharedStoredFontPreference } from './settingsUi.js'
 import { createIcons, Axe, BadgeAlert, BadgeHelp, BadgeInfo, BowArrow, CakeSlice, Candy, CandyCane, CircleDashed, Clover, Coffee, Crosshair, Diamond, Drumstick, FlaskConical, FlaskRound, Footprints, Gem, Hand, HandMetal, HardHat, HatGlasses, Leaf, MoonStar, Music2, Package, PackageOpen, PartyPopper, PillBottle, Pizza, Salad, ScrollText, Shield, Shirt, Sandwich, Sparkles, Swords, Sword, Target, UtensilsCrossed, Wand, WandSparkles, Apple, Fish, SunMedium, Cherry, Cookie } from 'lucide'
 
 const DEFAULT_SPREADSHEET_URL = 'https://playshoptitans.com/spreadsheet'
@@ -67,8 +69,6 @@ const STARTER_VIEW_PRESETS = [
 const TRACKED_UPGRADES_STORAGE_KEY = 'shopkeeper-tracked-upgrades'
 const BLUEPRINT_PROGRESS_STORAGE_KEY = 'shopkeeper-blueprint-progress'
 const SAVED_FILTER_VIEWS_STORAGE_KEY = 'shopkeeper-saved-filter-views'
-const FONT_PREFERENCE_STORAGE_KEY = 'shopkeeper-font-preference'
-const THEME_PREFERENCE_STORAGE_KEY = 'shopkeeper-theme'
 const BLUEPRINT_CACHE_STORAGE_KEY = 'shopkeeper-blueprint-cache-v1'
 const GOOGLE_SYNC_SPREADSHEET_ID_STORAGE_KEY = 'shopkeeper-google-sync-spreadsheet-id'
 const GOOGLE_SYNC_WRITE_DEBOUNCE_MS = 900
@@ -144,7 +144,9 @@ app.innerHTML = `
         <button class="top-tab" type="button" data-view="saved-views">Saved Views</button>
       </nav>
 
-      <button id="settings-toggle" class="settings-toggle" type="button" aria-label="Open settings" aria-expanded="false" aria-controls="settings-panel">⚙</button>
+      <button id="settings-toggle" class="settings-toggle" type="button" aria-label="Open settings" aria-expanded="false" aria-controls="settings-panel">
+        <img class="settings-toggle-icon" src="${gearIcon}" alt="" aria-hidden="true" />
+      </button>
     </header>
 
     <div class="view-shell">
@@ -308,6 +310,7 @@ let savedViewCriteria = {
   ...DEFAULT_SAVED_VIEW_CRITERIA,
 }
 let activeSavedViewPreset = 'custom'
+let savedViewDraftName = ''
 let pendingGoogleSyncWriteTimer = null
 let pendingGoogleSyncInitPromise = null
 let isApplyingRemoteSyncState = false
@@ -325,54 +328,19 @@ const googleSyncState = {
 }
 const googleAuth = useGoogleAuth({ clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID })
 
-function openSettings() {
-  settingsPanel.classList.add('is-open')
-  settingsPanel.setAttribute('aria-hidden', 'false')
-  settingsToggle.setAttribute('aria-expanded', 'true')
-  document.body.classList.add('settings-open')
-}
-
-function closeSettings() {
-  settingsPanel.classList.remove('is-open')
-  settingsPanel.setAttribute('aria-hidden', 'true')
-  settingsToggle.setAttribute('aria-expanded', 'false')
-  document.body.classList.remove('settings-open')
-}
-
-settingsToggle.addEventListener('click', () => {
-  if (settingsPanel.classList.contains('is-open')) {
-    closeSettings()
-  } else {
-    openSettings()
-  }
-})
-
-closeSettingsButton.addEventListener('click', closeSettings)
-settingsPanel.addEventListener('click', (event) => {
-  if (event.target === settingsPanel) {
-    closeSettings()
-  }
-})
-
-document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') {
-    if (settingsPanel.classList.contains('is-open')) {
-      closeSettings()
-    } else if (blueprintOverlay.classList.contains('is-open')) {
+const { closeSettings } = initSettingsUi({
+  settingsToggle,
+  settingsPanel,
+  closeSettingsButton,
+  themeInputs,
+  fontSelect,
+  onThemeChange: (nextTheme) => applyTheme(nextTheme),
+  onFontChange: (nextFont) => applyFontPreference(nextFont),
+  onEscape: () => {
+    if (blueprintOverlay.classList.contains('is-open')) {
       closeBlueprintOverlay()
     }
-  }
-})
-
-themeInputs.forEach((input) => {
-  input.addEventListener('change', () => {
-    applyTheme(input.value)
-  })
-})
-
-fontSelect.addEventListener('change', (event) => {
-  const target = event.currentTarget
-  applyFontPreference(target.value)
+  },
 })
 
 topTabs.forEach((tab) => {
@@ -773,7 +741,7 @@ function parseCollectionBookCriteria(value) {
   try {
     const parsed = JSON.parse(raw)
     return Array.isArray(parsed) ? parsed : []
-  } catch (error) {
+  } catch {
     return raw.split(',').map((entry) => cleanText(entry.toLowerCase())).filter(Boolean)
   }
 }
@@ -788,7 +756,7 @@ function parseTrackedUpgradeRows(settings = {}) {
     try {
       const parsed = JSON.parse(raw)
       return Array.isArray(parsed) ? parsed.filter(Boolean) : []
-    } catch (error) {
+    } catch {
       return []
     }
   }
@@ -1154,7 +1122,6 @@ function renderUpgradeSection(upgrades = {}, blueprintName = '', progress = {}, 
     { key: 'ascension', stageKey: 'ascension', label: 'Ascension' },
     { key: 'transcendence', stageKey: 'transcendence', label: 'Transcendence' },
   ]
-  const stageOrder = ['milestones', 'starforge', 'ascension', 'transcendence']
 
   const markup = groups.map(({ key, stageKey, label }) => {
     const entries = Array.isArray(upgrades[key]) ? upgrades[key] : []
@@ -1165,10 +1132,6 @@ function renderUpgradeSection(upgrades = {}, blueprintName = '', progress = {}, 
 
     const stageValue = getBlueprintStageValue(progress, stageKey)
     const options = getBlueprintStageOptions(stageKey, progress, entries)
-    const stageIndex = stageOrder.indexOf(stageKey)
-    const previousStageKey = stageIndex > 0 ? stageOrder[stageIndex - 1] : null
-    const previousStageValue = previousStageKey ? getBlueprintStageValue(progress, previousStageKey) : 0
-    const isLocked = !owned || (previousStageKey && previousStageValue < 1)
 
     return `
       <div class="upgrade-group ${owned ? '' : 'is-locked'}">
@@ -1265,9 +1228,9 @@ function renderSavedViews(items = []) {
               <span>Dependency</span>
               <select data-saved-filter="dependency">
                 ${renderSelectOptions([
-                  ['any', 'Any'],
-                  ['parent', 'Dependent'],
-                  ['child', 'Needed'],
+                  ['any', 'Any Status'],
+                  ['parent', 'Dependent On'],
+                  ['child', 'Needed For'],
                 ], savedViewCriteria.dependency)}
               </select>
             </label>
@@ -1275,7 +1238,7 @@ function renderSavedViews(items = []) {
               <span>Ownership</span>
               <select data-saved-filter="ownership">
                 ${renderSelectOptions([
-                  ['any', 'Any'],
+                  ['any', 'Any Status'],
                   ['owned', 'Owned'],
                   ['not-owned', 'Not owned'],
                 ], savedViewCriteria.ownership)}
@@ -1287,7 +1250,7 @@ function renderSavedViews(items = []) {
                 ${renderSelectOptions([
                   ['any', 'Any Status'],
                   ['has', 'Has Inventory'],
-                  ['none', 'Inventory = 0'],
+                  ['superior-or-better', 'Superior or Better'],
                 ], savedViewCriteria.inventory)}
               </select>
             </label>
@@ -1308,8 +1271,8 @@ function renderSavedViews(items = []) {
                 <div class="saved-view-match-radios" role="radiogroup" aria-label="Collection Book match state">
                   ${[
                     ['completed', 'Completed', 'Completed checks finished qualities'],
-                    ['needed', 'Still Needed', 'Still Needed checks missing ones'],
-                  ].map(([value, label, description]) => `
+                    ['needed', 'Still Needed', 'Still Needed checks missing qualities'],
+                  ].map(([value, label]) => `
                     <label class="saved-view-match-option">
                       <input
                         type="radio"
@@ -1322,9 +1285,9 @@ function renderSavedViews(items = []) {
                     </label>
                   `).join('')}
                 </div>
-              </div>
-              <div class="saved-view-match-description">
-                ${getCollectionBookMatchDescription(savedViewCriteria.collectionBookState)}
+                <div class="saved-view-match-description">
+                  ${getCollectionBookMatchDescription(savedViewCriteria.collectionBookState)}
+                </div>
               </div>
               <div class="collection-book-options">
                 ${renderCollectionBookFilterOptions(savedViewCriteria.collectionBook)}
@@ -1332,8 +1295,9 @@ function renderSavedViews(items = []) {
             </fieldset>
           </div>
           <form class="saved-view-save-row" data-save-view-form>
-            <input type="text" maxlength="60" placeholder="View Name (e.g. Not Owned + Dependents)" data-saved-view-name />
-            <button type="submit" class="saved-view-save-button">Save New View</button>
+            <input type="text" maxlength="60" placeholder="View Name (e.g. Not Owned + Dependents)" value="${escapeHtml(savedViewDraftName)}" data-saved-view-name />
+            <button type="submit" class="saved-view-save-button">Save View</button>
+            <p class="saved-view-save-error" data-save-view-error aria-live="polite"></p>
           </form>
         </div>
       </details>
@@ -1511,16 +1475,48 @@ function bindSavedViewControls(items = []) {
 
   const saveViewForm = savedViewsContentEl.querySelector('[data-save-view-form]')
   if (saveViewForm) {
+    const nameInput = savedViewsContentEl.querySelector('[data-saved-view-name]')
+    nameInput?.addEventListener('input', (event) => {
+      const target = event.currentTarget
+      savedViewDraftName = target?.value || ''
+    })
+
     saveViewForm.addEventListener('submit', (event) => {
       event.preventDefault()
-      const nameInput = savedViewsContentEl.querySelector('[data-saved-view-name]')
+      const saveErrorEl = savedViewsContentEl.querySelector('[data-save-view-error]')
       const nextName = cleanText(nameInput?.value)
+      const hasName = Boolean(nextName)
+      const hasSelectedFilter = hasActiveSavedViewFilters(savedViewCriteria)
 
-      if (!nextName) {
+      if (saveErrorEl) {
+        saveErrorEl.textContent = ''
+      }
+
+      if (!hasName && !hasSelectedFilter) {
+        if (saveErrorEl) {
+          saveErrorEl.textContent = 'Add a name so you can recognize this view later, and select at least one filter before saving a view.'
+        }
+        nameInput?.focus()
+        return
+      }
+
+      if (!hasName) {
+        if (saveErrorEl) {
+          saveErrorEl.textContent = 'Add a name so you can recognize this view later.'
+        }
+        nameInput?.focus()
+        return
+      }
+
+      if (!hasSelectedFilter) {
+        if (saveErrorEl) {
+          saveErrorEl.textContent = 'Select at least one filter before saving a view.'
+        }
         return
       }
 
       const savedView = saveCurrentFilterAsView(nextName)
+      savedViewDraftName = ''
       activeSavedViewPreset = `saved:${savedView.id}`
       renderSavedViews(items)
     })
@@ -1602,7 +1598,7 @@ function renderSelectOptions(options = [], selectedValue = 'any') {
 
 function getCollectionBookMatchDescription(state = 'completed') {
   return state === 'needed'
-    ? 'Still Needed checks missing ones.'
+    ? 'Still Needed checks missing qualities.'
     : 'Completed checks finished qualities.'
 }
 
@@ -1633,11 +1629,20 @@ function normalizeSavedViewCriteria(criteria = {}) {
   return {
     dependency: ['any', 'parent', 'child'].includes(criteria.dependency) ? criteria.dependency : 'any',
     ownership: ['owned', 'not-owned', 'any'].includes(criteria.ownership) ? criteria.ownership : 'any',
-    inventory: ['any', 'has', 'none'].includes(criteria.inventory) ? criteria.inventory : 'any',
+    inventory: ['any', 'has', 'superior-or-better'].includes(criteria.inventory) ? criteria.inventory : 'any',
     mastered: ['any', 'mastered', 'not-mastered'].includes(criteria.mastered) ? criteria.mastered : 'any',
     collectionBookState: ['completed', 'needed'].includes(criteria.collectionBookState) ? criteria.collectionBookState : 'completed',
     collectionBook: collectionBook.filter((value) => ['superior', 'flawless', 'epic', 'legendary'].includes(String(value).toLowerCase())),
   }
+}
+
+function hasActiveSavedViewFilters(criteria = {}) {
+  const normalizedCriteria = normalizeSavedViewCriteria(criteria)
+  return normalizedCriteria.dependency !== 'any'
+    || normalizedCriteria.ownership !== 'any'
+    || normalizedCriteria.inventory !== 'any'
+    || normalizedCriteria.mastered !== 'any'
+    || normalizedCriteria.collectionBook.length > 0
 }
 
 function buildDependencyIndex(items = []) {
@@ -1691,7 +1696,7 @@ function filterBlueprintItems(items = [], criteria = {}, dependencyIndex) {
       return false
     }
 
-    if (normalizedCriteria.inventory === 'none' && summary.hasInventory) {
+    if (normalizedCriteria.inventory === 'superior-or-better' && !summary.hasSuperiorOrBetterInventory) {
       return false
     }
 
@@ -1740,6 +1745,8 @@ function buildBlueprintSummary(item, dependencyIndex) {
   const allCollectionQualities = ['superior', 'flawless', 'epic', 'legendary']
   const collectionBookNeededQualities = allCollectionQualities.filter((quality) => !collectionBookQualities.includes(quality))
 
+  const hasSuperiorOrBetterInventory = INVENTORY_QUALITY_KEYS.slice(1).some((qualityKey) => toInventoryCount(blueprintState.inventory?.[qualityKey]) > 0)
+
   return {
     isOwned: Boolean(progress.owned),
     isMastered,
@@ -1747,6 +1754,7 @@ function buildBlueprintSummary(item, dependencyIndex) {
     isChildDependency: dependentNames.length > 0,
     dependentNames,
     hasInventory: totalInventory > 0,
+    hasSuperiorOrBetterInventory,
     totalInventory,
     isCollectionComplete: collectionStatus === '✅ Complete',
     collectionStatus,
@@ -2139,19 +2147,7 @@ function escapeHtml(value) {
 
 function applyTheme(theme, options = {}) {
   const skipSync = Boolean(options.skipSync)
-  const resolvedTheme = theme === 'light' || theme === 'dark' ? theme : 'device'
-  const isDark = resolvedTheme === 'dark' || (resolvedTheme === 'device' && window.matchMedia('(prefers-color-scheme: dark)').matches)
-
-  document.documentElement.dataset.theme = resolvedTheme
-  document.body.classList.toggle('theme-dark', isDark)
-  document.body.classList.toggle('theme-light', !isDark)
-
-  const selectedInput = Array.from(themeInputs).find((input) => input.value === resolvedTheme)
-  if (selectedInput) {
-    selectedInput.checked = true
-  }
-
-  localStorage.setItem(THEME_PREFERENCE_STORAGE_KEY, resolvedTheme)
+  applySharedTheme(theme, { themeInputs })
   if (!skipSync) {
     scheduleGoogleSyncWrite()
   }
@@ -2159,25 +2155,18 @@ function applyTheme(theme, options = {}) {
 
 function applyFontPreference(fontPreference, options = {}) {
   const skipSync = Boolean(options.skipSync)
-  const resolvedFont = ['default', 'serif', 'sans'].includes(fontPreference) ? fontPreference : 'default'
-  document.documentElement.dataset.fontPreference = resolvedFont
-
-  if (fontSelect) {
-    fontSelect.value = resolvedFont
-  }
-
-  localStorage.setItem(FONT_PREFERENCE_STORAGE_KEY, resolvedFont)
+  applySharedFontPreference(fontPreference, { fontSelect })
   if (!skipSync) {
     scheduleGoogleSyncWrite()
   }
 }
 
 function getStoredTheme() {
-  return localStorage.getItem(THEME_PREFERENCE_STORAGE_KEY) || 'device'
+  return getSharedStoredTheme()
 }
 
 function getStoredFontPreference() {
-  return localStorage.getItem(FONT_PREFERENCE_STORAGE_KEY) || 'default'
+  return getSharedStoredFontPreference()
 }
 
 async function resolveSpreadsheetUrl(rawUrl) {
@@ -2298,7 +2287,7 @@ function renderPreview(headers, rows, structuredBlueprints = []) {
   previewEl.innerHTML = ''
 
   if (!headers.length && !rows.length) {
-    previewEl.innerHTML = '<p class="empty">No rows were returned from the sheet.</p>'
+    previewEl.innerHTML = '<p class="empty-state">No rows were returned from the sheet.</p>'
     return
   }
 
@@ -2666,13 +2655,13 @@ function convertBlueprintRowToObject(headers, row) {
   addStat('Built-In Spirit', 'builtInSpirit')
 
   const upgradeGroups = [
-    { key: 'crafting', labelPrefix: 'Crafting Upgrade', countLabel: 'Crafts Needed' },
-    { key: 'starforged', labelPrefix: 'Starforged Milestone', countLabel: 'Crafts Needed' },
-    { key: 'ascension', labelPrefix: 'Ascension Upgrade', countLabel: 'Shards Needed' },
-    { key: 'transcendence', labelPrefix: 'Transcendence Upgrade', countLabel: 'Seals Needed' },
+    { key: 'crafting', labelPrefix: 'Crafting Upgrade' },
+    { key: 'starforged', labelPrefix: 'Starforged Milestone' },
+    { key: 'ascension', labelPrefix: 'Ascension Upgrade' },
+    { key: 'transcendence', labelPrefix: 'Transcendence Upgrade' },
   ]
 
-  upgradeGroups.forEach(({ key, labelPrefix, countLabel }) => {
+  upgradeGroups.forEach(({ key, labelPrefix }) => {
     for (let index = 1; index <= 5; index += 1) {
       const upgradeIndex = getColumnIndex(headers, `${labelPrefix} ${index}`)
       const countIndex = upgradeIndex + 1
