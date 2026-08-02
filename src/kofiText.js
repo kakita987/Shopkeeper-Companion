@@ -73,12 +73,8 @@ const CHARACTER_TITLES = [
   "Master",
   "Scholar",
   "Engineer",
-  "Sun Dragon",
-  "Moon Dragon",
-  "Summoner",
   "Cook",
   "Baker",
-  "Bard",
   "Veteran",
   "Storm Elemental",
 
@@ -215,6 +211,7 @@ const PHRASES = [
   {
     text: "{character} recommends supporting {recipient}.",
     characterFormat: "title",
+    characterArticle: "sentence",
     recipient: "app",
     addRecipientArticle: true
   },
@@ -253,6 +250,12 @@ const PHRASES = [
 // Helpers
 function random(array) {
   return array[Math.floor(Math.random() * array.length)];
+}
+
+
+export function formatCharacterTitle(title, articleStyle = 'lower') {
+  const article = articleStyle === 'sentence' ? 'The' : 'the'
+  return `${article} ${title}`
 }
 
 
@@ -297,7 +300,7 @@ function formatRecipient(type, articleSetting = "default") {
 }
 
 
-function getCharacter(format = "random") {
+function getCharacter(format = "random", articleStyle = 'lower') {
 
   // Tamas Day overrides normal character logic
   if (isTamasDay()) {
@@ -310,7 +313,7 @@ function getCharacter(format = "random") {
   }
 
   if (format === "title") {
-    return random(CHARACTER_TITLES);
+    return formatCharacterTitle(random(CHARACTER_TITLES), articleStyle);
   }
 
   if (format === "full") {
@@ -336,7 +339,7 @@ export function getRandomTavernText() {
   if (phrase.characterFormat) {
     message = message.replace(
       "{character}",
-      getCharacter(phrase.characterFormat)
+      getCharacter(phrase.characterFormat, phrase.characterArticle)
     );
   }
 
