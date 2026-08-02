@@ -364,6 +364,8 @@ body.theme-dark .top-tab.is-active,
   position: fixed;
   inset: 0;
   background: rgba(17, 24, 39, 0.45);
+  display: flex;
+  align-items: flex-start;
   gap: 14px;
   flex-wrap: nowrap;
   justify-content: flex-end;
@@ -1692,7 +1694,7 @@ body.theme-dark .item-name,
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  padding-right: 42px;
+  padding-right: 52px;
   margin-bottom: 12px;
 }
 
@@ -1893,8 +1895,8 @@ body.theme-dark .google-signin-button:hover,
   border: none;
   background: transparent;
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 26px;
+  right: 20px;
   width: 34px;
   height: 34px;
   padding: 0;
@@ -1979,6 +1981,7 @@ h1 {
   font-size: clamp(2rem, 3.5vw, 2.7rem);
   color: #4b3418;
   font-weight: 400;
+  margin-top: -5px;
   margin-bottom: 4px;
 }
 
