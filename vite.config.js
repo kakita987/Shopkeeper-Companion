@@ -11,6 +11,7 @@ export default defineConfig({
         main: resolve(__dirname, 'index.html'),
         privacy: resolve(__dirname, 'privacy.html'),
         bulkEdit: resolve(__dirname, 'bulk-edit.html'),
+        about: resolve(__dirname, 'about.html'),
       },
     },
   },

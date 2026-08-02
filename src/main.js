@@ -161,10 +161,6 @@ app.innerHTML = `
             <p class="settings-copy">The aesthetic font style uses Redressed for titles, Bokor for headers and accent labels, and Philosopher for body text.</p>
           </details>
         </section>
-
-        <p class="settings-privacy-link">
-          <a class="inline-link settings-privacy-link-anchor" href="/privacy.html">Privacy Policy</a>
-        </p>
       </div>
     </aside>
     </main>
@@ -177,6 +173,12 @@ app.innerHTML = `
   <div class="mobile-ad-rail" aria-label="Sponsored content">
     <div id="mobile-ad-banner"></div>
   </div>
+
+  <footer class="site-footer-links" aria-label="Legal and project links">
+    <a class="site-footer-link" href="/about.html">About</a>
+    <span class="site-footer-separator" aria-hidden="true">•</span>
+    <a class="site-footer-link" href="/privacy.html">Privacy Policy</a>
+  </footer>
 `
 
 const form = document.querySelector('#import-form')

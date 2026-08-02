@@ -3,6 +3,7 @@ import { getRandomTavernText } from './kofiText.js'
 const ETHICAL_ADS_SCRIPT_SRC = 'https://media.ethicalads.io/media/client/ethicalads.min.js'
 const ETHICAL_ADS_TIMEOUT_MS = 5000
 const KOFI_ICON_URL = 'https://storage.ko-fi.com/cdn/cup-border.png'
+const ADS_VISIBLE = import.meta.env.VITE_SHOW_ADS === 'true'
 
 let ethicalAdsScriptPromise = null
 
@@ -58,9 +59,10 @@ export function mountAdBanner(rootEl, options = {}) {
   const kofiLabel = getRandomTavernText()
   const themeHint = options.theme === 'dark' ? 'dark' : options.theme === 'light' ? 'light' : ''
   const themeAttributeMarkup = themeHint ? ` data-ea-theme="${themeHint}"` : ''
+  const hiddenBannerClass = ADS_VISIBLE ? '' : ' ad-banner-shell--hidden'
 
   rootEl.innerHTML = `
-    <div class="ad-banner-shell" aria-live="polite">
+    <div class="ad-banner-shell${hiddenBannerClass}" aria-live="polite">
       <p class="ad-banner-label">Sponsored</p>
       <div class="ad-banner-slot" data-ad-slot data-ea-publisher="${publisher}" data-ea-type="image" data-ea-style="stickybox"${themeAttributeMarkup}></div>
       <div class="ad-banner-fallback is-hidden" data-ad-fallback>
