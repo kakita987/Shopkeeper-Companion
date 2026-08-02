@@ -78,6 +78,13 @@ export function useGoogleAuth({ clientId }) {
         updateState({ isLoading: true, error: null })
         await loadGoogleIdentityScript()
 
+        if (window.google?.accounts?.id?.initialize) {
+          window.google.accounts.id.initialize({
+            client_id: clientId,
+            auto_select: false,
+          })
+        }
+
         tokenClient = window.google.accounts.oauth2.initTokenClient({
           client_id: clientId,
           scope: GOOGLE_AUTH_SCOPES,
@@ -179,7 +186,37 @@ export function useGoogleAuth({ clientId }) {
     }
 
     container.innerHTML = ''
-    return false
+
+    const idApi = window.google?.accounts?.id
+    if (!idApi?.renderButton) {
+      if (!initializePromise) {
+        void initialize()
+      }
+      return false
+    }
+
+    try {
+      idApi.renderButton(container, {
+        theme: 'outline',
+        size: 'large',
+      })
+
+      const button = container.querySelector?.('[role="button"]')
+      if (button) {
+        button.addEventListener('click', (event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          void signIn()
+        })
+      }
+
+      return true
+    } catch (error) {
+      if (!initializePromise) {
+        void initialize()
+      }
+      return false
+    }
   }
 
   initialize()
