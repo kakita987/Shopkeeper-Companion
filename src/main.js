@@ -18,7 +18,7 @@ import { buildBlueprintSummary, buildDependencySummaryLine, getBlueprintVisuals,
 
 const DEFAULT_SPREADSHEET_URL = 'https://playshoptitans.com/spreadsheet'
 const FALLBACK_GOOGLE_SHEET_URL = import.meta.env.VITE_BLUEPRINT_SHEET_URL || 'https://docs.google.com/spreadsheets/d/1WLa7X8h3O0-aGKxeAlCL7bnN8-FhGd3t7pz2RCzSg8c/edit'
-const GOOGLE_PICKER_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY || ''
+const GOOGLE_PICKER_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY || import.meta.env.VITE_GOOGLE_DRIVE_API_KEY || ''
 
 const CATEGORY_DEFINITIONS = [
   {
