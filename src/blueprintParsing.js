@@ -1,6 +1,5 @@
 import { cleanText } from './textUtils.js'
-
-const RESOURCE_LABELS = ['Iron', 'Wood', 'Steel', 'Leather', 'Herbs', 'Oils', 'Fabric', 'Gems', 'Mana', 'Essence']
+import { RESOURCE_LABELS } from './resourceLabels.js'
 
 const CATEGORY_TYPE_LOOKUP = new Map(
   [
@@ -27,10 +26,10 @@ export function buildBlueprintItems(headers, rows, structuredBlueprints = []) {
   if (!rows.length && structuredBlueprints.length) {
     return structuredBlueprints.map((structuredData) => {
       const name = structuredData.meta?.name || 'Unknown'
-      const type = structuredData.meta?.type || 'Unknown'
+      const category = structuredData.meta?.category || 'Unknown'
       const tier = structuredData.meta?.tier
 
-      const classification = classifyBlueprint(type, name)
+      const classification = classifyBlueprint(category, name)
       return {
         name,
         meta: tier ? `Tier ${tier}` : 'No tier',
@@ -41,18 +40,18 @@ export function buildBlueprintItems(headers, rows, structuredBlueprints = []) {
   }
 
   const nameIndex = getColumnIndex(headers, 'Name', 'Item Name', 'Blueprint Name')
-  const typeIndex = getColumnIndex(headers, 'Type', 'Item Type', 'Category')
+  const categoryIndex = getColumnIndex(headers, 'Category', 'Item Category')
   const tierIndex = getColumnIndex(headers, 'Tier', 'Rank', 'Level')
 
   const resolvedNameIndex = nameIndex >= 0 ? nameIndex : 0
-  const resolvedTypeIndex = typeIndex >= 0 ? typeIndex : 1
+  const resolvedCategoryIndex = categoryIndex >= 0 ? categoryIndex : 1
   const resolvedTierIndex = tierIndex >= 0 ? tierIndex : -1
 
   const items = []
 
   rows.forEach((row, rowIndex) => {
     const name = getCellValue(row, resolvedNameIndex)
-    const type = getCellValue(row, resolvedTypeIndex)
+    const category = getCellValue(row, resolvedCategoryIndex)
     const tier = getCellValue(row, resolvedTierIndex)
     const structuredData = structuredBlueprints[rowIndex] || {}
 
@@ -60,7 +59,7 @@ export function buildBlueprintItems(headers, rows, structuredBlueprints = []) {
       return
     }
 
-    const classification = classifyBlueprint(type, name)
+    const classification = classifyBlueprint(category, name)
     items.push({
       name,
       meta: tier ? `Tier ${tier}` : 'No tier',
@@ -105,7 +104,7 @@ export function convertBlueprintRowToObject(headers, row) {
   }
 
   addMeta('Name', 'name', (value) => cleanText(value))
-  addMeta('Type', 'type', (value) => cleanText(value))
+  addMeta('Category', 'category', (value) => cleanText(value))
   addMeta('Tier', 'tier', (value) => parseNumericValue(value))
   addMeta('Unlock Prerequisite', 'unlockPrerequisite', (value) => cleanText(value))
   addMeta('Research Scrolls', 'researchScrolls', (value) => parseNumericValue(value))

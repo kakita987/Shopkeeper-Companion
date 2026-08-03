@@ -43,7 +43,7 @@ const PROGRESS_COLUMNS = [
 
 const MASTER_BLUEPRINT_COLUMNS = [
   { key: 'blueprintName', label: 'Blueprint Name' },
-  { key: 'type', label: 'Type' },
+  { key: 'category', label: 'Category' },
   { key: 'tier', label: 'Tier' },
 ]
 
@@ -294,7 +294,7 @@ function buildBlueprintRow(item = {}, progress = {}) {
 
   const baseValues = {
     blueprintName: item?.name || '',
-    type: structuredData?.meta?.type || classification?.type || '',
+    category: structuredData?.meta?.category || classification?.type || '',
     tier: structuredData?.meta?.tier ?? '',
   }
 

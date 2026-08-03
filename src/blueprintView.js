@@ -2,13 +2,6 @@ import { createIcons } from 'lucide'
 import { LUCIDE_ICONS, getBlueprintItemIconName, getCategoryIconName, getTypeIconName } from './blueprintIcons.js'
 import { cleanText, escapeHtml } from './textUtils.js'
 
-const BLUEPRINT_TYPE_ORDER = {
-  Weapons: ['Sword', 'Axe', 'Dagger', 'Mace', 'Spear', 'Bow', 'Wand', 'Staff', 'Gun', 'Crossbow', 'Instrument', 'Dual Wield', 'Catalyst'],
-  Armor: ['Heavy Armor', 'Light Armor', 'Clothes', 'Helmet', 'Rogue Hat', 'Magician Hat', 'Gauntlets', 'Gloves', 'Heavy Footwear', 'Light Footwear'],
-  Accessories: ['Herbal Remedy', 'Potion', 'Spell', 'Shield', 'Cloak', 'Ring', 'Amulet', 'Familiar', 'Aurasong', 'Quiver', 'Idol', 'Meal', 'Dessert'],
-  Enchantments: ['Element', 'Spirit'],
-}
-
 export function renderLucideIcons(root = document) {
   createIcons({
     icons: LUCIDE_ICONS,
@@ -18,11 +11,11 @@ export function renderLucideIcons(root = document) {
 
 export function getBlueprintVisuals(item) {
   const category = item?.classification?.category || 'Accessories'
-  const type = item?.classification?.type || item?.structuredData?.meta?.type || ''
+  const categoryLabel = item?.classification?.type || item?.structuredData?.meta?.category || ''
 
   return {
-    category,
-    type,
+    group: category,
+    category: categoryLabel,
   }
 }
 

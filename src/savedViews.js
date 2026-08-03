@@ -66,7 +66,7 @@ export function getCollectionBookMatchDescription(state = 'completed') {
     : 'Completed checks finished qualities.'
 }
 
-export function parseCollectionBookCriteria(value) {
+function parseCollectionBookCriteria(value) {
   const raw = cleanText(value)
   if (!raw) {
     return []

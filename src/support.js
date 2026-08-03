@@ -1,34 +1,12 @@
 import './style.css'
 import { initAnalytics } from './analytics.js'
-import { mountAdBanner } from './adBanner.js'
 import { initSettingsUi, applyTheme, applyFontPreference, getStoredTheme, getStoredFontPreference } from './settingsUi.js'
 import { SETTINGS_GEAR_ICON_MARKUP } from './settingsGearIcon.js'
 import { ALLOWED_ATTACHMENT_MIME_TYPES, getSupportTicketType, MAX_ATTACHMENT_COUNT, MAX_ATTACHMENT_SIZE_BYTES, validateSupportTicketSubmission } from './supportTicketSchema.js'
+import { mountPageAdBanner } from './pageAdBanner.js'
 
 const GITHUB_ISSUE_CHOOSE_URL = 'https://github.com/kakita987/Shopkeeper-Companion/issues/new/choose'
 const FILE_ACCEPT_ATTRIBUTE = ALLOWED_ATTACHMENT_MIME_TYPES.join(',')
-
-let disposeDocsAd = () => {}
-
-function getCurrentThemeHint() {
-  return document.body.classList.contains('theme-dark') ? 'dark' : 'light'
-}
-
-function mountDocsAdBanner() {
-  const docsAdBannerEl = document.querySelector('#docs-ad-banner')
-
-  disposeDocsAd()
-
-  if (!docsAdBannerEl) {
-    return
-  }
-
-  disposeDocsAd = mountAdBanner(docsAdBannerEl, {
-    publisher: 'shopkeepercompanion',
-    kofiUrl: 'https://ko-fi.com/shopkeepercompanion',
-    theme: getCurrentThemeHint(),
-  })
-}
 
 function bytesToMb(value) {
   return (value / (1024 * 1024)).toFixed(0)
@@ -294,7 +272,7 @@ function initializeSupportPage() {
     fontSelect,
     onThemeChange: (nextTheme) => {
       applyTheme(nextTheme, { themeInputs })
-      mountDocsAdBanner()
+      mountPageAdBanner()
     },
     onFontChange: (nextFont) => applyFontPreference(nextFont, { fontSelect }),
   })
@@ -302,7 +280,7 @@ function initializeSupportPage() {
   applyTheme(getStoredTheme(), { themeInputs })
   applyFontPreference(getStoredFontPreference(), { fontSelect })
   renderSupportForm(formRootEl)
-  mountDocsAdBanner()
+  mountPageAdBanner()
   initAnalytics({ trackInitialView: true })
 }
 

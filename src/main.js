@@ -12,6 +12,7 @@ import { SETTINGS_GEAR_ICON_MARKUP } from './settingsGearIcon.js'
 import { escapeHtml, cleanText } from './textUtils.js'
 import { getBlueprintItemIconName, getCategoryIconName, getTypeIconName } from './blueprintIcons.js'
 import { buildBlueprintItems, convertBlueprintRowToObject } from './blueprintParsing.js'
+import { RESOURCE_LABELS } from './resourceLabels.js'
 import { DEFAULT_SAVED_VIEW_CRITERIA, STARTER_VIEW_PRESETS, SAVED_FILTER_VIEWS_STORAGE_KEY, buildSavedViewsRows, getCollectionBookMatchDescription, hasActiveSavedViewFilters, loadSavedFilterViews, normalizeSavedViewCriteria, parseSavedViewsRows } from './savedViews.js'
 import { buildBlueprintSummary, buildDependencySummaryLine, getBlueprintVisuals, renderCollectionSection, renderInventorySection, renderLucideIcons, renderMaterialsSection, renderOverlaySectionCard, renderPreview, renderStatsCards, renderUpgradeSection } from './blueprintView.js'
 
@@ -48,9 +49,9 @@ const CATEGORY_TYPE_ORDER_INDEX = new Map(
 )
 
 const app = document.querySelector('#app')
-const RESOURCE_LABELS = ['Iron', 'Wood', 'Steel', 'Leather', 'Herbs', 'Oils', 'Fabric', 'Gems', 'Mana', 'Essence']
 const INVENTORY_QUALITY_KEYS = ['normal', 'superior', 'flawless', 'epic', 'legendary']
 const COLLECTION_BOOK_QUALITY_ORDER = ['legendary', 'epic', 'flawless', 'superior']
+const STARTER_SAVED_VIEW_ID_PREFIX = 'starter-view:'
 const TRACKED_UPGRADES_STORAGE_KEY = 'shopkeeper-tracked-upgrades'
 const BLUEPRINT_PROGRESS_STORAGE_KEY = 'shopkeeper-blueprint-progress'
 const HIDDEN_STARTER_VIEW_PRESETS_STORAGE_KEY = 'shopkeeper-hidden-starter-view-presets-v2'
@@ -146,7 +147,7 @@ app.innerHTML = `
           <h3>Sync your progress with Google Sheets</h3>
           <div id="google-auth" class="google-auth"></div>
           <details class="attribution-details advanced-sync-details">
-            <summary>Why Google Sheets? <span class="advanced-sync-toggle-icon" aria-hidden="true">▶</span></summary>
+            <summary><span class="advanced-sync-toggle-icon" aria-hidden="true">▶</span> Why Google Sheets?</summary>
             <p class="settings-copy">Your progress is stored in a Google Sheet named <strong>Shopkeeper Companion User Data</strong> in your Drive, so it's always yours and easy to back up or inspect.</p>
             <p class="settings-copy">As a bonus, you can edit values directly in the sheet, then hit <strong>Sync Now</strong> to bring those changes into the app.</p>
             <p class="settings-copy"><a class="inline-link" href="/bulk-edit.html" target="_blank" rel="noopener noreferrer">Read the full Google Sync guide</a></p>
@@ -244,6 +245,8 @@ let isSavedViewFiltersPanelOpen = true
 let pendingGoogleSyncWriteTimer = null
 let pendingGoogleSyncInitPromise = null
 let isApplyingRemoteSyncState = false
+let latestSavedViewItems = []
+let hasBoundSavedViewDelegates = false
 let blueprintVersionLabel = ''
 let disposeDesktopAd = () => {}
 let disposeMobileAd = () => {}
@@ -375,200 +378,216 @@ function initializeKofiSupportButton() {
   }
 }
 
-function renderGoogleAuthUi(state) {
+function isGoogleAuthSetupStep() {
+  return googleSyncState.setupStep === 'choose-source' || googleSyncState.setupStep === 'enter-existing'
+}
+
+function buildGoogleAuthSetupPrompt() {
+  return googleSyncState.setupStep === 'choose-source'
+    ? 'Choose where to connect your Shopkeeper Companion sync sheet from Google Drive.'
+    : 'Paste your Google Sheet share link or file ID to connect your existing sync sheet.'
+}
+
+function buildGoogleAuthSetupInputMarkup() {
+  if (googleSyncState.setupStep === 'enter-existing') {
+    return `
+      <input
+        type="text"
+        class="google-sheet-input"
+        data-auth-sheet-input
+        placeholder="https://docs.google.com/spreadsheets/d/... or file ID"
+        value="${escapeHtml(googleSyncState.setupInput)}"
+      />
+      <div class="auth-controls">
+        <button type="button" class="auth-button" data-auth-action="connect-existing">Connect Existing Sheet</button>
+        <button type="button" class="auth-button auth-button-secondary" data-auth-action="back-to-choice">Back</button>
+      </div>
+    `
+  }
+
+  return `
+    <div class="auth-controls">
+      <button type="button" class="auth-button" data-auth-action="pick-existing-sheet">Pick existing sheet</button>
+      <button type="button" class="auth-button auth-button-secondary" data-auth-action="enter-existing">Paste share link / file ID</button>
+      <button type="button" class="auth-button" data-auth-action="create-new-sheet">Create new sheet</button>
+      <button type="button" class="auth-button auth-button-secondary" data-auth-action="create-new-in-folder">Create new sheet in chosen folder</button>
+    </div>
+  `
+}
+
+function buildGoogleAuthSetupMarkup(signOutDisabled) {
+  return `
+    <p class="settings-copy sync-caption">${escapeHtml(buildGoogleAuthSetupPrompt())}</p>
+    ${buildGoogleAuthSetupInputMarkup()}
+    ${googleSyncState.setupError ? `<p class="settings-copy sync-caption sync-error">${escapeHtml(googleSyncState.setupError)}</p>` : ''}
+    ${googleSyncState.error ? `<p class="settings-copy sync-caption sync-error">${escapeHtml(googleSyncState.error)}</p>` : ''}
+    <div class="auth-controls">
+      <button type="button" class="auth-button auth-button-secondary" data-auth-action="sign-out" ${signOutDisabled ? 'disabled' : ''}>Sign Out</button>
+    </div>
+  `
+}
+
+function bindGoogleAuthSetupActions(state) {
   if (!googleAuthContainer) {
     return
   }
 
-  const signOutDisabled = state.isLoading || state.isAuthenticating || !state.isAuthenticated
+  const sheetInput = googleAuthContainer.querySelector('[data-auth-sheet-input]')
+  sheetInput?.addEventListener('input', (event) => {
+    googleSyncState.setupInput = event.target.value || ''
+  })
 
-  if (state.isAuthenticated) {
-    const isSetupStep = googleSyncState.setupStep === 'choose-source' || googleSyncState.setupStep === 'enter-existing'
-    if (isSetupStep) {
-      const setupPrompt = googleSyncState.setupStep === 'choose-source'
-        ? 'Choose where to connect your Shopkeeper Companion sync sheet from Google Drive.'
-        : 'Paste your Google Sheet share link or file ID to connect your existing sync sheet.'
+  const enterExistingButton = googleAuthContainer.querySelector('[data-auth-action="enter-existing"]')
+  enterExistingButton?.addEventListener('click', () => {
+    googleSyncState.setupStep = 'enter-existing'
+    googleSyncState.setupError = ''
+    renderGoogleAuthUi(googleAuth.getState())
+  })
 
-      const setupInputMarkup = googleSyncState.setupStep === 'enter-existing'
-        ? `
-          <input
-            type="text"
-            class="google-sheet-input"
-            data-auth-sheet-input
-            placeholder="https://docs.google.com/spreadsheets/d/... or file ID"
-            value="${escapeHtml(googleSyncState.setupInput)}"
-          />
-          <div class="auth-controls">
-            <button type="button" class="auth-button" data-auth-action="connect-existing">Connect Existing Sheet</button>
-            <button type="button" class="auth-button auth-button-secondary" data-auth-action="back-to-choice">Back</button>
-          </div>
-        `
-        : `
-          <div class="auth-controls">
-            <button type="button" class="auth-button" data-auth-action="pick-existing-sheet">Pick existing sheet</button>
-            <button type="button" class="auth-button auth-button-secondary" data-auth-action="enter-existing">Paste share link / file ID</button>
-            <button type="button" class="auth-button" data-auth-action="create-new-sheet">Create new sheet</button>
-            <button type="button" class="auth-button auth-button-secondary" data-auth-action="create-new-in-folder">Create new sheet in chosen folder</button>
-          </div>
-        `
+  const pickExistingSheetButton = googleAuthContainer.querySelector('[data-auth-action="pick-existing-sheet"]')
+  pickExistingSheetButton?.addEventListener('click', async () => {
+    try {
+      googleSyncState.setupError = ''
+      googleSyncState.isSyncing = true
+      renderGoogleAuthUi(googleAuth.getState())
 
-      googleAuthContainer.innerHTML = `
-        <p class="settings-copy sync-caption">${escapeHtml(setupPrompt)}</p>
-        ${setupInputMarkup}
-        ${googleSyncState.setupError ? `<p class="settings-copy sync-caption sync-error">${escapeHtml(googleSyncState.setupError)}</p>` : ''}
-        ${googleSyncState.error ? `<p class="settings-copy sync-caption sync-error">${escapeHtml(googleSyncState.error)}</p>` : ''}
-        <div class="auth-controls">
-          <button type="button" class="auth-button auth-button-secondary" data-auth-action="sign-out" ${signOutDisabled ? 'disabled' : ''}>Sign Out</button>
-        </div>
-      `
-
-      const sheetInput = googleAuthContainer.querySelector('[data-auth-sheet-input]')
-      sheetInput?.addEventListener('input', (event) => {
-        googleSyncState.setupInput = event.target.value || ''
+      const pickedSheet = await pickSpreadsheetFromDrive({
+        accessToken: state.accessToken,
+        developerKey: GOOGLE_PICKER_API_KEY,
       })
 
-      const enterExistingButton = googleAuthContainer.querySelector('[data-auth-action="enter-existing"]')
-      enterExistingButton?.addEventListener('click', () => {
-        googleSyncState.setupStep = 'enter-existing'
-        googleSyncState.setupError = ''
-        renderGoogleAuthUi(googleAuth.getState())
-      })
+      if (!pickedSheet?.id) {
+        return
+      }
 
-      const pickExistingSheetButton = googleAuthContainer.querySelector('[data-auth-action="pick-existing-sheet"]')
-      pickExistingSheetButton?.addEventListener('click', async () => {
-        try {
-          googleSyncState.setupError = ''
-          googleSyncState.isSyncing = true
-          renderGoogleAuthUi(googleAuth.getState())
+      googleSyncState.selectedSpreadsheetId = pickedSheet.id
+      await persistGoogleSyncSpreadsheetId(pickedSheet.id)
+      googleSyncState.setupStep = 'idle'
+      renderGoogleAuthUi(googleAuth.getState())
+      await initializeGoogleSync(state.accessToken, { preferredSpreadsheetId: pickedSheet.id, reason: 'recovery' })
+    } catch (error) {
+      googleSyncState.setupError = error?.message || 'Unable to open Google Drive Picker right now.'
+    } finally {
+      googleSyncState.isSyncing = false
+      renderGoogleAuthUi(googleAuth.getState())
+    }
+  })
 
-          const pickedSheet = await pickSpreadsheetFromDrive({
-            accessToken: state.accessToken,
-            developerKey: GOOGLE_PICKER_API_KEY,
-          })
+  const backToChoiceButton = googleAuthContainer.querySelector('[data-auth-action="back-to-choice"]')
+  backToChoiceButton?.addEventListener('click', () => {
+    googleSyncState.setupStep = 'choose-source'
+    googleSyncState.setupError = ''
+    renderGoogleAuthUi(googleAuth.getState())
+  })
 
-          if (!pickedSheet?.id) {
-            return
-          }
-
-          googleSyncState.selectedSpreadsheetId = pickedSheet.id
-          await persistGoogleSyncSpreadsheetId(pickedSheet.id)
-          googleSyncState.setupStep = 'idle'
-          renderGoogleAuthUi(googleAuth.getState())
-          await initializeGoogleSync(state.accessToken, { preferredSpreadsheetId: pickedSheet.id, reason: 'recovery' })
-        } catch (error) {
-          googleSyncState.setupError = error?.message || 'Unable to open Google Drive Picker right now.'
-        } finally {
-          googleSyncState.isSyncing = false
-          renderGoogleAuthUi(googleAuth.getState())
-        }
-      })
-
-      const backToChoiceButton = googleAuthContainer.querySelector('[data-auth-action="back-to-choice"]')
-      backToChoiceButton?.addEventListener('click', () => {
-        googleSyncState.setupStep = 'choose-source'
-        googleSyncState.setupError = ''
-        renderGoogleAuthUi(googleAuth.getState())
-      })
-
-      const connectExistingButton = googleAuthContainer.querySelector('[data-auth-action="connect-existing"]')
-      connectExistingButton?.addEventListener('click', async () => {
-        const spreadsheetId = parseSpreadsheetIdFromInput(googleSyncState.setupInput)
-        if (!spreadsheetId) {
-          googleSyncState.setupError = 'Please paste a valid Google Sheet share link or spreadsheet file ID.'
-          renderGoogleAuthUi(googleAuth.getState())
-          return
-        }
-
-        googleSyncState.setupError = ''
-        googleSyncState.selectedSpreadsheetId = spreadsheetId
-        await persistGoogleSyncSpreadsheetId(spreadsheetId)
-        googleSyncState.setupStep = 'idle'
-        renderGoogleAuthUi(googleAuth.getState())
-        await initializeGoogleSync(state.accessToken, { preferredSpreadsheetId: spreadsheetId, reason: 'recovery' })
-      })
-
-      const createNewSheetButton = googleAuthContainer.querySelector('[data-auth-action="create-new-sheet"]')
-      createNewSheetButton?.addEventListener('click', async () => {
-        googleSyncState.setupError = ''
-        googleSyncState.selectedSpreadsheetId = ''
-        googleSyncState.setupStep = 'idle'
-        renderGoogleAuthUi(googleAuth.getState())
-        await initializeGoogleSync(state.accessToken, { preferredSpreadsheetId: '', reason: 'new-user' })
-      })
-
-      const createNewInFolderButton = googleAuthContainer.querySelector('[data-auth-action="create-new-in-folder"]')
-      createNewInFolderButton?.addEventListener('click', async () => {
-        try {
-          googleSyncState.setupError = ''
-          googleSyncState.isSyncing = true
-          renderGoogleAuthUi(googleAuth.getState())
-
-          const pickedFolder = await pickFolderFromDrive({
-            accessToken: state.accessToken,
-            developerKey: GOOGLE_PICKER_API_KEY,
-          })
-
-          if (!pickedFolder?.id) {
-            return
-          }
-
-          googleSyncState.selectedSpreadsheetId = ''
-          googleSyncState.setupStep = 'idle'
-          renderGoogleAuthUi(googleAuth.getState())
-          await initializeGoogleSync(state.accessToken, {
-            preferredSpreadsheetId: '',
-            reason: 'new-user',
-            targetFolderId: pickedFolder.id,
-          })
-        } catch (error) {
-          googleSyncState.setupError = error?.message || 'Unable to open Google Drive folder picker right now.'
-        } finally {
-          googleSyncState.isSyncing = false
-          renderGoogleAuthUi(googleAuth.getState())
-        }
-      })
-
-      const signOutButton = googleAuthContainer.querySelector('[data-auth-action="sign-out"]')
-      signOutButton?.addEventListener('click', async () => {
-        await googleAuth.signOut()
-      })
-
+  const connectExistingButton = googleAuthContainer.querySelector('[data-auth-action="connect-existing"]')
+  connectExistingButton?.addEventListener('click', async () => {
+    const spreadsheetId = parseSpreadsheetIdFromInput(googleSyncState.setupInput)
+    if (!spreadsheetId) {
+      googleSyncState.setupError = 'Please paste a valid Google Sheet share link or spreadsheet file ID.'
+      renderGoogleAuthUi(googleAuth.getState())
       return
     }
 
-    const syncLabel = googleSyncState.lastSyncedAt
-      ? `Last sync: ${new Date(googleSyncState.lastSyncedAt).toLocaleString()}`
-      : 'Connected. Ready to sync.'
-    const syncDisabled = googleSyncState.isSyncing || !googleSyncState.isReady
+    googleSyncState.setupError = ''
+    googleSyncState.selectedSpreadsheetId = spreadsheetId
+    await persistGoogleSyncSpreadsheetId(spreadsheetId)
+    googleSyncState.setupStep = 'idle'
+    renderGoogleAuthUi(googleAuth.getState())
+    await initializeGoogleSync(state.accessToken, { preferredSpreadsheetId: spreadsheetId, reason: 'recovery' })
+  })
 
-    googleAuthContainer.innerHTML = `
-      <div class="auth-controls">
-        <button type="button" class="auth-button" data-auth-action="sync-now" ${syncDisabled ? 'disabled' : ''}>${googleSyncState.isSyncing ? 'Syncing…' : 'Sync Now'}</button>
-        <button type="button" class="auth-button auth-button-secondary" data-auth-action="change-sync-sheet" ${googleSyncState.isSyncing ? 'disabled' : ''}>Change Sync Sheet</button>
-        <button type="button" class="auth-button auth-button-secondary" data-auth-action="sign-out" ${signOutDisabled ? 'disabled' : ''}>Sign Out</button>
-      </div>
-      <p class="settings-copy sync-caption">${escapeHtml(syncLabel)}</p>
-      ${googleSyncState.notice ? `<p class="settings-copy sync-caption">${escapeHtml(googleSyncState.notice)}</p>` : ''}
-      ${googleSyncState.error ? `<p class="settings-copy sync-caption sync-error">${escapeHtml(googleSyncState.error)}</p>` : ''}
-    `
+  const createNewSheetButton = googleAuthContainer.querySelector('[data-auth-action="create-new-sheet"]')
+  createNewSheetButton?.addEventListener('click', async () => {
+    googleSyncState.setupError = ''
+    googleSyncState.selectedSpreadsheetId = ''
+    googleSyncState.setupStep = 'idle'
+    renderGoogleAuthUi(googleAuth.getState())
+    await initializeGoogleSync(state.accessToken, { preferredSpreadsheetId: '', reason: 'new-user' })
+  })
 
-    const syncNowButton = googleAuthContainer.querySelector('[data-auth-action="sync-now"]')
-    syncNowButton?.addEventListener('click', async () => {
-      await syncFromGoogleSheet()
-    })
-
-    const changeSyncSheetButton = googleAuthContainer.querySelector('[data-auth-action="change-sync-sheet"]')
-    changeSyncSheetButton?.addEventListener('click', () => {
-      googleSyncState.setupStep = 'choose-source'
-      googleSyncState.setupInput = ''
+  const createNewInFolderButton = googleAuthContainer.querySelector('[data-auth-action="create-new-in-folder"]')
+  createNewInFolderButton?.addEventListener('click', async () => {
+    try {
       googleSyncState.setupError = ''
+      googleSyncState.isSyncing = true
       renderGoogleAuthUi(googleAuth.getState())
-    })
 
-    const signOutButton = googleAuthContainer.querySelector('[data-auth-action="sign-out"]')
-    signOutButton?.addEventListener('click', async () => {
-      await googleAuth.signOut()
-    })
+      const pickedFolder = await pickFolderFromDrive({
+        accessToken: state.accessToken,
+        developerKey: GOOGLE_PICKER_API_KEY,
+      })
+
+      if (!pickedFolder?.id) {
+        return
+      }
+
+      googleSyncState.selectedSpreadsheetId = ''
+      googleSyncState.setupStep = 'idle'
+      renderGoogleAuthUi(googleAuth.getState())
+      await initializeGoogleSync(state.accessToken, {
+        preferredSpreadsheetId: '',
+        reason: 'new-user',
+        targetFolderId: pickedFolder.id,
+      })
+    } catch (error) {
+      googleSyncState.setupError = error?.message || 'Unable to open Google Drive folder picker right now.'
+    } finally {
+      googleSyncState.isSyncing = false
+      renderGoogleAuthUi(googleAuth.getState())
+    }
+  })
+
+  const signOutButton = googleAuthContainer.querySelector('[data-auth-action="sign-out"]')
+  signOutButton?.addEventListener('click', async () => {
+    await googleAuth.signOut()
+  })
+}
+
+function buildGoogleAuthConnectedMarkup(signOutDisabled) {
+  const syncLabel = googleSyncState.lastSyncedAt
+    ? `Last sync: ${new Date(googleSyncState.lastSyncedAt).toLocaleString()}`
+    : 'Connected. Ready to sync.'
+  const syncDisabled = googleSyncState.isSyncing || !googleSyncState.isReady
+
+  return `
+    <div class="auth-controls">
+      <button type="button" class="auth-button" data-auth-action="sync-now" ${syncDisabled ? 'disabled' : ''}>${googleSyncState.isSyncing ? 'Syncing…' : 'Sync Now'}</button>
+      <button type="button" class="auth-button auth-button-secondary" data-auth-action="change-sync-sheet" ${googleSyncState.isSyncing ? 'disabled' : ''}>Change Sync Sheet</button>
+      <button type="button" class="auth-button auth-button-secondary" data-auth-action="sign-out" ${signOutDisabled ? 'disabled' : ''}>Sign Out</button>
+    </div>
+    <p class="settings-copy sync-caption">${escapeHtml(syncLabel)}</p>
+    ${googleSyncState.notice ? `<p class="settings-copy sync-caption">${escapeHtml(googleSyncState.notice)}</p>` : ''}
+    ${googleSyncState.error ? `<p class="settings-copy sync-caption sync-error">${escapeHtml(googleSyncState.error)}</p>` : ''}
+  `
+}
+
+function bindGoogleAuthConnectedActions() {
+  if (!googleAuthContainer) {
+    return
+  }
+
+  const syncNowButton = googleAuthContainer.querySelector('[data-auth-action="sync-now"]')
+  syncNowButton?.addEventListener('click', async () => {
+    await syncFromGoogleSheet()
+  })
+
+  const changeSyncSheetButton = googleAuthContainer.querySelector('[data-auth-action="change-sync-sheet"]')
+  changeSyncSheetButton?.addEventListener('click', () => {
+    googleSyncState.setupStep = 'choose-source'
+    googleSyncState.setupInput = ''
+    googleSyncState.setupError = ''
+    renderGoogleAuthUi(googleAuth.getState())
+  })
+
+  const signOutButton = googleAuthContainer.querySelector('[data-auth-action="sign-out"]')
+  signOutButton?.addEventListener('click', async () => {
+    await googleAuth.signOut()
+  })
+}
+
+function renderGoogleAuthSignedOutUi(state) {
+  if (!googleAuthContainer) {
     return
   }
 
@@ -584,22 +603,86 @@ function renderGoogleAuthUi(state) {
     signInButton?.addEventListener('click', async () => {
       await googleAuth.signIn()
     })
-  } else if (authMessage) {
+    return
+  }
+
+  if (authMessage) {
     googleAuthContainer.insertAdjacentHTML('beforeend', authMessage)
   }
 }
 
+function renderGoogleAuthUi(state) {
+  if (!googleAuthContainer) {
+    return
+  }
+
+  const signOutDisabled = state.isLoading || state.isAuthenticating || !state.isAuthenticated
+
+  if (state.isAuthenticated) {
+    if (isGoogleAuthSetupStep()) {
+      googleAuthContainer.innerHTML = buildGoogleAuthSetupMarkup(signOutDisabled)
+      bindGoogleAuthSetupActions(state)
+      return
+    }
+
+    googleAuthContainer.innerHTML = buildGoogleAuthConnectedMarkup(signOutDisabled)
+    bindGoogleAuthConnectedActions()
+    return
+  }
+
+  renderGoogleAuthSignedOutUi(state)
+}
+
+function refreshGoogleAuthUi() {
+  renderGoogleAuthUi(googleAuth.getState())
+}
+
+function resetGoogleSyncForSignedOutState() {
+  googleSyncState.isReady = false
+  googleSyncState.error = ''
+  googleSyncState.notice = ''
+  googleSyncState.isSyncing = false
+  googleSyncState.setupStep = 'idle'
+  googleSyncState.setupInput = ''
+  googleSyncState.setupError = ''
+  googleSyncState.selectedSpreadsheetId = ''
+  pendingGoogleSyncInitPromise = null
+}
+
+function beginGoogleSyncRun({ clearError = true, clearNotice = false } = {}) {
+  googleSyncState.isSyncing = true
+  if (clearError) {
+    googleSyncState.error = ''
+  }
+  if (clearNotice) {
+    googleSyncState.notice = ''
+  }
+  refreshGoogleAuthUi()
+}
+
+function finishGoogleSyncRun() {
+  googleSyncState.isSyncing = false
+  refreshGoogleAuthUi()
+}
+
+function setGoogleSyncNotice(notice = '') {
+  googleSyncState.notice = notice
+  refreshGoogleAuthUi()
+}
+
+function setGoogleSyncError(error, { clearNotice = false } = {}) {
+  googleSyncState.error = typeof error === 'string'
+    ? error
+    : getGoogleSyncErrorMessage(error)
+  if (clearNotice) {
+    googleSyncState.notice = ''
+  }
+  refreshGoogleAuthUi()
+}
+
 async function handleGoogleAuthStateChange(state) {
   if (!state?.isAuthenticated || !state?.accessToken) {
-    googleSyncState.isReady = false
-    googleSyncState.error = ''
-    googleSyncState.notice = ''
-    googleSyncState.isSyncing = false
-    googleSyncState.setupStep = 'idle'
-    googleSyncState.setupInput = ''
-    googleSyncState.setupError = ''
-    googleSyncState.selectedSpreadsheetId = ''
-    pendingGoogleSyncInitPromise = null
+    resetGoogleSyncForSignedOutState()
     renderGoogleAuthUi(state)
     return
   }
@@ -643,17 +726,13 @@ async function initializeGoogleSync(accessToken, options = {}) {
 
   pendingGoogleSyncInitPromise = (async () => {
     try {
-      googleSyncState.isSyncing = true
-      googleSyncState.error = ''
-      googleSyncState.notice = ''
-      renderGoogleAuthUi(googleAuth.getState())
+      beginGoogleSyncRun({ clearNotice: true })
 
       const ensured = await ensureUserSyncSpreadsheet(accessToken, preferredSpreadsheetId, {
         reason: syncReason,
         targetFolderId,
         confirmCreate: async (message) => {
-          googleSyncState.notice = message
-          renderGoogleAuthUi(googleAuth.getState())
+          setGoogleSyncNotice(message)
           return window.confirm(message)
         },
       })
@@ -671,19 +750,16 @@ async function initializeGoogleSync(accessToken, options = {}) {
       googleSyncState.isReady = true
       googleSyncState.notice = ''
       googleSyncState.lastSyncedAt = new Date().toISOString()
-      renderGoogleAuthUi(googleAuth.getState())
+      refreshGoogleAuthUi()
     } catch (error) {
-      googleSyncState.error = getGoogleSyncErrorMessage(error)
-      googleSyncState.notice = ''
+      setGoogleSyncError(error, { clearNotice: true })
       googleSyncState.isReady = false
       googleSyncState.spreadsheetId = ''
       googleSyncState.spreadsheetUrl = ''
       await clearStoredGoogleSyncSpreadsheetId()
       console.error(error)
-      renderGoogleAuthUi(googleAuth.getState())
     } finally {
-      googleSyncState.isSyncing = false
-      renderGoogleAuthUi(googleAuth.getState())
+      finishGoogleSyncRun()
     }
   })()
 
@@ -826,23 +902,18 @@ async function syncFromGoogleSheet() {
       throw new Error('Google Sync Sheet is not connected yet.')
     }
 
-    googleSyncState.isSyncing = true
-    googleSyncState.error = ''
-    googleSyncState.notice = ''
-    renderGoogleAuthUi(authState)
+    beginGoogleSyncRun({ clearNotice: true })
 
     const remote = await readSyncTables(authState.accessToken, googleSyncState.spreadsheetId)
     applyRemoteSyncState(remote)
     googleSyncState.lastSyncedAt = new Date().toISOString()
-    renderGoogleAuthUi(googleAuth.getState())
+    refreshGoogleAuthUi()
     updateStatus('Synced user data from Google Sheet.', 'info')
   } catch (error) {
-    googleSyncState.error = getGoogleSyncErrorMessage(error)
-    renderGoogleAuthUi(googleAuth.getState())
+    setGoogleSyncError(error)
     console.error(error)
   } finally {
-    googleSyncState.isSyncing = false
-    renderGoogleAuthUi(googleAuth.getState())
+    finishGoogleSyncRun()
   }
 }
 
@@ -904,15 +975,16 @@ function applyRemoteSyncState(remoteTables) {
       applyFontPreference(nextFont, { skipSync: true })
     }
 
+    hiddenStarterViewPresetIds = new Set(parseHiddenStarterViewPresetRows(settings))
+    localStorage.setItem(HIDDEN_STARTER_VIEW_PRESETS_STORAGE_KEY, JSON.stringify([...hiddenStarterViewPresetIds]))
+
     savedFilterViews = parseSavedViewsRows(remoteTables.savedViews)
+    ensureStarterSavedViewsPresent()
     hasLoadedSavedFilterViews = true
     localStorage.setItem(SAVED_FILTER_VIEWS_STORAGE_KEY, JSON.stringify(savedFilterViews))
 
     trackedUpgradeKeys = new Set(parseTrackedUpgradeRows(settings))
     localStorage.setItem(TRACKED_UPGRADES_STORAGE_KEY, JSON.stringify([...trackedUpgradeKeys]))
-
-    hiddenStarterViewPresetIds = new Set(parseHiddenStarterViewPresetRows(settings))
-    localStorage.setItem(HIDDEN_STARTER_VIEW_PRESETS_STORAGE_KEY, JSON.stringify([...hiddenStarterViewPresetIds]))
 
     blueprintProgressByName = parseBlueprintProgressRows(remoteTables.blueprintProgress, blueprintProgressByName)
     localStorage.setItem(BLUEPRINT_PROGRESS_STORAGE_KEY, JSON.stringify(blueprintProgressByName))
@@ -955,24 +1027,22 @@ async function pushLocalStateToGoogleSheet(accessToken) {
   }
 
   try {
-    googleSyncState.isSyncing = true
-    googleSyncState.error = ''
-    renderGoogleAuthUi(googleAuth.getState())
+    ensureSavedFilterViewsLoaded()
+    beginGoogleSyncRun()
 
     await writeSyncTables(accessToken, googleSyncState.spreadsheetId, {
       settings: buildSettingsRows(),
-      savedViews: buildSavedViewsRows(),
+      savedViews: buildSavedViewsRows(savedFilterViews),
       blueprintItems: allBlueprintItems,
       blueprintProgressByName,
     })
 
     googleSyncState.lastSyncedAt = new Date().toISOString()
   } catch (error) {
-    googleSyncState.error = getGoogleSyncErrorMessage(error)
+    setGoogleSyncError(error)
     console.error(error)
   } finally {
-    googleSyncState.isSyncing = false
-    renderGoogleAuthUi(googleAuth.getState())
+    finishGoogleSyncRun()
   }
 }
 
@@ -1300,18 +1370,18 @@ function openBlueprintOverlay(item) {
         <div class="overlay-hero-content">
           <div class="overlay-visual-strip" aria-hidden="true">
             <div class="overlay-visual-tile overlay-visual-category">
-              <span class="icon-slot overlay-visual-icon"><i data-lucide="${escapeHtml(getCategoryIconName(visuals.category))}"></i></span>
+              <span class="icon-slot overlay-visual-icon"><i data-lucide="${escapeHtml(getCategoryIconName(visuals.group))}"></i></span>
             </div>
             <div class="overlay-visual-tile overlay-visual-item">
               <span class="icon-slot overlay-item-icon"><i data-lucide="${escapeHtml(getBlueprintItemIconName(item))}"></i></span>
             </div>
           </div>
           <div class="overlay-title-block">
-            <p class="overlay-eyebrow">${escapeHtml(visuals.category)} / ${escapeHtml(visuals.type || 'Blueprint')}</p>
+            <p class="overlay-eyebrow">${escapeHtml(visuals.group)} / ${escapeHtml(visuals.category || 'Category')}</p>
             <h3 id="blueprint-overlay-title">${escapeHtml(item.name)}</h3>
             <div class="overlay-meta-row">
               <span class="overlay-tier-badge">Tier ${escapeHtml(tierValue)}</span>
-              <span class="overlay-group-badge">${escapeHtml(visuals.category)}</span>
+              <span class="overlay-group-badge">${escapeHtml(visuals.group)}</span>
             </div>
           </div>
           <label class="owned-toggle overlay-owned-toggle">
@@ -1366,6 +1436,7 @@ function openBlueprintOverlay(item) {
 
 function renderSavedViews(items = []) {
   ensureSavedFilterViewsLoaded()
+  latestSavedViewItems = Array.isArray(items) ? items : []
 
   if (!savedViewsContentEl) {
     return
@@ -1451,7 +1522,9 @@ function renderSavedViews(items = []) {
             <fieldset class="saved-view-filter saved-view-filter-multiselect">
               <legend>Collection Book</legend>
               <div class="saved-view-filter saved-view-filter-collection-state">
-                <span>Select qualities to match</span>
+                <div class="saved-view-match-description">
+                  ${getCollectionBookMatchDescription(savedViewCriteria.collectionBookState)}
+                </div>
                 <div class="saved-view-match-radios" role="radiogroup" aria-label="Collection Book match state">
                   ${[
                     ['completed', 'Completed', 'Completed checks finished qualities'],
@@ -1469,9 +1542,7 @@ function renderSavedViews(items = []) {
                     </label>
                   `).join('')}
                 </div>
-                <div class="saved-view-match-description">
-                  ${getCollectionBookMatchDescription(savedViewCriteria.collectionBookState)}
-                </div>
+                <span>Select qualities to match</span>
               </div>
               <div class="collection-book-options">
                 ${renderCollectionBookFilterOptions(savedViewCriteria.collectionBook)}
@@ -1502,7 +1573,8 @@ function renderSavedViews(items = []) {
     </div>
   `
 
-  bindSavedViewControls(items)
+  bindSavedViewAccordion()
+  bindSavedViewControls()
   renderLucideIcons(savedViewsContentEl)
 }
 
@@ -1557,7 +1629,9 @@ function renderSavedViewResults(items = [], dependencyIndex) {
     return leftGroup.category.localeCompare(rightGroup.category)
   })
 
-  return orderedCategoryGroups.map((categoryGroup) => {
+  return `
+    <div class="blueprint-groups saved-view-groups">
+      ${orderedCategoryGroups.map((categoryGroup) => {
     const typeOrderIndex = CATEGORY_TYPE_ORDER_INDEX.get(categoryGroup.category) || new Map()
     const orderedTypeGroups = Array.from(categoryGroup.types.values()).sort((leftTypeGroup, rightTypeGroup) => {
       const leftIndex = typeOrderIndex.get(leftTypeGroup.type)
@@ -1593,18 +1667,23 @@ function renderSavedViewResults(items = [], dependencyIndex) {
         const ownershipText = summary.isOwned ? 'Owned' : 'Not Owned'
 
         return `
-          <li class="resource-item dependency-item saved-view-item" data-blueprint-name="${escapeHtml(item.name)}">
-            <span>
-              <strong>${escapeHtml(item.name)}</strong><br>
-              <small>${escapeHtml(`${ownershipText} · Inventory ${summary.totalInventory} · ${collectionText}`)}</small><br>
-              <small>${escapeHtml(dependencyText)}</small>
-            </span>
+          <li class="blueprint-item saved-view-item" data-blueprint-name="${escapeHtml(item.name)}">
+            <div class="item-copy saved-view-item-copy">
+              <div class="item-title-row saved-view-item-title-row">
+                <span class="icon-slot item-card-icon" aria-hidden="true"><i data-lucide="${escapeHtml(getBlueprintItemIconName(item))}"></i></span>
+                <span class="item-name">${escapeHtml(item.name)}</span>
+              </div>
+              <div class="saved-view-item-meta">
+                <small class="saved-view-item-meta-line">${escapeHtml(`${ownershipText} · Inventory ${summary.totalInventory} · ${collectionText}`)}</small>
+                <small class="saved-view-item-meta-line">${escapeHtml(dependencyText)}</small>
+              </div>
+            </div>
           </li>
         `
       }).join('')
 
       return `
-        <details class="blueprint-type" open>
+        <details class="blueprint-type">
           <summary>
             <span class="group-summary-title">
               <span class="icon-slot group-summary-icon" aria-hidden="true"><i data-lucide="${escapeHtml(getTypeIconName(typeGroup.type, categoryGroup.category))}"></i></span>
@@ -1612,13 +1691,13 @@ function renderSavedViewResults(items = [], dependencyIndex) {
             </span>
             <span class="group-count">${typeGroup.items.length}</span>
           </summary>
-          <ul class="material-list dependency-list">${listMarkup}</ul>
+          <ul class="blueprint-items saved-view-items">${listMarkup}</ul>
         </details>
       `
     }).join('')
 
     return `
-      <details class="blueprint-category" open>
+      <details class="blueprint-category">
         <summary>
           <span class="group-summary-title">
             <span class="icon-slot group-summary-icon" aria-hidden="true"><i data-lucide="${escapeHtml(getCategoryIconName(categoryGroup.category))}"></i></span>
@@ -1629,10 +1708,53 @@ function renderSavedViewResults(items = [], dependencyIndex) {
         <div class="category-body">${typeMarkup}</div>
       </details>
     `
-  }).join('')
+      }).join('')}
+    </div>
+  `
 }
 
-function bindSavedViewControls(items = []) {
+function bindSavedViewAccordion() {
+  if (!savedViewsContentEl) {
+    return
+  }
+
+  const categoryNodes = Array.from(savedViewsContentEl.querySelectorAll('.blueprint-category'))
+  const typeNodes = Array.from(savedViewsContentEl.querySelectorAll('.blueprint-type'))
+
+  categoryNodes.forEach((node) => {
+    node.addEventListener('toggle', () => {
+      if (!node.open) {
+        return
+      }
+
+      categoryNodes.forEach((otherNode) => {
+        if (otherNode !== node) {
+          otherNode.open = false
+        }
+      })
+
+      typeNodes.forEach((typeNode) => {
+        typeNode.open = false
+      })
+    })
+  })
+
+  typeNodes.forEach((node) => {
+    node.addEventListener('toggle', () => {
+      if (!node.open) {
+        return
+      }
+
+      typeNodes.forEach((otherNode) => {
+        if (otherNode !== node) {
+          otherNode.open = false
+        }
+      })
+    })
+  })
+}
+
+function bindSavedViewControls() {
   if (!savedViewsContentEl) {
     return
   }
@@ -1642,51 +1764,49 @@ function bindSavedViewControls(items = []) {
     isSavedViewFiltersPanelOpen = filtersPanel.open
   })
 
-  savedViewsContentEl.querySelectorAll('[data-starter-view-preset]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const presetId = button.dataset.starterViewPreset
-      applyStarterViewPreset(presetId, items)
-    })
-  })
+  if (hasBoundSavedViewDelegates) {
+    return
+  }
 
-  savedViewsContentEl.querySelectorAll('[data-saved-filter-view-id]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const viewId = button.dataset.savedFilterViewId
-      applySavedFilterView(viewId, items)
-    })
-  })
+  savedViewsContentEl.addEventListener('click', (event) => {
+    const starterPresetButton = event.target.closest('[data-starter-view-preset]')
+    if (starterPresetButton) {
+      const presetId = starterPresetButton.dataset.starterViewPreset
+      applyStarterViewPreset(presetId, latestSavedViewItems)
+      return
+    }
 
-  const deleteActiveViewButton = savedViewsContentEl.querySelector('[data-delete-active-saved-filter]')
-  deleteActiveViewButton?.addEventListener('click', () => {
-    deleteActiveSavedViewFilter(items)
-  })
+    const savedFilterButton = event.target.closest('[data-saved-filter-view-id]')
+    if (savedFilterButton) {
+      const viewId = savedFilterButton.dataset.savedFilterViewId
+      applySavedFilterView(viewId, latestSavedViewItems)
+      return
+    }
 
-  savedViewsContentEl.querySelectorAll('[data-saved-filter]').forEach((select) => {
-    select.addEventListener('change', (event) => {
-      const target = event.currentTarget
-      const key = target.dataset.savedFilter
-      if (!key) {
-        return
+    const deleteActiveViewButton = event.target.closest('[data-delete-active-saved-filter]')
+    if (deleteActiveViewButton) {
+      deleteActiveSavedViewFilter(latestSavedViewItems)
+      return
+    }
+
+    const savedViewItem = event.target.closest('.saved-view-item')
+    if (savedViewItem) {
+      const blueprintName = savedViewItem.getAttribute('data-blueprint-name')
+      const item = latestSavedViewItems.find((entry) => entry.name === blueprintName)
+      if (item) {
+        openBlueprintOverlay(item)
       }
-
-      savedViewCriteria = {
-        ...savedViewCriteria,
-        [key]: target.value,
-      }
-
-      activeSavedViewPreset = 'custom'
-      renderSavedViews(items)
-    })
+    }
   })
 
-  savedViewsContentEl.querySelectorAll('[data-saved-filter-book]').forEach((checkbox) => {
-    checkbox.addEventListener('change', (event) => {
-      const target = event.currentTarget
-      const quality = target.dataset.savedFilterBook
-      if (!quality) {
-        return
-      }
+  savedViewsContentEl.addEventListener('change', (event) => {
+    const target = event.target
+    if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement)) {
+      return
+    }
 
+    const quality = target.dataset.savedFilterBook
+    if (quality) {
       const nextCollectionBook = new Set(savedViewCriteria.collectionBook || [])
       if (target.checked) {
         nextCollectionBook.add(quality)
@@ -1700,69 +1820,83 @@ function bindSavedViewControls(items = []) {
       }
 
       activeSavedViewPreset = 'custom'
-      renderSavedViews(items)
-    })
+      renderSavedViews(latestSavedViewItems)
+      return
+    }
+
+    const key = target.dataset.savedFilter
+    if (!key) {
+      return
+    }
+
+    savedViewCriteria = {
+      ...savedViewCriteria,
+      [key]: target.value,
+    }
+
+    activeSavedViewPreset = 'custom'
+    renderSavedViews(latestSavedViewItems)
   })
 
-  const saveViewForm = savedViewsContentEl.querySelector('[data-save-view-form]')
-  if (saveViewForm) {
-    const nameInput = savedViewsContentEl.querySelector('[data-saved-view-name]')
-    nameInput?.addEventListener('input', (event) => {
-      const target = event.currentTarget
-      savedViewDraftName = target?.value || ''
-    })
+  savedViewsContentEl.addEventListener('input', (event) => {
+    const target = event.target
+    if (!(target instanceof HTMLInputElement)) {
+      return
+    }
 
-    saveViewForm.addEventListener('submit', (event) => {
-      event.preventDefault()
-      const saveErrorEl = savedViewsContentEl.querySelector('[data-save-view-error]')
-      const nextName = cleanText(nameInput?.value)
-      const hasName = Boolean(nextName)
-      const hasSelectedFilter = hasActiveSavedViewFilters(savedViewCriteria)
+    if (target.matches('[data-saved-view-name]')) {
+      savedViewDraftName = target.value || ''
+    }
+  })
 
+  savedViewsContentEl.addEventListener('submit', (event) => {
+    const form = event.target
+    if (!(form instanceof HTMLFormElement) || !form.matches('[data-save-view-form]')) {
+      return
+    }
+
+    event.preventDefault()
+    const nameInput = form.querySelector('[data-saved-view-name]')
+    const saveErrorEl = form.querySelector('[data-save-view-error]')
+    const nextName = cleanText(nameInput?.value)
+    const hasName = Boolean(nextName)
+    const hasSelectedFilter = hasActiveSavedViewFilters(savedViewCriteria)
+
+    if (saveErrorEl) {
+      saveErrorEl.textContent = ''
+    }
+
+    if (!hasName && !hasSelectedFilter) {
       if (saveErrorEl) {
-        saveErrorEl.textContent = ''
+        saveErrorEl.textContent = 'Add a name so you can recognize this view later, and select at least one filter before saving a view.'
       }
+      nameInput?.focus()
+      return
+    }
 
-      if (!hasName && !hasSelectedFilter) {
-        if (saveErrorEl) {
-          saveErrorEl.textContent = 'Add a name so you can recognize this view later, and select at least one filter before saving a view.'
-        }
-        nameInput?.focus()
-        return
+    if (!hasName) {
+      if (saveErrorEl) {
+        saveErrorEl.textContent = 'Add a name so you can recognize this view later.'
       }
+      nameInput?.focus()
+      return
+    }
 
-      if (!hasName) {
-        if (saveErrorEl) {
-          saveErrorEl.textContent = 'Add a name so you can recognize this view later.'
-        }
-        nameInput?.focus()
-        return
+    if (!hasSelectedFilter) {
+      if (saveErrorEl) {
+        saveErrorEl.textContent = 'Select at least one filter before saving a view.'
       }
+      return
+    }
 
-      if (!hasSelectedFilter) {
-        if (saveErrorEl) {
-          saveErrorEl.textContent = 'Select at least one filter before saving a view.'
-        }
-        return
-      }
-
-      const savedView = saveCurrentFilterAsView(nextName)
-      savedViewDraftName = ''
-      activeSavedViewPreset = `saved:${savedView.id}`
-      isSavedViewFiltersPanelOpen = false
-      renderSavedViews(items)
-    })
-  }
-
-  savedViewsContentEl.querySelectorAll('.saved-view-item').forEach((node) => {
-    node.addEventListener('click', () => {
-      const blueprintName = node.getAttribute('data-blueprint-name')
-      const item = items.find((entry) => entry.name === blueprintName)
-      if (item) {
-        openBlueprintOverlay(item)
-      }
-    })
+    const savedView = saveCurrentFilterAsView(nextName)
+    savedViewDraftName = ''
+    activeSavedViewPreset = `saved:${savedView.id}`
+    isSavedViewFiltersPanelOpen = false
+    renderSavedViews(latestSavedViewItems)
   })
+
+  hasBoundSavedViewDelegates = true
 }
 
 function applyStarterViewPreset(presetId, items = []) {
@@ -1841,7 +1975,14 @@ function canDeleteActiveSavedViewFilter() {
 }
 
 function getVisibleStarterViewPresets() {
-  return STARTER_VIEW_PRESETS.filter((preset) => !hiddenStarterViewPresetIds.has(preset.id))
+  return STARTER_VIEW_PRESETS.filter((preset) => {
+    if (hiddenStarterViewPresetIds.has(preset.id)) {
+      return false
+    }
+
+    const starterSavedViewId = getStarterSavedViewId(preset.id)
+    return !savedFilterViews.some((view) => view.id === starterSavedViewId)
+  })
 }
 
 function getActiveSavedViewLabel() {
@@ -2022,7 +2163,50 @@ function ensureSavedFilterViewsLoaded() {
   }
 
   savedFilterViews = loadSavedFilterViews()
+  if (ensureStarterSavedViewsPresent()) {
+    localStorage.setItem(SAVED_FILTER_VIEWS_STORAGE_KEY, JSON.stringify(savedFilterViews))
+  }
   hasLoadedSavedFilterViews = true
+}
+
+function getStarterSavedViewId(presetId) {
+  return `${STARTER_SAVED_VIEW_ID_PREFIX}${presetId}`
+}
+
+function ensureStarterSavedViewsPresent() {
+  if (!Array.isArray(savedFilterViews)) {
+    savedFilterViews = []
+  }
+
+  const existingIds = new Set(savedFilterViews.map((view) => view.id))
+  let hasChanges = false
+
+  STARTER_VIEW_PRESETS.forEach((preset) => {
+    if (hiddenStarterViewPresetIds.has(preset.id)) {
+      return
+    }
+
+    const starterSavedViewId = getStarterSavedViewId(preset.id)
+    if (existingIds.has(starterSavedViewId)) {
+      return
+    }
+
+    savedFilterViews = [
+      {
+        id: starterSavedViewId,
+        name: preset.label,
+        criteria: normalizeSavedViewCriteria({
+          ...DEFAULT_SAVED_VIEW_CRITERIA,
+          ...preset.criteria,
+        }),
+      },
+      ...savedFilterViews,
+    ]
+    existingIds.add(starterSavedViewId)
+    hasChanges = true
+  })
+
+  return hasChanges
 }
 
 function saveSavedFilterViews() {
@@ -2086,17 +2270,6 @@ function hideStarterViewPreset(presetId) {
   hiddenStarterViewPresetIds.add(presetId)
   saveHiddenStarterViewPresets()
   return true
-}
-
-function deleteSavedFilterView(viewId) {
-  const removed = removeSavedFilterView(viewId)
-  if (!removed) {
-    return
-  }
-
-  if (activeSavedViewPreset === `saved:${viewId}`) {
-    activeSavedViewPreset = 'custom'
-  }
 }
 
 function refreshSavedViewsResults() {

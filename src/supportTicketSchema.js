@@ -179,33 +179,75 @@ export function validateSupportTicketSubmission(rawPayload) {
   }
 }
 
-export function buildSupportTicketIssue(validatedTicket, screenshotUrls = []) {
-  const { definition, summary, fields, sourcePage, userAgent } = validatedTicket
-  const title = `${definition.titlePrefix}${summary}`
+function buildIssueSection(title, content) {
+  const value = normalizeString(content)
+  if (!value) {
+    return ''
+  }
 
-  const bodySections = definition.fields.map((field) => {
-    const value = fields[field.key] || '_No details provided._'
-    return `## ${field.label}\n\n${value}`
-  })
+  return `### ${title}\n${value}`
+}
 
-  if (Array.isArray(screenshotUrls) && screenshotUrls.length > 0) {
-    const screenshotLines = screenshotUrls
-      .filter((url) => typeof url === 'string' && url.trim())
-      .map((url) => `![Screenshot](${url})`)
+export function buildSupportTicketIssue(submission, screenshotUrls = []) {
+  const value = submission && typeof submission === 'object' ? submission : {}
+  const definition = value.definition && typeof value.definition === 'object' ? value.definition : {}
+  const fields = value.fields && typeof value.fields === 'object' ? value.fields : {}
+  const summary = normalizeString(value.summary)
+  const titlePrefix = typeof definition.titlePrefix === 'string' ? definition.titlePrefix : ''
+  const issueTitle = `${titlePrefix}${summary}`.trim()
+  const sections = []
 
-    if (screenshotLines.length > 0) {
-      bodySections.push('## Screenshots')
-      bodySections.push(screenshotLines.join('\n\n'))
+  const typeSection = buildIssueSection('Ticket Type', definition.label)
+  if (typeSection) {
+    sections.push(typeSection)
+  }
+
+  const summarySection = buildIssueSection('Summary', summary)
+  if (summarySection) {
+    sections.push(summarySection)
+  }
+
+  const fieldDefinitions = Array.isArray(definition.fields) ? definition.fields : []
+  for (const fieldDefinition of fieldDefinitions) {
+    const key = normalizeString(fieldDefinition?.key)
+    const label = normalizeString(fieldDefinition?.label)
+    if (!key || !label) {
+      continue
+    }
+
+    const fieldSection = buildIssueSection(label, fields[key])
+    if (fieldSection) {
+      sections.push(fieldSection)
     }
   }
 
-  bodySections.push('## Submission context')
-  bodySections.push(`Submitted from: ${sourcePage || 'Unknown page'}`)
-  bodySections.push(`User agent: ${userAgent || 'Unknown agent'}`)
+  const screenshots = Array.isArray(screenshotUrls)
+    ? screenshotUrls
+        .map((url) => normalizeString(url))
+        .filter(Boolean)
+    : []
+  if (screenshots.length > 0) {
+    sections.push(`### Screenshots\n${screenshots.map((url) => `- ${url}`).join('\n')}`)
+  }
+
+  const metadataRows = []
+  const sourcePage = normalizeString(value.sourcePage)
+  const userAgent = normalizeString(value.userAgent)
+  if (sourcePage) {
+    metadataRows.push(`- Source Page: ${sourcePage}`)
+  }
+  if (userAgent) {
+    metadataRows.push(`- User Agent: ${userAgent}`)
+  }
+  if (metadataRows.length > 0) {
+    sections.push(`### Metadata\n${metadataRows.join('\n')}`)
+  }
+
+  const githubLabel = normalizeString(definition.githubLabel)
 
   return {
-    title,
-    body: bodySections.join('\n\n'),
-    labels: [definition.githubLabel],
+    title: issueTitle || summary || 'Support ticket',
+    body: sections.join('\n\n'),
+    labels: githubLabel ? [githubLabel] : [],
   }
 }
