@@ -14,10 +14,10 @@ test('getBlueprintVisuals prefers classification data and falls back to structur
   })
 })
 
-test('buildDependencySummaryLine summarizes parent and child relationships', () => {
+test('buildDependencySummaryLine summarizes dependency relationships', () => {
   assert.equal(buildDependencySummaryLine({}), 'No dependency relation')
-  assert.equal(buildDependencySummaryLine({ isParentDependency: true }), 'Dependent')
-  assert.equal(buildDependencySummaryLine({ isChildDependency: true, dependentNames: ['Alpha', 'Beta'] }), 'Needed (2)')
+  assert.equal(buildDependencySummaryLine({ isDependentOn: true }), 'Dependent')
+  assert.equal(buildDependencySummaryLine({ isNeededFor: true, dependentNames: ['Alpha', 'Beta'] }), 'Needed (2)')
 })
 
 test('buildBlueprintSummary combines progress, inventory, and dependency state', () => {
@@ -30,7 +30,10 @@ test('buildBlueprintSummary combines progress, inventory, and dependency state',
         },
       },
     },
-    { dependentsByComponent: new Map([['alpha', new Set(['Beta'])]]) },
+    {
+      dependentsByComponent: new Map([['alpha', new Set(['Beta'])]]),
+      blueprintNames: new Set(['alpha', 'beta']),
+    },
     {
       getBlueprintProgressState: () => ({
         owned: true,
@@ -42,14 +45,14 @@ test('buildBlueprintSummary combines progress, inventory, and dependency state',
       getCollectionBookStatus: () => '✅ Complete',
       getBlueprintMilestoneKeys: (blueprintName, entries) => entries.map((entry, index) => `${blueprintName}::crafting::${index}::${entry.name || 'Unlock'}`),
       isTrackedUpgrade: () => true,
-      getBlueprintMaterials: () => ({ components: [{ name: 'Shard' }] }),
+      getBlueprintMaterials: () => ({ components: [{ name: 'Beta' }] }),
     },
   )
 
   assert.equal(summary.isOwned, true)
   assert.equal(summary.isMastered, true)
-  assert.equal(summary.isParentDependency, true)
-  assert.equal(summary.isChildDependency, true)
+  assert.equal(summary.isDependentOn, true)
+  assert.equal(summary.isNeededFor, true)
   assert.equal(summary.totalInventory, 2)
   assert.equal(summary.hasSuperiorOrBetterInventory, true)
   assert.equal(summary.isCollectionComplete, true)

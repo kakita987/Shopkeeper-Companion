@@ -37,6 +37,15 @@ const CATEGORY_DEFINITIONS = [
     types: ['Element', 'Spirit'],
   },
 ]
+const CATEGORY_ORDER_INDEX = new Map(
+  CATEGORY_DEFINITIONS.map((definition, index) => [definition.title, index])
+)
+const CATEGORY_TYPE_ORDER_INDEX = new Map(
+  CATEGORY_DEFINITIONS.map((definition) => [
+    definition.title,
+    new Map(definition.types.map((type, index) => [type, index])),
+  ])
+)
 
 const app = document.querySelector('#app')
 const RESOURCE_LABELS = ['Iron', 'Wood', 'Steel', 'Leather', 'Herbs', 'Oils', 'Fabric', 'Gems', 'Mana', 'Essence']
@@ -44,6 +53,8 @@ const INVENTORY_QUALITY_KEYS = ['normal', 'superior', 'flawless', 'epic', 'legen
 const COLLECTION_BOOK_QUALITY_ORDER = ['legendary', 'epic', 'flawless', 'superior']
 const TRACKED_UPGRADES_STORAGE_KEY = 'shopkeeper-tracked-upgrades'
 const BLUEPRINT_PROGRESS_STORAGE_KEY = 'shopkeeper-blueprint-progress'
+const HIDDEN_STARTER_VIEW_PRESETS_STORAGE_KEY = 'shopkeeper-hidden-starter-view-presets-v2'
+const HIDDEN_STARTER_VIEW_PRESETS_SETTINGS_KEY = 'hidden-starter-view-presets-v2'
 const BLUEPRINT_CACHE_STORAGE_KEY = 'shopkeeper-blueprint-cache-v1'
 const GOOGLE_SYNC_SPREADSHEET_ID_STORAGE_KEY = 'shopkeeper-google-sync-spreadsheet-id'
 const GOOGLE_SYNC_SPREADSHEET_ID_COOKIE_KEY = 'shopkeeper_google_sync_spreadsheet_id'
@@ -201,6 +212,7 @@ const mobileAdBannerEl = document.querySelector('#mobile-ad-banner')
 const topTabs = Array.from(document.querySelectorAll('.top-tab'))
 const viewPanels = Array.from(document.querySelectorAll('[data-view-panel]'))
 let trackedUpgradeKeys = loadTrackedUpgradeKeys()
+let hiddenStarterViewPresetIds = loadHiddenStarterViewPresetIds()
 
 function activateView(viewName) {
   const normalizedViewName = viewName === 'saved-views' ? 'saved-views' : 'blueprints'
@@ -228,6 +240,7 @@ let savedViewCriteria = {
 }
 let activeSavedViewPreset = 'custom'
 let savedViewDraftName = ''
+let isSavedViewFiltersPanelOpen = true
 let pendingGoogleSyncWriteTimer = null
 let pendingGoogleSyncInitPromise = null
 let isApplyingRemoteSyncState = false
@@ -869,6 +882,7 @@ function hasLocalUserData() {
   return (
     Boolean(allBlueprintItems.length) ||
     Boolean(savedFilterViews.length) ||
+    Boolean(hiddenStarterViewPresetIds.size) ||
     Boolean(trackedUpgradeKeys.size) ||
     Boolean(Object.keys(blueprintProgressByName).length) ||
     Boolean(localStorage.getItem(FONT_PREFERENCE_STORAGE_KEY)) ||
@@ -896,6 +910,9 @@ function applyRemoteSyncState(remoteTables) {
 
     trackedUpgradeKeys = new Set(parseTrackedUpgradeRows(settings))
     localStorage.setItem(TRACKED_UPGRADES_STORAGE_KEY, JSON.stringify([...trackedUpgradeKeys]))
+
+    hiddenStarterViewPresetIds = new Set(parseHiddenStarterViewPresetRows(settings))
+    localStorage.setItem(HIDDEN_STARTER_VIEW_PRESETS_STORAGE_KEY, JSON.stringify([...hiddenStarterViewPresetIds]))
 
     blueprintProgressByName = parseBlueprintProgressRows(remoteTables.blueprintProgress, blueprintProgressByName)
     localStorage.setItem(BLUEPRINT_PROGRESS_STORAGE_KEY, JSON.stringify(blueprintProgressByName))
@@ -964,6 +981,7 @@ function buildSettingsRows() {
     ['theme', getStoredTheme()],
     ['font', getStoredFontPreference()],
     ['tracked-upgrades', JSON.stringify([...trackedUpgradeKeys])],
+    [HIDDEN_STARTER_VIEW_PRESETS_SETTINGS_KEY, JSON.stringify([...hiddenStarterViewPresetIds])],
   ]
 }
 
@@ -988,6 +1006,28 @@ function parseTrackedUpgradeRows(settings = {}) {
     try {
       const parsed = JSON.parse(raw)
       return Array.isArray(parsed) ? parsed.filter(Boolean) : []
+    } catch {
+      return []
+    }
+  }
+
+  return []
+}
+
+function parseHiddenStarterViewPresetRows(settings = {}) {
+  if (settings && typeof settings === 'object' && !Array.isArray(settings)) {
+    const raw = cleanText(settings[HIDDEN_STARTER_VIEW_PRESETS_SETTINGS_KEY])
+    if (!raw) {
+      return []
+    }
+
+    const validPresetIds = new Set(STARTER_VIEW_PRESETS.map((preset) => preset.id))
+
+    try {
+      const parsed = JSON.parse(raw)
+      return Array.isArray(parsed)
+        ? parsed.map((value) => cleanText(value)).filter((value) => validPresetIds.has(value))
+        : []
     } catch {
       return []
     }
@@ -1339,23 +1379,27 @@ function renderSavedViews(items = []) {
   const dependencyIndex = getDependencyIndex(items)
   const filteredItems = filterBlueprintItems(items, savedViewCriteria, dependencyIndex)
   const totalCount = items.length
+  const starterViewPresets = getVisibleStarterViewPresets()
 
   savedViewsContentEl.innerHTML = `
-    <div class="saved-views-toolbar overlay-card">
-      <div class="saved-view-presets">
-        ${STARTER_VIEW_PRESETS.map((preset) => `
-          <button
-            type="button"
-            class="saved-view-preset ${activeSavedViewPreset === `starter:${preset.id}` ? 'is-active' : ''}"
-            data-starter-view-preset="${escapeHtml(preset.id)}"
-          >${escapeHtml(preset.label)}</button>
-        `).join('')}
+    <div class="saved-views-toolbar overlay-card saved-view-chip-panel">
+      ${renderActiveSavedViewDeleteControl()}
+      <div class="saved-view-chip-wrap">
+        <div class="saved-view-presets">
+          ${starterViewPresets.map((preset) => `
+            <button
+              type="button"
+              class="saved-view-preset ${activeSavedViewPreset === `starter:${preset.id}` ? 'is-active' : ''}"
+              data-starter-view-preset="${escapeHtml(preset.id)}"
+            >${escapeHtml(preset.label)}</button>
+          `).join('')}
+        </div>
+        ${renderSavedFilterViews()}
       </div>
-      ${renderSavedFilterViews()}
     </div>
 
     <div class="saved-views-toolbar overlay-card">
-      <details class="overlay-section" open>
+      <details class="overlay-section" ${isSavedViewFiltersPanelOpen ? 'open' : ''} data-saved-view-filters-panel>
         <summary class="section-summary section-summary--toggle">
           <div class="section-summary-title">
             <h4>Filters</h4>
@@ -1369,8 +1413,8 @@ function renderSavedViews(items = []) {
               <select data-saved-filter="dependency">
                 ${renderSelectOptions([
                   ['any', 'Any Status'],
-                  ['parent', 'Dependent On'],
-                  ['child', 'Needed For'],
+                  ['dependent', 'Dependent On'],
+                  ['needed', 'Needed For'],
                 ], savedViewCriteria.dependency)}
               </select>
             </label>
@@ -1494,8 +1538,47 @@ function renderSavedViewResults(items = [], dependencyIndex) {
     categoryGroup.types.get(type).items.push(item)
   })
 
-  return Array.from(grouped.values()).map((categoryGroup) => {
-    const typeMarkup = Array.from(categoryGroup.types.values()).map((typeGroup) => {
+  const orderedCategoryGroups = Array.from(grouped.values()).sort((leftGroup, rightGroup) => {
+    const leftIndex = CATEGORY_ORDER_INDEX.get(leftGroup.category)
+    const rightIndex = CATEGORY_ORDER_INDEX.get(rightGroup.category)
+
+    if (leftIndex !== undefined && rightIndex !== undefined) {
+      return leftIndex - rightIndex
+    }
+
+    if (leftIndex !== undefined) {
+      return -1
+    }
+
+    if (rightIndex !== undefined) {
+      return 1
+    }
+
+    return leftGroup.category.localeCompare(rightGroup.category)
+  })
+
+  return orderedCategoryGroups.map((categoryGroup) => {
+    const typeOrderIndex = CATEGORY_TYPE_ORDER_INDEX.get(categoryGroup.category) || new Map()
+    const orderedTypeGroups = Array.from(categoryGroup.types.values()).sort((leftTypeGroup, rightTypeGroup) => {
+      const leftIndex = typeOrderIndex.get(leftTypeGroup.type)
+      const rightIndex = typeOrderIndex.get(rightTypeGroup.type)
+
+      if (leftIndex !== undefined && rightIndex !== undefined) {
+        return leftIndex - rightIndex
+      }
+
+      if (leftIndex !== undefined) {
+        return -1
+      }
+
+      if (rightIndex !== undefined) {
+        return 1
+      }
+
+      return leftTypeGroup.type.localeCompare(rightTypeGroup.type)
+    })
+
+    const typeMarkup = orderedTypeGroups.map((typeGroup) => {
       const listMarkup = typeGroup.items.map((item) => {
         const summary = buildBlueprintSummary(item, dependencyIndex, {
           getBlueprintProgressState,
@@ -1554,6 +1637,11 @@ function bindSavedViewControls(items = []) {
     return
   }
 
+  const filtersPanel = savedViewsContentEl.querySelector('[data-saved-view-filters-panel]')
+  filtersPanel?.addEventListener('toggle', () => {
+    isSavedViewFiltersPanelOpen = filtersPanel.open
+  })
+
   savedViewsContentEl.querySelectorAll('[data-starter-view-preset]').forEach((button) => {
     button.addEventListener('click', () => {
       const presetId = button.dataset.starterViewPreset
@@ -1568,13 +1656,9 @@ function bindSavedViewControls(items = []) {
     })
   })
 
-  savedViewsContentEl.querySelectorAll('[data-delete-saved-filter-view-id]').forEach((button) => {
-    button.addEventListener('click', (event) => {
-      event.stopPropagation()
-      const viewId = button.dataset.deleteSavedFilterViewId
-      deleteSavedFilterView(viewId)
-      renderSavedViews(items)
-    })
+  const deleteActiveViewButton = savedViewsContentEl.querySelector('[data-delete-active-saved-filter]')
+  deleteActiveViewButton?.addEventListener('click', () => {
+    deleteActiveSavedViewFilter(items)
   })
 
   savedViewsContentEl.querySelectorAll('[data-saved-filter]').forEach((select) => {
@@ -1665,6 +1749,7 @@ function bindSavedViewControls(items = []) {
       const savedView = saveCurrentFilterAsView(nextName)
       savedViewDraftName = ''
       activeSavedViewPreset = `saved:${savedView.id}`
+      isSavedViewFiltersPanelOpen = false
       renderSavedViews(items)
     })
   }
@@ -1687,6 +1772,7 @@ function applyStarterViewPreset(presetId, items = []) {
   }
 
   activeSavedViewPreset = `starter:${preset.id}`
+  isSavedViewFiltersPanelOpen = false
   savedViewCriteria = normalizeSavedViewCriteria({
     ...DEFAULT_SAVED_VIEW_CRITERIA,
     ...preset.criteria,
@@ -1702,6 +1788,7 @@ function applySavedFilterView(viewId, items = []) {
   }
 
   activeSavedViewPreset = `saved:${view.id}`
+  isSavedViewFiltersPanelOpen = false
   savedViewCriteria = normalizeSavedViewCriteria({
     ...DEFAULT_SAVED_VIEW_CRITERIA,
     ...(view.criteria || {}),
@@ -1718,22 +1805,85 @@ function renderSavedFilterViews() {
   return `
     <div class="saved-filter-list">
       ${savedFilterViews.map((view) => `
-        <div class="saved-filter-row">
-          <button
-            type="button"
-            class="saved-view-preset ${activeSavedViewPreset === `saved:${view.id}` ? 'is-active' : ''}"
-            data-saved-filter-view-id="${escapeHtml(view.id)}"
-          >${escapeHtml(view.name)}</button>
-          <button
-            type="button"
-            class="saved-view-delete"
-            data-delete-saved-filter-view-id="${escapeHtml(view.id)}"
-            aria-label="Delete ${escapeHtml(view.name)}"
-          >×</button>
-        </div>
+        <button
+          type="button"
+          class="saved-view-preset ${activeSavedViewPreset === `saved:${view.id}` ? 'is-active' : ''}"
+          data-saved-filter-view-id="${escapeHtml(view.id)}"
+        >${escapeHtml(view.name)}</button>
       `).join('')}
     </div>
   `
+}
+
+function renderActiveSavedViewDeleteControl() {
+  const canDeleteActive = canDeleteActiveSavedViewFilter()
+  const activeLabel = getActiveSavedViewLabel()
+  const ariaLabel = activeLabel
+    ? `Delete active Saved View ${activeLabel}`
+    : 'Delete active Saved View'
+
+  return `
+    <div class="saved-view-active-controls">
+      <span class="saved-view-delete-tip">This X deletes the active Saved View.</span>
+      <button
+        type="button"
+        class="saved-view-delete"
+        data-delete-active-saved-filter
+        ${canDeleteActive ? '' : 'disabled'}
+        aria-label="${escapeHtml(ariaLabel)}"
+      >×</button>
+    </div>
+  `
+}
+
+function canDeleteActiveSavedViewFilter() {
+  return activeSavedViewPreset.startsWith('saved:') || activeSavedViewPreset.startsWith('starter:')
+}
+
+function getVisibleStarterViewPresets() {
+  return STARTER_VIEW_PRESETS.filter((preset) => !hiddenStarterViewPresetIds.has(preset.id))
+}
+
+function getActiveSavedViewLabel() {
+  if (activeSavedViewPreset.startsWith('saved:')) {
+    const viewId = activeSavedViewPreset.slice('saved:'.length)
+    const view = savedFilterViews.find((entry) => entry.id === viewId)
+    return view?.name || ''
+  }
+
+  if (activeSavedViewPreset.startsWith('starter:')) {
+    const presetId = activeSavedViewPreset.slice('starter:'.length)
+    const preset = STARTER_VIEW_PRESETS.find((entry) => entry.id === presetId)
+    return preset?.label || ''
+  }
+
+  return ''
+}
+
+function resetSavedViewsToDefaultCriteria() {
+  activeSavedViewPreset = 'custom'
+  savedViewCriteria = {
+    ...DEFAULT_SAVED_VIEW_CRITERIA,
+  }
+}
+
+function deleteActiveSavedViewFilter(items = []) {
+  if (activeSavedViewPreset.startsWith('saved:')) {
+    const viewId = activeSavedViewPreset.slice('saved:'.length)
+    resetSavedViewsToDefaultCriteria()
+    const removed = removeSavedFilterView(viewId)
+    if (!removed) {
+      renderSavedViews(items)
+    }
+    return
+  }
+
+  if (activeSavedViewPreset.startsWith('starter:')) {
+    const presetId = activeSavedViewPreset.slice('starter:'.length)
+    hideStarterViewPreset(presetId)
+    resetSavedViewsToDefaultCriteria()
+    renderSavedViews(items)
+  }
 }
 
 function renderSelectOptions(options = [], selectedValue = 'any') {
@@ -1762,13 +1912,19 @@ function renderCollectionBookFilterOptions(selectedValues = []) {
 
 function buildDependencyIndex(items = []) {
   const dependentsByComponent = new Map()
+  const blueprintNames = new Set(
+    items
+      .map((item) => normalizeBlueprintName(item?.name))
+      .filter(Boolean),
+  )
 
   items.forEach((item) => {
+    const itemName = normalizeBlueprintName(item?.name)
     const components = getBlueprintMaterials(item).components || []
 
     components.forEach((component) => {
       const componentName = normalizeBlueprintName(component?.name)
-      if (!componentName) {
+      if (!componentName || !blueprintNames.has(componentName) || componentName === itemName) {
         return
       }
 
@@ -1782,6 +1938,7 @@ function buildDependencyIndex(items = []) {
 
   return {
     dependentsByComponent,
+    blueprintNames,
   }
 }
 
@@ -1813,11 +1970,11 @@ function filterBlueprintItems(items = [], criteria = {}, dependencyIndex) {
       getBlueprintMaterials,
     })
 
-    if (normalizedCriteria.dependency === 'parent' && !summary.isParentDependency) {
+    if (normalizedCriteria.dependency === 'dependent' && !summary.isDependentOn) {
       return false
     }
 
-    if (normalizedCriteria.dependency === 'child' && !summary.isChildDependency) {
+    if (normalizedCriteria.dependency === 'needed' && !summary.isNeededFor) {
       return false
     }
 
@@ -1895,16 +2052,51 @@ function saveCurrentFilterAsView(name) {
   return nextView
 }
 
-function deleteSavedFilterView(viewId) {
+function removeSavedFilterView(viewId) {
   if (!viewId) {
+    return false
+  }
+
+  const nextViews = savedFilterViews.filter((entry) => entry.id !== viewId)
+  if (nextViews.length === savedFilterViews.length) {
+    return false
+  }
+
+  savedFilterViews = nextViews
+  saveSavedFilterViews()
+  return true
+}
+
+function saveHiddenStarterViewPresets() {
+  localStorage.setItem(HIDDEN_STARTER_VIEW_PRESETS_STORAGE_KEY, JSON.stringify([...hiddenStarterViewPresetIds]))
+  scheduleGoogleSyncWrite()
+}
+
+function hideStarterViewPreset(presetId) {
+  if (!presetId) {
+    return false
+  }
+
+  const isKnownPreset = STARTER_VIEW_PRESETS.some((preset) => preset.id === presetId)
+  if (!isKnownPreset || hiddenStarterViewPresetIds.has(presetId)) {
+    return false
+  }
+
+  hiddenStarterViewPresetIds = new Set(hiddenStarterViewPresetIds)
+  hiddenStarterViewPresetIds.add(presetId)
+  saveHiddenStarterViewPresets()
+  return true
+}
+
+function deleteSavedFilterView(viewId) {
+  const removed = removeSavedFilterView(viewId)
+  if (!removed) {
     return
   }
 
-  savedFilterViews = savedFilterViews.filter((entry) => entry.id !== viewId)
   if (activeSavedViewPreset === `saved:${viewId}`) {
     activeSavedViewPreset = 'custom'
   }
-  saveSavedFilterViews()
 }
 
 function refreshSavedViewsResults() {
@@ -1919,6 +2111,24 @@ function loadTrackedUpgradeKeys() {
     return new Set(Array.isArray(stored) ? stored : [])
   } catch (error) {
     console.warn('Unable to load tracked upgrades.', error)
+    return new Set()
+  }
+}
+
+function loadHiddenStarterViewPresetIds() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(HIDDEN_STARTER_VIEW_PRESETS_STORAGE_KEY) || '[]')
+    if (!Array.isArray(stored)) {
+      return new Set()
+    }
+
+    const validPresetIds = new Set(STARTER_VIEW_PRESETS.map((preset) => preset.id))
+    const sanitized = stored
+      .map((value) => cleanText(value))
+      .filter((value) => validPresetIds.has(value))
+    return new Set(sanitized)
+  } catch (error) {
+    console.warn('Unable to load hidden starter view presets.', error)
     return new Set()
   }
 }

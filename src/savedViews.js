@@ -13,19 +13,19 @@ export const DEFAULT_SAVED_VIEW_CRITERIA = {
 
 export const STARTER_VIEW_PRESETS = [
   {
-    id: 'parent-dependencies',
+    id: 'dependent-on',
     label: 'Dependent',
     criteria: {
       ...DEFAULT_SAVED_VIEW_CRITERIA,
-      dependency: 'parent',
+      dependency: 'dependent',
     },
   },
   {
-    id: 'child-dependencies',
+    id: 'needed-for',
     label: 'Needed',
     criteria: {
       ...DEFAULT_SAVED_VIEW_CRITERIA,
-      dependency: 'child',
+      dependency: 'needed',
     },
   },
 ]
@@ -37,8 +37,12 @@ export function normalizeSavedViewCriteria(criteria = {}) {
       ? [criteria.collection]
       : []
 
+  const dependency = cleanText(criteria.dependency).toLowerCase()
+
   return {
-    dependency: ['any', 'parent', 'child'].includes(criteria.dependency) ? criteria.dependency : 'any',
+    dependency: ['any', 'dependent', 'needed'].includes(dependency)
+      ? dependency
+      : 'any',
     ownership: ['owned', 'not-owned', 'any'].includes(criteria.ownership) ? criteria.ownership : 'any',
     inventory: ['any', 'has', 'superior-or-better'].includes(criteria.inventory) ? criteria.inventory : 'any',
     mastered: ['any', 'mastered', 'not-mastered'].includes(criteria.mastered) ? criteria.mastered : 'any',
@@ -89,13 +93,13 @@ export function parseSavedViewsRows(rows = []) {
       return {
         id,
         name,
-        criteria: {
+        criteria: normalizeSavedViewCriteria({
           dependency: cleanText(row?.[2]) || 'any',
           ownership: cleanText(row?.[3]) || 'any',
           inventory: cleanText(row?.[4]) || 'any',
           mastered: cleanText(row?.[5]) || 'any',
           collectionBook: parseCollectionBookCriteria(row?.[6]),
-        },
+        }),
       }
     })
     .filter(Boolean)

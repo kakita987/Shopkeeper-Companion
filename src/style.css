@@ -127,6 +127,10 @@ body {
   align-items: start;
 }
 
+body.ads-disabled .app-layout {
+  grid-template-columns: minmax(0, 1200px);
+}
+
 .desktop-ad-rail {
   position: sticky;
   top: 16px;
@@ -135,6 +139,12 @@ body {
 
 .mobile-ad-rail {
   display: none;
+}
+
+body.ads-disabled .desktop-ad-rail,
+body.ads-disabled .mobile-ad-rail,
+body.ads-disabled .docs-ad-banner {
+  display: none !important;
 }
 
 .ad-banner-shell {
@@ -1164,6 +1174,11 @@ body.theme-dark .overlay-card,
   border-radius: 0;
 }
 
+body.theme-dark .saved-view-results.overlay-card,
+:root[data-theme='dark'] .saved-view-results.overlay-card {
+  background: transparent;
+}
+
 .saved-view-results .section-summary-title h4 {
   font-size: 1.35rem;
 }
@@ -1177,9 +1192,42 @@ body.theme-dark .overlay-card,
   margin-right: 40px;
 }
 
+.saved-view-chip-panel {
+  position: relative;
+  padding-top: 42px;
+}
+
+.saved-view-active-controls {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: calc(100% - 24px);
+}
+
+.saved-view-delete-tip {
+  margin: 0;
+  color: #4b5563;
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: right;
+}
+
+.saved-view-chip-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
 .saved-view-presets {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
 }
 
@@ -1213,7 +1261,8 @@ body.theme-dark .overlay-card,
 
 .saved-filter-list {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
 }
 
@@ -1238,6 +1287,12 @@ body.theme-dark .overlay-card,
   font: inherit;
   font-weight: 700;
   cursor: pointer;
+  flex-shrink: 0;
+}
+
+.saved-view-delete:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .saved-view-save-row {
@@ -1493,6 +1548,11 @@ body.theme-dark .saved-view-delete,
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.2);
   color: #fecaca;
+}
+
+body.theme-dark .saved-view-delete-tip,
+:root[data-theme='dark'] .saved-view-delete-tip {
+  color: #cbd5e1;
 }
 
 body.theme-dark .saved-view-filter select,
@@ -2782,9 +2842,20 @@ body.theme-dark .site-footer-link,
     margin-top: -22px;
   }
 
-  .saved-view-preset {
+  .saved-view-chip-wrap .saved-view-preset {
+    width: auto;
+    text-align: center;
+  }
+
+  .saved-view-active-controls {
+    position: static;
+    display: flex;
     width: 100%;
-    text-align: left;
+    margin-bottom: 8px;
+  }
+
+  .saved-view-chip-panel {
+    padding-top: 14px;
   }
 
   /* Match desktop tab sizing exactly — file-folder tabs, same size on mobile */
