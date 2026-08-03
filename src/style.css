@@ -1149,9 +1149,32 @@ body.theme-dark .overlay-card,
   align-content: start;
 }
 
+.saved-views-content .section-summary-title {
+  padding-left: 24px;
+}
+
 .saved-views-toolbar,
 .saved-view-results {
   padding: 14px;
+}
+
+.saved-view-results.overlay-card {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+.saved-view-results .section-summary-title h4 {
+  font-size: 1.35rem;
+}
+
+.saved-view-results > .overlay-section > .section-summary > .group-count {
+  margin-right: 40px;
+}
+
+.saved-view-results .blueprint-category > summary > .group-count,
+.saved-view-results .blueprint-type > summary > .group-count {
+  margin-right: 40px;
 }
 
 .saved-view-presets {
@@ -1182,6 +1205,10 @@ body.theme-dark .overlay-card,
   display: grid;
   gap: 10px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.saved-view-filters > .saved-view-filter > span {
+  padding-left: 16px;
 }
 
 .saved-filter-list {
@@ -2454,6 +2481,167 @@ a.top-tab {
 
 .site-footer-separator {
   opacity: 0.45;
+}
+
+.support-page-intro {
+  margin-bottom: 18px;
+  padding-left: 16px;
+}
+
+.support-page-intro p {
+  margin-bottom: 10px;
+}
+
+.support-ticket-form {
+  display: grid;
+  gap: 14px;
+}
+
+.support-ticket-fields {
+  display: grid;
+  gap: 12px;
+}
+
+.support-field {
+  display: grid;
+  gap: 6px;
+}
+
+.support-field span {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding-left: 16px;
+}
+
+.support-field-helper {
+  margin: 0;
+  font-size: 0.82rem;
+  opacity: 0.74;
+  line-height: 1.35;
+}
+
+.support-selected-files {
+  margin: 2px 0 0;
+  font-size: 0.8rem;
+  opacity: 0.78;
+  line-height: 1.35;
+}
+
+.support-field input,
+.support-field select,
+.support-field textarea {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid rgba(120, 89, 45, 0.3);
+  background: rgba(255, 255, 255, 0.9);
+  padding: 10px 11px;
+  font: inherit;
+}
+
+.support-field input[type='file'] {
+  padding: 8px;
+  border-style: dashed;
+}
+
+.support-field input[type='file'] + .support-field-helper {
+  padding-left: 24px;
+}
+
+.support-field input[type='file']::file-selector-button {
+  margin-right: 10px;
+  border: 1px solid #b59059;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #e6cfa8 0%, #d8bb8c 100%);
+  padding: 7px 11px;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #3f2d16;
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 249, 238, 0.6),
+    0 1px 2px rgba(105, 76, 40, 0.2);
+}
+
+.support-field input[type='file']::file-selector-button:hover {
+  filter: brightness(1.08);
+}
+
+body.theme-dark .support-field input,
+body.theme-dark .support-field select,
+body.theme-dark .support-field textarea,
+:root[data-theme='dark'] .support-field input,
+:root[data-theme='dark'] .support-field select,
+:root[data-theme='dark'] .support-field textarea {
+  border-color: rgba(148, 163, 184, 0.35);
+  background: rgba(30, 41, 59, 0.86);
+  color: #e2e8f0;
+}
+
+body.theme-dark .support-field input[type='file']::file-selector-button,
+:root[data-theme='dark'] .support-field input[type='file']::file-selector-button {
+  background: linear-gradient(180deg, #4b5e7c 0%, #394960 100%);
+  border-color: rgba(194, 209, 232, 0.52);
+  color: #eef4ff;
+  box-shadow:
+    inset 0 1px 0 rgba(218, 228, 244, 0.24),
+    0 1px 2px rgba(2, 6, 23, 0.34);
+}
+
+.support-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: -20px;
+  padding-right: 40px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.support-actions button {
+  border: 1px solid #b59059;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #e6cfa8 0%, #d8bb8c 100%);
+  padding: 9px 18px;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #3f2d16;
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 249, 238, 0.6),
+    0 2px 4px rgba(105, 76, 40, 0.22);
+}
+
+.support-actions button:hover {
+  filter: brightness(1.08);
+}
+
+.support-actions button:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+body.theme-dark .support-actions button,
+:root[data-theme='dark'] .support-actions button {
+  background: linear-gradient(180deg, #4b5e7c 0%, #394960 100%);
+  border-color: rgba(194, 209, 232, 0.52);
+  color: #eef4ff;
+  box-shadow:
+    inset 0 1px 0 rgba(218, 228, 244, 0.24),
+    0 2px 4px rgba(2, 6, 23, 0.34);
+}
+
+.support-honeypot {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.status.success {
+  color: #0f766e !important;
 }
 
 body.theme-dark .site-footer-link,

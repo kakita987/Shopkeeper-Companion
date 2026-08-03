@@ -38,9 +38,10 @@ Shopkeeper Companion may use external services:
 
 - **EthicalAds:** Used to display privacy-preserving advertisements. EthicalAds does not use tracking cookies or sell your personal data.
 - **Ko-fi:** An optional link for users who wish to support development. Any transactions are handled entirely on Ko-fi's platform.
+- **GitHub:** If you submit a ticket through the Support page or GitHub links, the ticket content is stored in the Shopkeeper Companion GitHub repository.
 
 These services may have their own privacy policies.
 
 ## Contact
 
-If you have feature requests or bug reports, you can reach out through GitHub repository or support links.
+If you have feature requests, bug reports, documentation suggestions, or questions, you can use the in-site Support page or submit directly through the GitHub repository issue links.

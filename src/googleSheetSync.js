@@ -908,5 +908,4 @@ export async function writeSyncTables(accessToken, spreadsheetId, tablesByKey) {
 export {
   buildWorkbookPayload,
   getSyncWorkbookSchemaEntries,
-  parseBooleanCell,
 }

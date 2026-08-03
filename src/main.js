@@ -40,7 +40,6 @@ const CATEGORY_DEFINITIONS = [
 
 const app = document.querySelector('#app')
 const RESOURCE_LABELS = ['Iron', 'Wood', 'Steel', 'Leather', 'Herbs', 'Oils', 'Fabric', 'Gems', 'Mana', 'Essence']
-const QUALITY_LABELS = ['Normal', 'Superior', 'Flawless', 'Epic', 'Legendary']
 const INVENTORY_QUALITY_KEYS = ['normal', 'superior', 'flawless', 'epic', 'legendary']
 const COLLECTION_BOOK_QUALITY_ORDER = ['legendary', 'epic', 'flawless', 'superior']
 const TRACKED_UPGRADES_STORAGE_KEY = 'shopkeeper-tracked-upgrades'
@@ -175,6 +174,8 @@ app.innerHTML = `
   </div>
 
   <footer class="site-footer-links" aria-label="Legal and project links">
+    <a class="site-footer-link" href="/support.html">Support</a>
+    <span class="site-footer-separator" aria-hidden="true">•</span>
     <a class="site-footer-link" href="/about.html">About</a>
     <span class="site-footer-separator" aria-hidden="true">•</span>
     <a class="site-footer-link" href="/privacy.html">Privacy Policy</a>
@@ -234,6 +235,7 @@ let blueprintVersionLabel = ''
 let disposeDesktopAd = () => {}
 let disposeMobileAd = () => {}
 let hasTrackedAdBannerRefresh = false
+const dependencyIndexCache = new WeakMap()
 const googleSyncState = {
   spreadsheetId: '',
   spreadsheetUrl: '',
@@ -1334,7 +1336,7 @@ function renderSavedViews(items = []) {
     return
   }
 
-  const dependencyIndex = buildDependencyIndex(items)
+  const dependencyIndex = getDependencyIndex(items)
   const filteredItems = filterBlueprintItems(items, savedViewCriteria, dependencyIndex)
   const totalCount = items.length
 
@@ -1783,6 +1785,21 @@ function buildDependencyIndex(items = []) {
   }
 }
 
+function getDependencyIndex(items = []) {
+  if (!Array.isArray(items)) {
+    return buildDependencyIndex([])
+  }
+
+  const cached = dependencyIndexCache.get(items)
+  if (cached) {
+    return cached
+  }
+
+  const next = buildDependencyIndex(items)
+  dependencyIndexCache.set(items, next)
+  return next
+}
+
 function filterBlueprintItems(items = [], criteria = {}, dependencyIndex) {
   const normalizedCriteria = normalizeSavedViewCriteria(criteria)
 
@@ -2057,13 +2074,6 @@ function getCollectionBookStatus(blueprint) {
   }
 
   return '✅ Complete'
-}
-
-function hasCraftingComponents(blueprint) {
-  const materials = getBlueprintMaterials(blueprint)
-  const components = Array.isArray(materials.components) ? materials.components : []
-
-  return components.some((component) => cleanText(component?.name))
 }
 
 function getBlueprintMaterials(blueprint) {

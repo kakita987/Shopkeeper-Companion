@@ -5,7 +5,6 @@ import { renderMarkdown } from './markdownRenderer.js'
 import { SETTINGS_GEAR_ICON_MARKUP } from './settingsGearIcon.js'
 
 let disposeDocsAd = () => {}
-const ADS_VISIBLE = import.meta.env.VITE_SHOW_ADS === 'true'
 
 function getCurrentThemeHint() {
   return document.body.classList.contains('theme-dark') ? 'dark' : 'light'

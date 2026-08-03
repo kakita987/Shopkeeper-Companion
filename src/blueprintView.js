@@ -237,7 +237,7 @@ export function buildBlueprintSummary(item, dependencyIndex, { getBlueprintProgr
   }
 }
 
-export function buildBlueprintGroups(items = [], categoryDefinitions = []) {
+function buildBlueprintGroups(items = [], categoryDefinitions = []) {
   const categoryMaps = categoryDefinitions.map((definition) => ({
     title: definition.title,
     typeOrder: definition.types.map((type) => type.toLowerCase()),
