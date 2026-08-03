@@ -5,7 +5,7 @@ import { buildBlueprintItems, convertBlueprintRowToObject } from './blueprintPar
 test('convertBlueprintRowToObject parses row data into blueprint structure', () => {
   const headers = [
     'Name',
-    'Type',
+    'Category',
     'Tier',
     'Value',
     'Crafting Time (seconds)',
@@ -37,7 +37,7 @@ test('convertBlueprintRowToObject parses row data into blueprint structure', () 
   const blueprint = convertBlueprintRowToObject(headers, row)
 
   assert.equal(blueprint.meta.name, 'Test Sword')
-  assert.equal(blueprint.meta.type, 'Sword')
+  assert.equal(blueprint.meta.category, 'Sword')
   assert.equal(blueprint.meta.tier, 3)
   assert.equal(blueprint.economy.value, 1200)
   assert.equal(blueprint.economy.craftingTimeSeconds, 45)
@@ -50,13 +50,13 @@ test('convertBlueprintRowToObject parses row data into blueprint structure', () 
 
 test('buildBlueprintItems classifies cached and tabular blueprint data', () => {
   const cachedItems = buildBlueprintItems([], [], [
-    { meta: { name: 'Cached Blade', type: 'Sword', tier: 1 } },
+    { meta: { name: 'Cached Blade', category: 'Sword', tier: 1 } },
   ])
   assert.equal(cachedItems[0].name, 'Cached Blade')
   assert.equal(cachedItems[0].classification.category, 'Weapons')
 
   const tabularItems = buildBlueprintItems(
-    ['Name', 'Type', 'Tier'],
+    ['Name', 'Category', 'Tier'],
     [['Blue Cloak', 'Cloak', '2']],
     [],
   )

@@ -7,6 +7,14 @@ const ADS_VISIBLE = import.meta.env.VITE_SHOW_ADS === 'true'
 
 let ethicalAdsScriptPromise = null
 
+function syncAdsVisibilityClass() {
+  if (!document.body) {
+    return
+  }
+
+  document.body.classList.toggle('ads-disabled', !ADS_VISIBLE)
+}
+
 function loadEthicalAdsScript() {
   if (window.ethicalads || window._ethicalads) {
     return Promise.resolve()
@@ -50,8 +58,18 @@ function hasRenderedAd(slotEl) {
 }
 
 export function mountAdBanner(rootEl, options = {}) {
+  syncAdsVisibilityClass()
+
   if (!rootEl) {
     return () => {}
+  }
+
+  if (!ADS_VISIBLE) {
+    rootEl.innerHTML = ''
+    rootEl.setAttribute('aria-hidden', 'true')
+    return () => {
+      rootEl.innerHTML = ''
+    }
   }
 
   const publisher = options.publisher || 'shopkeepercompanion'

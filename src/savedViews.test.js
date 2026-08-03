@@ -16,8 +16,8 @@ test('normalizeSavedViewCriteria keeps invalid values on the default path', () =
 })
 
 test('saved view presets stay anchored to the default criteria shape', () => {
-  assert.equal(STARTER_VIEW_PRESETS[0].criteria.dependency, 'parent')
-  assert.equal(STARTER_VIEW_PRESETS[1].criteria.dependency, 'child')
+  assert.equal(STARTER_VIEW_PRESETS[0].criteria.dependency, 'dependent')
+  assert.equal(STARTER_VIEW_PRESETS[1].criteria.dependency, 'needed')
 })
 
 test('saved view rows round-trip through parse and build helpers', () => {
@@ -36,7 +36,7 @@ test('loadSavedFilterViews returns cleaned views from storage and tolerates miss
     getItem(key) {
       if (key === 'shopkeeper-saved-filter-views') {
         return JSON.stringify([
-          { id: ' view-2 ', name: ' My View ', criteria: { dependency: 'parent' } },
+          { id: ' view-2 ', name: ' My View ', criteria: { dependency: 'dependent' } },
         ])
       }
 
@@ -46,7 +46,7 @@ test('loadSavedFilterViews returns cleaned views from storage and tolerates miss
 
   const loaded = loadSavedFilterViews(storage)
   assert.equal(loaded[0].id, 'view-2')
-  assert.equal(loaded[0].criteria.dependency, 'parent')
+  assert.equal(loaded[0].criteria.dependency, 'dependent')
   assert.deepEqual(loadSavedFilterViews(null), [])
 })
 

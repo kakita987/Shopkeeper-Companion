@@ -2,13 +2,6 @@ import { createIcons } from 'lucide'
 import { LUCIDE_ICONS, getBlueprintItemIconName, getCategoryIconName, getTypeIconName } from './blueprintIcons.js'
 import { cleanText, escapeHtml } from './textUtils.js'
 
-const BLUEPRINT_TYPE_ORDER = {
-  Weapons: ['Sword', 'Axe', 'Dagger', 'Mace', 'Spear', 'Bow', 'Wand', 'Staff', 'Gun', 'Crossbow', 'Instrument', 'Dual Wield', 'Catalyst'],
-  Armor: ['Heavy Armor', 'Light Armor', 'Clothes', 'Helmet', 'Rogue Hat', 'Magician Hat', 'Gauntlets', 'Gloves', 'Heavy Footwear', 'Light Footwear'],
-  Accessories: ['Herbal Remedy', 'Potion', 'Spell', 'Shield', 'Cloak', 'Ring', 'Amulet', 'Familiar', 'Aurasong', 'Quiver', 'Idol', 'Meal', 'Dessert'],
-  Enchantments: ['Element', 'Spirit'],
-}
-
 export function renderLucideIcons(root = document) {
   createIcons({
     icons: LUCIDE_ICONS,
@@ -18,11 +11,11 @@ export function renderLucideIcons(root = document) {
 
 export function getBlueprintVisuals(item) {
   const category = item?.classification?.category || 'Accessories'
-  const type = item?.classification?.type || item?.structuredData?.meta?.type || ''
+  const categoryLabel = item?.classification?.type || item?.structuredData?.meta?.category || ''
 
   return {
-    category,
-    type,
+    group: category,
+    category: categoryLabel,
   }
 }
 
@@ -178,11 +171,11 @@ export function renderCollectionSection(progress = {}, isOwned = false, { getQua
 export function buildDependencySummaryLine(summary = {}) {
   const parts = []
 
-  if (summary.isParentDependency) {
+  if (summary.isDependentOn) {
     parts.push('Dependent')
   }
 
-  if (summary.isChildDependency) {
+  if (summary.isNeededFor) {
     const dependentCount = summary.dependentNames?.length || 0
     parts.push(`Needed (${dependentCount})`)
   }
@@ -220,12 +213,14 @@ export function buildBlueprintSummary(item, dependencyIndex, { getBlueprintProgr
 
   const hasSuperiorOrBetterInventory = ['superior', 'flawless', 'epic', 'legendary'].some((qualityKey) => Number(blueprintState.inventory?.[qualityKey] || 0) > 0)
   const components = Array.isArray(materials.components) ? materials.components : []
+  const blueprintNames = dependencyIndex?.blueprintNames instanceof Set ? dependencyIndex.blueprintNames : new Set()
+  const isDependentOn = components.some((component) => blueprintNames.has(cleanText(component?.name).toLowerCase()))
 
   return {
     isOwned: Boolean(progress.owned),
     isMastered,
-    isParentDependency: components.some((component) => Boolean(cleanText(component?.name))),
-    isChildDependency: dependentNames.length > 0,
+    isDependentOn,
+    isNeededFor: dependentNames.length > 0,
     dependentNames,
     hasInventory: totalInventory > 0,
     hasSuperiorOrBetterInventory,
