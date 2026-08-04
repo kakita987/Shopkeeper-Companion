@@ -10,14 +10,14 @@ import {
 } from './blueprintView.js'
 
 test('getBlueprintVisuals prefers classification data and falls back to structured meta type', () => {
-  assert.deepEqual(getBlueprintVisuals({ classification: { category: 'Armor', type: 'Helmet' } }), {
+  assert.deepEqual(getBlueprintVisuals({ classification: { group: 'Armor', type: 'Helmet' } }), {
     group: 'Armor',
-    category: 'Helmet',
+    type: 'Helmet',
   })
 
   assert.deepEqual(getBlueprintVisuals({ structuredData: { meta: { type: 'Dagger' } } }), {
     group: 'Accessories',
-    category: 'Dagger',
+    type: 'Dagger',
   })
 })
 

@@ -37,7 +37,7 @@ test('convertBlueprintRowToObject parses row data into blueprint structure', () 
   const blueprint = convertBlueprintRowToObject(headers, row)
 
   assert.equal(blueprint.meta.name, 'Test Sword')
-  assert.equal(blueprint.meta.category, 'Sword')
+  assert.equal(blueprint.meta.type, 'Sword')
   assert.equal(blueprint.meta.tier, 3)
   assert.equal(blueprint.economy.value, 1200)
   assert.equal(blueprint.economy.craftingTimeSeconds, 45)
@@ -50,10 +50,10 @@ test('convertBlueprintRowToObject parses row data into blueprint structure', () 
 
 test('buildBlueprintItems classifies cached and tabular blueprint data', () => {
   const cachedItems = buildBlueprintItems([], [], [
-    { meta: { name: 'Cached Blade', category: 'Sword', tier: 1 } },
+    { meta: { name: 'Cached Blade', type: 'Sword', tier: 1 } },
   ])
   assert.equal(cachedItems[0].name, 'Cached Blade')
-  assert.equal(cachedItems[0].classification.category, 'Weapons')
+  assert.equal(cachedItems[0].classification.group, 'Weapons')
 
   const tabularItems = buildBlueprintItems(
     ['Name', 'Type', 'Tier'],
@@ -62,7 +62,7 @@ test('buildBlueprintItems classifies cached and tabular blueprint data', () => {
   )
 
   assert.equal(tabularItems[0].name, 'Blue Cloak')
-  assert.equal(tabularItems[0].classification.category, 'Accessories')
+  assert.equal(tabularItems[0].classification.group, 'Accessories')
   assert.equal(tabularItems[0].classification.type, 'Cloak')
 })
 
@@ -73,7 +73,7 @@ test('buildBlueprintItems still supports legacy Category column headers', () => 
     [],
   )
 
-  assert.equal(tabularItems[0].classification.category, 'Weapons')
+  assert.equal(tabularItems[0].classification.group, 'Weapons')
   assert.equal(tabularItems[0].classification.type, 'Dagger')
 })
 
@@ -87,10 +87,10 @@ test('buildBlueprintItems keeps strict source types for non-enchantments', () =>
     [],
   )
 
-  assert.equal(tabularItems[0].classification.category, 'Weapons')
+  assert.equal(tabularItems[0].classification.group, 'Weapons')
   assert.equal(tabularItems[0].classification.type, 'Weapon')
 
-  assert.equal(tabularItems[1].classification.category, 'Accessories')
+  assert.equal(tabularItems[1].classification.group, 'Accessories')
   assert.equal(tabularItems[1].classification.type, 'Potion')
 })
 
@@ -104,9 +104,9 @@ test('buildBlueprintItems resolves enchantment type from name only', () => {
     [],
   )
 
-  assert.equal(tabularItems[0].classification.category, 'Enchantments')
+  assert.equal(tabularItems[0].classification.group, 'Enchantments')
   assert.equal(tabularItems[0].classification.type, 'Spirit')
 
-  assert.equal(tabularItems[1].classification.category, 'Enchantments')
+  assert.equal(tabularItems[1].classification.group, 'Enchantments')
   assert.equal(tabularItems[1].classification.type, 'Element')
 })

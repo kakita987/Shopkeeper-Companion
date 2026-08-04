@@ -1,20 +1,20 @@
-// Single source of truth for blueprint category/type order.
+// Single source of truth for blueprint group/type order.
 // Update this file when the game adds or renames blueprint types.
-export const BLUEPRINT_CATEGORY_DEFINITIONS = [
+export const BLUEPRINT_GROUP_TYPE_ORDER = [
   {
-    title: 'Weapons',
+    group: 'Weapons',
     types: ['Sword', 'Axe', 'Dagger', 'Mace', 'Spear', 'Bow', 'Wand', 'Staff', 'Gun', 'Crossbow', 'Instrument', 'Dual Wield', 'Catalyst'],
   },
   {
-    title: 'Armor',
+    group: 'Armor',
     types: ['Heavy Armor', 'Light Armor', 'Clothes', 'Helmet', 'Rogue Hat', 'Magician Hat', 'Gauntlets', 'Gloves', 'Heavy Footwear', 'Light Footwear'],
   },
   {
-    title: 'Accessories',
+    group: 'Accessories',
     types: ['Herbal Remedy', 'Potion', 'Spell', 'Shield', 'Cloak', 'Ring', 'Amulet', 'Familiar', 'Aurasong', 'Quiver', 'Idol', 'Meal', 'Dessert'],
   },
   {
-    title: 'Enchantments',
+    group: 'Enchantments',
     types: ['Element', 'Spirit'],
   },
 ]

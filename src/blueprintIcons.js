@@ -34,8 +34,8 @@ export const LUCIDE_ICONS = {
   WandSparkles,
 }
 
-export function getCategoryIconName(category) {
-  switch (category) {
+export function getGroupIconName(group) {
+  switch (group) {
     case 'Weapons':
       return 'Swords'
     case 'Armor':
@@ -49,7 +49,7 @@ export function getCategoryIconName(category) {
   }
 }
 
-export function getTypeIconName(type, category) {
+export function getTypeIconName(type, group) {
   const haystack = `${type || ''}`.toLowerCase()
 
   if (/sword/.test(haystack)) return 'Sword'
@@ -84,9 +84,9 @@ export function getTypeIconName(type, category) {
   if (/element/.test(haystack)) return 'Sparkles'
   if (/spirit/.test(haystack)) return 'MoonStar'
 
-  return getCategoryIconName(category)
+  return getGroupIconName(group)
 }
 
 export function getBlueprintItemIconName(item) {
-  return getTypeIconName(item?.classification?.type, item?.classification?.category)
+  return getTypeIconName(item?.classification?.type, item?.classification?.group || item?.classification?.category)
 }

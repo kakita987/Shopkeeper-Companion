@@ -1,5 +1,5 @@
 import { createIcons } from 'lucide'
-import { LUCIDE_ICONS, getBlueprintItemIconName, getCategoryIconName, getTypeIconName } from './blueprintIcons.js'
+import { LUCIDE_ICONS, getBlueprintItemIconName, getGroupIconName, getTypeIconName } from './blueprintIcons.js'
 import { cleanText, escapeHtml } from './textUtils.js'
 
 export function renderLucideIcons(root = document) {
@@ -10,12 +10,12 @@ export function renderLucideIcons(root = document) {
 }
 
 export function getBlueprintVisuals(item) {
-  const category = item?.classification?.category || 'Accessories'
-  const categoryLabel = item?.classification?.type || item?.structuredData?.meta?.type || item?.structuredData?.meta?.category || ''
+  const group = item?.classification?.group || item?.classification?.category || 'Accessories'
+  const typeLabel = item?.classification?.type || item?.structuredData?.meta?.type || item?.structuredData?.meta?.category || ''
 
   return {
-    group: category,
-    category: categoryLabel,
+    group,
+    type: typeLabel,
   }
 }
 
@@ -336,15 +336,16 @@ export function buildBlueprintSummary(item, dependencyIndex, { getBlueprintProgr
   }
 }
 
-function buildBlueprintGroups(items = [], categoryDefinitions = []) {
-  const categoryMaps = categoryDefinitions.map((definition) => ({
-    title: definition.title,
+function buildBlueprintGroups(items = [], groupDefinitions = []) {
+  const groupMaps = groupDefinitions.map((definition) => ({
+    title: definition.group,
     typeOrder: definition.types.map((type) => type.toLowerCase()),
     typeGroups: new Map(),
   }))
 
   items.forEach((item) => {
-    const group = categoryMaps.find((entry) => entry.title === item.classification.category)
+    const itemGroup = item?.classification?.group || item?.classification?.category
+    const group = groupMaps.find((entry) => entry.title === itemGroup)
 
     if (!group) {
       return
@@ -365,7 +366,7 @@ function buildBlueprintGroups(items = [], categoryDefinitions = []) {
     typeGroup.items.push(item)
   })
 
-  return categoryMaps.map((group) => {
+  return groupMaps.map((group) => {
     const orderedTypes = []
 
     group.typeOrder.forEach((typeKey) => {
@@ -392,7 +393,7 @@ function buildBlueprintGroups(items = [], categoryDefinitions = []) {
 export function renderPreview(items = [], {
   previewEl,
   blueprintOverlay,
-  categoryDefinitions = [],
+  groupDefinitions = [],
   onOpenBlueprintOverlay,
   onCloseBlueprintOverlay,
   renderLucideIcons: renderIcons = renderLucideIcons,
@@ -412,21 +413,21 @@ export function renderPreview(items = [], {
     return
   }
 
-  const groups = buildBlueprintGroups(items, categoryDefinitions)
+  const groups = buildBlueprintGroups(items, groupDefinitions)
   const container = document.createElement('div')
   container.className = 'blueprint-groups'
 
   groups.forEach((group) => {
     const details = document.createElement('details')
     details.className = 'blueprint-category'
-    const categoryDrawerKey = `category::${group.title}`
-    details.dataset.drawerKey = categoryDrawerKey
-    details.open = openDrawerKeys.has(categoryDrawerKey)
+    const groupDrawerKey = `group::${group.title}`
+    details.dataset.drawerKey = groupDrawerKey
+    details.open = openDrawerKeys.has(groupDrawerKey)
 
     const summary = document.createElement('summary')
     summary.innerHTML = `
       <span class="group-summary-title">
-        <span class="icon-slot group-summary-icon" aria-hidden="true"><i data-lucide="${escapeHtml(getCategoryIconName(group.title))}"></i></span>
+        <span class="icon-slot group-summary-icon" aria-hidden="true"><i data-lucide="${escapeHtml(getGroupIconName(group.title))}"></i></span>
         <span>${escapeHtml(group.title)}</span>
       </span>
       <span class="group-count">${group.totalItems}</span>

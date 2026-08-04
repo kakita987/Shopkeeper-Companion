@@ -16,6 +16,6 @@ test('getTypeIconName maps common blueprint types to the expected icon names', (
 })
 
 test('getBlueprintItemIconName reads classification data safely', () => {
-  assert.equal(getBlueprintItemIconName({ classification: { type: 'Dessert', category: 'Accessories' } }), 'CakeSlice')
+  assert.equal(getBlueprintItemIconName({ classification: { type: 'Dessert', group: 'Accessories' } }), 'CakeSlice')
   assert.equal(getBlueprintItemIconName({}), 'CircleDashed')
 })
