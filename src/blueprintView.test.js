@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  buildBlueprintGroups,
   buildBlueprintSummary,
   buildDependencySummaryLine,
   getBlueprintVisuals,
@@ -25,6 +26,22 @@ test('buildDependencySummaryLine summarizes dependency relationships', () => {
   assert.equal(buildDependencySummaryLine({}), 'No dependency relation')
   assert.equal(buildDependencySummaryLine({ isDependentOn: true }), 'Dependent')
   assert.equal(buildDependencySummaryLine({ isNeededFor: true, dependentNames: ['Alpha', 'Beta'] }), 'Needed (2)')
+})
+
+test('buildBlueprintGroups preserves source-sheet order within each type while keeping configured type order', () => {
+  const groups = buildBlueprintGroups(
+    [
+      { name: 'Third Sword', sourceIndex: 2, classification: { group: 'Weapons', type: 'Sword' } },
+      { name: 'First Sword', sourceIndex: 0, classification: { group: 'Weapons', type: 'Sword' } },
+      { name: 'Second Dagger', sourceIndex: 1, classification: { group: 'Weapons', type: 'Dagger' } },
+      { name: 'Fourth Dagger', sourceIndex: 3, classification: { group: 'Weapons', type: 'Dagger' } },
+    ],
+    [{ group: 'Weapons', types: ['Sword', 'Dagger'] }],
+  )
+
+  assert.deepEqual(groups[0].types.map((typeGroup) => typeGroup.title), ['Sword', 'Dagger'])
+  assert.deepEqual(groups[0].types[0].items.map((item) => item.name), ['First Sword', 'Third Sword'])
+  assert.deepEqual(groups[0].types[1].items.map((item) => item.name), ['Second Dagger', 'Fourth Dagger'])
 })
 
 test('buildBlueprintSummary combines progress, inventory, and dependency state', () => {

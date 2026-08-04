@@ -336,7 +336,19 @@ export function buildBlueprintSummary(item, dependencyIndex, { getBlueprintProgr
   }
 }
 
-function buildBlueprintGroups(items = [], groupDefinitions = []) {
+function getBlueprintItemOrder(item) {
+  if (typeof item?.sourceIndex === 'number') {
+    return item.sourceIndex
+  }
+
+  if (typeof item?.rowIndex === 'number') {
+    return item.rowIndex
+  }
+
+  return Number.MAX_SAFE_INTEGER
+}
+
+export function buildBlueprintGroups(items = [], groupDefinitions = []) {
   const groupMaps = groupDefinitions.map((definition) => ({
     title: definition.group,
     typeOrder: definition.types.map((type) => type.toLowerCase()),
@@ -382,10 +394,15 @@ function buildBlueprintGroups(items = [], groupDefinitions = []) {
       }
     })
 
+    const orderedTypeGroups = orderedTypes.map((typeGroup) => ({
+      ...typeGroup,
+      items: [...typeGroup.items].sort((leftItem, rightItem) => getBlueprintItemOrder(leftItem) - getBlueprintItemOrder(rightItem)),
+    }))
+
     return {
       title: group.title,
-      totalItems: orderedTypes.reduce((count, typeGroup) => count + typeGroup.items.length, 0),
-      types: orderedTypes,
+      totalItems: orderedTypeGroups.reduce((count, typeGroup) => count + typeGroup.items.length, 0),
+      types: orderedTypeGroups,
     }
   }).filter((group) => group.totalItems > 0)
 }
