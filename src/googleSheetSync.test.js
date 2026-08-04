@@ -5,9 +5,11 @@ import {
   buildWorkbookPayload,
   getGoogleSyncErrorMessage,
   getSyncWorkbookSchemaEntries,
+  isTokenExpiredError,
   parseWorkbookBlueprintProgress,
   readSyncTables,
   resolveUserSyncSpreadsheet,
+  shouldWipeSpreadsheetId,
 } from './googleSheetSync.js'
 
 test('buildWorkbookPayload creates the requested sheet order and initializes blueprint progress defaults', () => {
@@ -175,6 +177,32 @@ test('getGoogleSyncErrorMessage surfaces the Drive API configuration issue clear
   }))
 
   assert.match(getGoogleSyncErrorMessage(error), /Google Drive API is not enabled/i)
+})
+
+test('isTokenExpiredError returns true only for auth-expired responses', () => {
+  const tokenError = new Error('Request had invalid authentication credentials')
+  tokenError.status = 401
+
+  const forbiddenError = new Error('permission denied')
+  forbiddenError.status = 403
+
+  assert.equal(isTokenExpiredError(tokenError), true)
+  assert.equal(isTokenExpiredError(forbiddenError), false)
+})
+
+test('shouldWipeSpreadsheetId only returns true for missing spreadsheet responses', () => {
+  const missingError = new Error('not found')
+  missingError.status = 404
+
+  const goneError = new Error('gone')
+  goneError.status = 410
+
+  const tokenError = new Error('unauthorized')
+  tokenError.status = 401
+
+  assert.equal(shouldWipeSpreadsheetId(missingError), true)
+  assert.equal(shouldWipeSpreadsheetId(goneError), true)
+  assert.equal(shouldWipeSpreadsheetId(tokenError), false)
 })
 
 test('resolveUserSyncSpreadsheet ignores missing Sheets files and creates a fresh spreadsheet', async () => {
