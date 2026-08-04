@@ -79,7 +79,7 @@ test('buildWorkbookPayload includes imported blueprints even without any saved p
   assert.equal(payload.Armor[1][0], 'Wooden Shield')
 })
 
-test('buildWorkbookPayload places Staff entries before Wand entries for weapon exports', () => {
+test('buildWorkbookPayload follows configured weapon order for Wand and Staff', () => {
   const payload = buildWorkbookPayload({
     settingsRows: [],
     savedViewRows: [],
@@ -98,8 +98,37 @@ test('buildWorkbookPayload places Staff entries before Wand entries for weapon e
     blueprintProgressByName: {},
   })
 
-  assert.equal(payload.Weapons[1][0], 'Oak Staff')
-  assert.equal(payload.Weapons[2][0], 'Wizard Wand')
+  assert.equal(payload.Weapons[1][0], 'Wizard Wand')
+  assert.equal(payload.Weapons[2][0], 'Oak Staff')
+})
+
+test('buildWorkbookPayload follows configured accessories order for Quiver', () => {
+  const payload = buildWorkbookPayload({
+    settingsRows: [],
+    savedViewRows: [],
+    blueprintItems: [
+      {
+        name: 'Archer Idol',
+        classification: { category: 'Accessories', type: 'Idol' },
+        structuredData: { meta: { name: 'Archer Idol', category: 'Idol', tier: 1 } },
+      },
+      {
+        name: 'Feather Quiver',
+        classification: { category: 'Accessories', type: 'Quiver' },
+        structuredData: { meta: { name: 'Feather Quiver', category: 'Quiver', tier: 1 } },
+      },
+      {
+        name: 'Songbook Aurasong',
+        classification: { category: 'Accessories', type: 'Aurasong' },
+        structuredData: { meta: { name: 'Songbook Aurasong', category: 'Aurasong', tier: 1 } },
+      },
+    ],
+    blueprintProgressByName: {},
+  })
+
+  assert.equal(payload.Accessories[1][0], 'Songbook Aurasong')
+  assert.equal(payload.Accessories[2][0], 'Feather Quiver')
+  assert.equal(payload.Accessories[3][0], 'Archer Idol')
 })
 
 test('parseWorkbookBlueprintProgress merges workbook rows by blueprint name and preserves existing progress', () => {

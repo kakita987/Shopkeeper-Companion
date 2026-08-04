@@ -244,6 +244,7 @@ export function renderInventorySection(progress = {}, { qualityLabels = ['Normal
     const qualityClass = getQualityClass(label)
     return `
       <label class="inventory-field inventory-color-only ${qualityClass}" title="${escapeMarkup(label)}">
+        <span class="inventory-quality-label">${escapeMarkup(label)}</span>
         <input class="quality-input" aria-label="${escapeMarkup(label)} quality inventory" type="number" min="0" step="1" value="${value}" data-quality-key="${escapeMarkup(key)}" />
       </label>
     `
@@ -262,6 +263,7 @@ export function renderCollectionSection(progress = {}, isOwned = false, { getQua
         const qualityClass = getQualityClass(label)
         return `
           <label class="inventory-field collection-toggle-field ${qualityClass}" title="${escapeMarkup(label)}">
+            <span class="inventory-quality-label">${escapeMarkup(label)}</span>
             <input class="collection-input" aria-label="${escapeMarkup(label)} collection status" type="checkbox" data-quality-key="${escapeMarkup(key)}" ${collectionValues[key] ? 'checked' : ''} ${isOwned ? '' : 'disabled'} />
           </label>
         `

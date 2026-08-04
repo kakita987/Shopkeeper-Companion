@@ -20,6 +20,7 @@ import { SETTINGS_GEAR_ICON_MARKUP } from './settingsGearIcon.js'
 import { escapeHtml, cleanText, toInventoryCount } from './textUtils.js'
 import { getBlueprintItemIconName, getCategoryIconName, getTypeIconName } from './blueprintIcons.js'
 import { buildBlueprintItems, convertBlueprintRowToObject } from './blueprintParsing.js'
+import { BLUEPRINT_CATEGORY_DEFINITIONS } from './assets/blueprintTypeOrder.js'
 import { RESOURCE_LABELS } from './resourceLabels.js'
 import { DEFAULT_SAVED_VIEW_CRITERIA, STARTER_VIEW_PRESETS, SAVED_FILTER_VIEWS_STORAGE_KEY, buildSavedViewsRows, getCollectionBookMatchDescription, hasActiveSavedViewFilters, loadSavedFilterViews, normalizeSavedViewCriteria, parseSavedViewsRows } from './savedViews.js'
 import { buildBlueprintSummary, buildDependencySummaryLine, getBlueprintVisuals, renderCollectionSection, renderInventorySection, renderLucideIcons, renderMaterialsSection, renderOverlaySectionCard, renderPreview, renderStatsCards, renderUpgradeSection } from './blueprintView.js'
@@ -28,24 +29,7 @@ const DEFAULT_SPREADSHEET_URL = 'https://playshoptitans.com/spreadsheet'
 const FALLBACK_GOOGLE_SHEET_URL = import.meta.env.VITE_BLUEPRINT_SHEET_URL || 'https://docs.google.com/spreadsheets/d/1WLa7X8h3O0-aGKxeAlCL7bnN8-FhGd3t7pz2RCzSg8c/edit'
 const GOOGLE_PICKER_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY || import.meta.env.VITE_GOOGLE_DRIVE_API_KEY || ''
 
-const CATEGORY_DEFINITIONS = [
-  {
-    title: 'Weapons',
-    types: ['Sword', 'Axe', 'Dagger', 'Mace', 'Spear', 'Bow', 'Staff', 'Wand', 'Gun', 'Crossbow', 'Instrument', 'Dual Wield', 'Catalyst'],
-  },
-  {
-    title: 'Armor',
-    types: ['Heavy Armor', 'Light Armor', 'Clothes', 'Helmet', 'Rogue Hat', 'Magician Hat', 'Gauntlets', 'Gloves', 'Heavy Footwear', 'Light Footwear'],
-  },
-  {
-    title: 'Accessories',
-    types: ['Herbal Remedy', 'Potion', 'Spell', 'Shield', 'Cloak', 'Ring', 'Amulet', 'Familiar', 'Aurasong', 'Quiver', 'Idol', 'Meal', 'Dessert'],
-  },
-  {
-    title: 'Enchantments',
-    types: ['Element', 'Spirit'],
-  },
-]
+const CATEGORY_DEFINITIONS = BLUEPRINT_CATEGORY_DEFINITIONS
 const CATEGORY_ORDER_INDEX = new Map(
   CATEGORY_DEFINITIONS.map((definition, index) => [definition.title, index])
 )
@@ -1246,9 +1230,13 @@ async function importBlueprintData() {
 
     updateStatus('Downloading blueprints…')
     const { headers, rows, structuredBlueprints } = await importGoogleSheet(exportUrl)
-    blueprintVersionLabel = versionLabel || blueprintVersionLabel
-    await saveBlueprintCache({ headers, structuredBlueprints, versionLabel: blueprintVersionLabel })
     allBlueprintItems = buildBlueprintItems(headers, rows, structuredBlueprints)
+    if (isSuspiciousBlueprintDataset(allBlueprintItems)) {
+      throw new Error('The blueprint import looked incomplete (items classified as Unknown). Please import again in a moment.')
+    }
+
+    blueprintVersionLabel = versionLabel || blueprintVersionLabel
+    await saveBlueprintCache({ headers, rows, structuredBlueprints, versionLabel: blueprintVersionLabel })
     renderBlueprintVersionLabel(blueprintVersionLabel)
 
     renderPreview(allBlueprintItems, {
@@ -1282,8 +1270,16 @@ async function initializeBlueprintDataFromCache() {
     return
   }
 
-  const { headers = [], structuredBlueprints = [] } = cached
-  allBlueprintItems = buildBlueprintItems(headers, [], structuredBlueprints)
+  const { headers = [], rows = [], structuredBlueprints = [] } = cached
+  allBlueprintItems = buildBlueprintItems(headers, rows, structuredBlueprints)
+  if (isSuspiciousBlueprintDataset(allBlueprintItems)) {
+    await removeItem(BLUEPRINT_CACHE_STORAGE_KEY)
+    allBlueprintItems = []
+    updateStatus('Cached blueprint data looked incomplete. Please import Blueprints again.', 'error')
+    renderBlueprintEmptyState('Cached blueprint data looked incomplete. Click "Import Blueprints" in Settings to refresh the library.')
+    return
+  }
+
   renderPreview(allBlueprintItems, {
     previewEl,
     blueprintOverlay,
@@ -1301,6 +1297,7 @@ async function initializeBlueprintDataFromCache() {
 async function saveBlueprintCache(payload) {
   const safePayload = {
     headers: Array.isArray(payload?.headers) ? payload.headers : [],
+    rows: Array.isArray(payload?.rows) ? payload.rows : [],
     structuredBlueprints: Array.isArray(payload?.structuredBlueprints) ? payload.structuredBlueprints : [],
     versionLabel: typeof payload?.versionLabel === 'string' ? payload.versionLabel : '',
   }
@@ -1391,11 +1388,34 @@ async function loadBlueprintCache() {
       return null
     }
 
+    if ('rows' in cached && !Array.isArray(cached.rows)) {
+      return null
+    }
+
     return cached
   } catch (error) {
     console.warn('Unable to read blueprint cache.', error)
     return null
   }
+}
+
+function isSuspiciousBlueprintDataset(items = []) {
+  if (!Array.isArray(items) || !items.length) {
+    return true
+  }
+
+  const unknownItems = items.filter((item) => {
+    const category = String(item?.classification?.category || '').trim().toLowerCase()
+    const type = String(item?.classification?.type || '').trim().toLowerCase()
+    return category === 'accessories' && type === 'unknown'
+  })
+
+  if (!unknownItems.length) {
+    return false
+  }
+
+  const ratio = unknownItems.length / items.length
+  return unknownItems.length === items.length || ratio >= 0.9
 }
 
 function bindBlueprintOverlayInteractions(item) {

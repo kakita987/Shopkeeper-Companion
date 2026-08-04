@@ -1,4 +1,5 @@
 import { cleanText, toInventoryCount } from './textUtils.js'
+import { BLUEPRINT_CATEGORY_DEFINITIONS } from './assets/blueprintTypeOrder.js'
 
 const SHEETS_API_BASE = 'https://sheets.googleapis.com/v4/spreadsheets'
 const DRIVE_API_BASE = 'https://www.googleapis.com/drive/v3/files'
@@ -31,9 +32,9 @@ const PROGRESS_COLUMNS = [
   { key: 'inventoryEpic', label: 'Inventory Epic' },
   { key: 'inventoryLegendary', label: 'Inventory Legendary' },
   { key: 'owned', label: 'Owned' },
+  { key: 'starforge', label: 'Starforge' },
   { key: 'milestones', label: 'Milestones' },
   { key: 'improve', label: 'Improve' },
-  { key: 'starforge', label: 'Starforge' },
   { key: 'collectionSuperior', label: 'Collection Superior' },
   { key: 'collectionFlawless', label: 'Collection Flawless' },
   { key: 'collectionEpic', label: 'Collection Epic' },
@@ -45,6 +46,17 @@ const MASTER_BLUEPRINT_COLUMNS = [
   { key: 'type', label: 'Type' },
   { key: 'tier', label: 'Tier' },
 ]
+
+const CATEGORY_ORDER_INDEX = new Map(
+  BLUEPRINT_CATEGORY_DEFINITIONS.map((definition, index) => [definition.title, index])
+)
+
+const CATEGORY_TYPE_ORDER_INDEX = new Map(
+  BLUEPRINT_CATEGORY_DEFINITIONS.map((definition) => [
+    definition.title,
+    new Map(definition.types.map((type, index) => [type.toLowerCase(), index])),
+  ])
+)
 
 function getSyncWorkbookSchemaEntries() {
   return [
@@ -388,22 +400,57 @@ function getBlueprintItemType(item = {}) {
     item?.structuredData?.meta?.type ||
     item?.structuredData?.meta?.category ||
     ''
-  ).trim().toLowerCase()
+  ).trim()
+}
+
+function getBlueprintItemCategory(item = {}) {
+  return String(item?.classification?.category || '').trim()
 }
 
 function sortBlueprintItemsForWorkbook(blueprintItems = []) {
   return blueprintItems
     .map((item, index) => ({ item, index }))
     .sort((left, right) => {
-      const leftType = getBlueprintItemType(left.item)
-      const rightType = getBlueprintItemType(right.item)
+      const leftCategory = getBlueprintItemCategory(left.item)
+      const rightCategory = getBlueprintItemCategory(right.item)
+      const leftCategoryIndex = CATEGORY_ORDER_INDEX.get(leftCategory)
+      const rightCategoryIndex = CATEGORY_ORDER_INDEX.get(rightCategory)
 
-      if (leftType === 'staff' && rightType === 'wand') {
-        return -1
+      if (leftCategoryIndex !== rightCategoryIndex) {
+        if (leftCategoryIndex === undefined) {
+          return 1
+        }
+
+        if (rightCategoryIndex === undefined) {
+          return -1
+        }
+
+        return leftCategoryIndex - rightCategoryIndex
       }
 
-      if (leftType === 'wand' && rightType === 'staff') {
-        return 1
+      const typeOrder = CATEGORY_TYPE_ORDER_INDEX.get(leftCategory) || new Map()
+      const leftType = getBlueprintItemType(left.item)
+      const rightType = getBlueprintItemType(right.item)
+      const leftTypeIndex = typeOrder.get(leftType.toLowerCase())
+      const rightTypeIndex = typeOrder.get(rightType.toLowerCase())
+
+      if (leftTypeIndex !== rightTypeIndex) {
+        if (leftTypeIndex === undefined) {
+          return 1
+        }
+
+        if (rightTypeIndex === undefined) {
+          return -1
+        }
+
+        return leftTypeIndex - rightTypeIndex
+      }
+
+      const leftName = String(left.item?.name || '')
+      const rightName = String(right.item?.name || '')
+      const nameCompare = leftName.localeCompare(rightName)
+      if (nameCompare !== 0) {
+        return nameCompare
       }
 
       return left.index - right.index

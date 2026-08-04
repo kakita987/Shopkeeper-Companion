@@ -1,25 +1,10 @@
 import { cleanText } from './textUtils.js'
 import { RESOURCE_LABELS } from './resourceLabels.js'
+import { BLUEPRINT_CATEGORY_DEFINITIONS } from './assets/blueprintTypeOrder.js'
 
 const CATEGORY_TYPE_LOOKUP = new Map(
-  [
-    {
-      title: 'Weapons',
-      types: ['Sword', 'Axe', 'Dagger', 'Mace', 'Spear', 'Bow', 'Staff', 'Wand', 'Gun', 'Crossbow', 'Instrument', 'Dual Wield', 'Catalyst'],
-    },
-    {
-      title: 'Armor',
-      types: ['Heavy Armor', 'Light Armor', 'Clothes', 'Helmet', 'Rogue Hat', 'Magician Hat', 'Gauntlets', 'Gloves', 'Heavy Footwear', 'Light Footwear'],
-    },
-    {
-      title: 'Accessories',
-      types: ['Herbal Remedy', 'Potion', 'Spell', 'Shield', 'Cloak', 'Ring', 'Amulet', 'Familiar', 'Aurasong', 'Quiver', 'Idol', 'Meal', 'Dessert'],
-    },
-    {
-      title: 'Enchantments',
-      types: ['Element', 'Spirit'],
-    },
-  ].flatMap((definition) => definition.types.map((type) => [normalizeTypeKey(type), { category: definition.title, type }]))
+  BLUEPRINT_CATEGORY_DEFINITIONS
+    .flatMap((definition) => definition.types.map((type) => [normalizeTypeKey(type), { category: definition.title, type }]))
 )
 
 export function buildBlueprintItems(headers, rows, structuredBlueprints = []) {

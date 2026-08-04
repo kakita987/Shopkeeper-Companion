@@ -1,6 +1,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildBlueprintSummary, buildDependencySummaryLine, getBlueprintVisuals, renderUpgradeSection } from './blueprintView.js'
+import {
+  buildBlueprintSummary,
+  buildDependencySummaryLine,
+  getBlueprintVisuals,
+  renderCollectionSection,
+  renderInventorySection,
+  renderUpgradeSection,
+} from './blueprintView.js'
 
 test('getBlueprintVisuals prefers classification data and falls back to structured meta type', () => {
   assert.deepEqual(getBlueprintVisuals({ classification: { category: 'Armor', type: 'Helmet' } }), {
@@ -101,4 +108,36 @@ test('renderUpgradeSection uses one selector for Milestones then Starforge optio
   assert.doesNotMatch(markup, /data-stage-key="ascension"/)
   assert.doesNotMatch(markup, /data-stage-key="transcendence"/)
   assert.match(markup, /1\. Improve · ascension-one[\s\S]*2\. Transcendence · transcendence-one/)
+})
+
+test('renderInventorySection shows all quality labels including Normal', () => {
+  const markup = renderInventorySection(
+    { inventory: { normal: 1, superior: 2, flawless: 3, epic: 4, legendary: 5 } },
+    {
+      getQualityClass: (label) => `quality-${label.toLowerCase()}`,
+      escapeHtml: (value) => String(value),
+    },
+  )
+
+  assert.match(markup, /inventory-quality-label">Normal</)
+  assert.match(markup, /inventory-quality-label">Superior</)
+  assert.match(markup, /inventory-quality-label">Flawless</)
+  assert.match(markup, /inventory-quality-label">Epic</)
+  assert.match(markup, /inventory-quality-label">Legendary</)
+})
+
+test('renderCollectionSection shows collection quality labels', () => {
+  const markup = renderCollectionSection(
+    { collectionBook: { superior: true, flawless: false, epic: true, legendary: false } },
+    true,
+    {
+      getQualityClass: (label) => `quality-${label.toLowerCase()}`,
+      escapeHtml: (value) => String(value),
+    },
+  )
+
+  assert.match(markup, /inventory-quality-label">Superior</)
+  assert.match(markup, /inventory-quality-label">Flawless</)
+  assert.match(markup, /inventory-quality-label">Epic</)
+  assert.match(markup, /inventory-quality-label">Legendary</)
 })
