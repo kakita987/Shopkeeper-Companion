@@ -1815,7 +1815,12 @@ function renderSavedViewResults(items = [], dependencyIndex) {
     })
 
     const typeMarkup = orderedTypeGroups.map((typeGroup) => {
-      const listMarkup = typeGroup.items.map((item) => {
+      const orderedItems = [...typeGroup.items].sort((leftItem, rightItem) => {
+        const leftOrder = typeof leftItem?.sourceIndex === 'number' ? leftItem.sourceIndex : Number.POSITIVE_INFINITY
+        const rightOrder = typeof rightItem?.sourceIndex === 'number' ? rightItem.sourceIndex : Number.POSITIVE_INFINITY
+        return leftOrder - rightOrder
+      })
+      const listMarkup = orderedItems.map((item) => {
         const summary = buildBlueprintSummary(item, dependencyIndex, {
           getBlueprintProgressState,
           calculateTotalInventory,

@@ -9,7 +9,7 @@ const GROUP_TYPE_LOOKUP = new Map(
 
 export function buildBlueprintItems(headers, rows, structuredBlueprints = []) {
   if (!rows.length && structuredBlueprints.length) {
-    return structuredBlueprints.map((structuredData) => {
+    return structuredBlueprints.map((structuredData, index) => {
       const name = structuredData.meta?.name || 'Unknown'
       const blueprintType = structuredData.meta?.type || structuredData.meta?.category || 'Unknown'
       const tier = structuredData.meta?.tier
@@ -20,6 +20,7 @@ export function buildBlueprintItems(headers, rows, structuredBlueprints = []) {
         meta: tier ? `Tier ${tier}` : 'No tier',
         structuredData,
         classification,
+        sourceIndex: index,
       }
     })
   }
@@ -50,6 +51,7 @@ export function buildBlueprintItems(headers, rows, structuredBlueprints = []) {
       meta: tier ? `Tier ${tier}` : 'No tier',
       structuredData,
       classification,
+      sourceIndex: rowIndex,
     })
   })
 
