@@ -1,35 +1,20 @@
 import { cleanText } from './textUtils.js'
 import { RESOURCE_LABELS } from './resourceLabels.js'
+import { BLUEPRINT_GROUP_TYPE_ORDER } from './assets/blueprintTypeOrder.js'
 
-const CATEGORY_TYPE_LOOKUP = new Map(
-  [
-    {
-      title: 'Weapons',
-      types: ['Sword', 'Axe', 'Dagger', 'Mace', 'Spear', 'Bow', 'Staff', 'Wand', 'Gun', 'Crossbow', 'Instrument', 'Dual Wield', 'Catalyst'],
-    },
-    {
-      title: 'Armor',
-      types: ['Heavy Armor', 'Light Armor', 'Clothes', 'Helmet', 'Rogue Hat', 'Magician Hat', 'Gauntlets', 'Gloves', 'Heavy Footwear', 'Light Footwear'],
-    },
-    {
-      title: 'Accessories',
-      types: ['Herbal Remedy', 'Potion', 'Spell', 'Shield', 'Cloak', 'Ring', 'Amulet', 'Familiar', 'Aurasong', 'Quiver', 'Idol', 'Meal', 'Dessert'],
-    },
-    {
-      title: 'Enchantments',
-      types: ['Element', 'Spirit'],
-    },
-  ].flatMap((definition) => definition.types.map((type) => [normalizeTypeKey(type), { category: definition.title, type }]))
+const GROUP_TYPE_LOOKUP = new Map(
+  BLUEPRINT_GROUP_TYPE_ORDER
+    .flatMap((definition) => definition.types.map((type) => [normalizeTypeKey(type), { group: definition.group, type }]))
 )
 
 export function buildBlueprintItems(headers, rows, structuredBlueprints = []) {
   if (!rows.length && structuredBlueprints.length) {
     return structuredBlueprints.map((structuredData) => {
       const name = structuredData.meta?.name || 'Unknown'
-      const category = structuredData.meta?.type || structuredData.meta?.category || 'Unknown'
+      const blueprintType = structuredData.meta?.type || structuredData.meta?.category || 'Unknown'
       const tier = structuredData.meta?.tier
 
-      const classification = classifyBlueprint(category, name)
+      const classification = classifyBlueprint(blueprintType, name)
       return {
         name,
         meta: tier ? `Tier ${tier}` : 'No tier',
@@ -40,18 +25,18 @@ export function buildBlueprintItems(headers, rows, structuredBlueprints = []) {
   }
 
   const nameIndex = getColumnIndex(headers, 'Name', 'Item Name', 'Blueprint Name')
-  const categoryIndex = getColumnIndex(headers, 'Type', 'Category', 'Item Type', 'Item Category')
+  const typeIndex = getColumnIndex(headers, 'Type', 'Category', 'Item Type', 'Item Category')
   const tierIndex = getColumnIndex(headers, 'Tier', 'Rank', 'Level')
 
   const resolvedNameIndex = nameIndex >= 0 ? nameIndex : 0
-  const resolvedCategoryIndex = categoryIndex >= 0 ? categoryIndex : 1
+  const resolvedTypeIndex = typeIndex >= 0 ? typeIndex : 1
   const resolvedTierIndex = tierIndex >= 0 ? tierIndex : -1
 
   const items = []
 
   rows.forEach((row, rowIndex) => {
     const name = getCellValue(row, resolvedNameIndex)
-    const category = getCellValue(row, resolvedCategoryIndex)
+    const blueprintType = getCellValue(row, resolvedTypeIndex)
     const tier = getCellValue(row, resolvedTierIndex)
     const structuredData = structuredBlueprints[rowIndex] || {}
 
@@ -59,7 +44,7 @@ export function buildBlueprintItems(headers, rows, structuredBlueprints = []) {
       return
     }
 
-    const classification = classifyBlueprint(category, name)
+    const classification = classifyBlueprint(blueprintType, name)
     items.push({
       name,
       meta: tier ? `Tier ${tier}` : 'No tier',
@@ -104,12 +89,9 @@ export function convertBlueprintRowToObject(headers, row) {
   }
 
   addMeta('Name', 'name', (value) => cleanText(value))
-  addMeta('Type', 'category', (value) => cleanText(value))
-  if (!blueprint.meta.category) {
-    addMeta('Category', 'category', (value) => cleanText(value))
-  }
-  if (blueprint.meta.category) {
-    blueprint.meta.type = blueprint.meta.category
+  addMeta('Type', 'type', (value) => cleanText(value))
+  if (!blueprint.meta.type) {
+    addMeta('Category', 'type', (value) => cleanText(value))
   }
   addMeta('Tier', 'tier', (value) => parseNumericValue(value))
   addMeta('Unlock Prerequisite', 'unlockPrerequisite', (value) => cleanText(value))
@@ -326,35 +308,35 @@ function classifyBlueprint(type, name) {
   const normalizedName = (name || '').toString().trim()
   const normalizedTypeKey = normalizeTypeKey(normalizedType)
 
-  const directMatch = CATEGORY_TYPE_LOOKUP.get(normalizedTypeKey)
+  const directMatch = GROUP_TYPE_LOOKUP.get(normalizedTypeKey)
   if (directMatch) {
-    if (directMatch.category === 'Enchantments') {
-      return { category: 'Enchantments', type: resolveEnchantmentType(normalizedName, directMatch.type) }
+    if (directMatch.group === 'Enchantments') {
+      return { group: 'Enchantments', type: resolveEnchantmentType(normalizedName, directMatch.type) }
     }
     return directMatch
   }
 
   if (normalizedTypeKey === 'enchantment' || normalizedTypeKey === 'enchantments') {
-    return { category: 'Enchantments', type: resolveEnchantmentType(normalizedName, normalizedType) }
+    return { group: 'Enchantments', type: resolveEnchantmentType(normalizedName, normalizedType) }
   }
 
   if (normalizedTypeKey === 'weapon' || normalizedTypeKey === 'weapons') {
-    return { category: 'Weapons', type: normalizedType || 'Weapon' }
+    return { group: 'Weapons', type: normalizedType || 'Weapon' }
   }
 
   if (normalizedTypeKey === 'armor' || normalizedTypeKey === 'armors' || normalizedTypeKey === 'armour' || normalizedTypeKey === 'armours') {
-    return { category: 'Armor', type: normalizedType || 'Armor' }
+    return { group: 'Armor', type: normalizedType || 'Armor' }
   }
 
   if (normalizedTypeKey === 'accessory' || normalizedTypeKey === 'accessories') {
-    return { category: 'Accessories', type: normalizedType || 'Accessory' }
+    return { group: 'Accessories', type: normalizedType || 'Accessory' }
   }
 
   if (normalizedType) {
-    return { category: 'Accessories', type: normalizedType }
+    return { group: 'Accessories', type: normalizedType }
   }
 
-  return { category: 'Accessories', type: 'Unknown' }
+  return { group: 'Accessories', type: 'Unknown' }
 }
 
 function normalizeTypeKey(value) {

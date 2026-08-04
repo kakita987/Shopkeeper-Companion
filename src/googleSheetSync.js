@@ -1,10 +1,11 @@
 import { cleanText, toInventoryCount } from './textUtils.js'
+import { BLUEPRINT_GROUP_TYPE_ORDER } from './assets/blueprintTypeOrder.js'
 
 const SHEETS_API_BASE = 'https://sheets.googleapis.com/v4/spreadsheets'
 const DRIVE_API_BASE = 'https://www.googleapis.com/drive/v3/files'
 const README_SHEET_TITLE = 'ReadMe'
 const WORKBOOK_SHEET_TITLES = ['ReadMe', 'Weapons', 'Armor', 'Accessories', 'Enchantments', 'Saved Views', 'Settings']
-const BLUEPRINT_CATEGORY_TITLES = ['Weapons', 'Armor', 'Accessories', 'Enchantments']
+const BLUEPRINT_GROUP_TITLES = ['Weapons', 'Armor', 'Accessories', 'Enchantments']
 
 const README_ROWS = [
   ['Shopkeeper Companion - User Data Sheet'],
@@ -31,9 +32,9 @@ const PROGRESS_COLUMNS = [
   { key: 'inventoryEpic', label: 'Inventory Epic' },
   { key: 'inventoryLegendary', label: 'Inventory Legendary' },
   { key: 'owned', label: 'Owned' },
+  { key: 'starforge', label: 'Starforge' },
   { key: 'milestones', label: 'Milestones' },
   { key: 'improve', label: 'Improve' },
-  { key: 'starforge', label: 'Starforge' },
   { key: 'collectionSuperior', label: 'Collection Superior' },
   { key: 'collectionFlawless', label: 'Collection Flawless' },
   { key: 'collectionEpic', label: 'Collection Epic' },
@@ -45,6 +46,13 @@ const MASTER_BLUEPRINT_COLUMNS = [
   { key: 'type', label: 'Type' },
   { key: 'tier', label: 'Tier' },
 ]
+
+const GROUP_TYPE_ORDER_INDEX = new Map(
+  BLUEPRINT_GROUP_TYPE_ORDER.map((definition) => [
+    definition.group,
+    new Map(definition.types.map((type, index) => [type.toLowerCase(), index])),
+  ])
+)
 
 function getSyncWorkbookSchemaEntries() {
   return [
@@ -152,6 +160,45 @@ function getRowValue(row = [], headers = [], labels = []) {
   }
 
   return row[index] ?? ''
+}
+
+function getBlueprintTypeOrderIndex(groupTitle, blueprintType) {
+  const typeOrder = GROUP_TYPE_ORDER_INDEX.get(groupTitle) || new Map()
+  const normalizedType = cleanText(blueprintType).toLowerCase()
+  const index = typeOrder.get(normalizedType)
+  return index === undefined ? Number.MAX_SAFE_INTEGER : index
+}
+
+function isBlueprintRowsOutOfOrder(headerRow = [], dataRows = [], groupTitle = '') {
+  let previousTypeIndex = -1
+  let previousBlueprintName = ''
+
+  for (const row of dataRows) {
+    if (!Array.isArray(row)) {
+      continue
+    }
+
+    const blueprintName = cleanText(getRowValue(row, headerRow, ['Blueprint Name', 'blueprintName', 'Name']))
+    if (!blueprintName) {
+      continue
+    }
+
+    const blueprintType = getRowValue(row, headerRow, ['Type', 'Category', 'Item Type', 'Item Category'])
+    const typeIndex = getBlueprintTypeOrderIndex(groupTitle, blueprintType)
+
+    if (typeIndex < previousTypeIndex) {
+      return true
+    }
+
+    if (typeIndex === previousTypeIndex && blueprintName.localeCompare(previousBlueprintName) < 0) {
+      return true
+    }
+
+    previousTypeIndex = typeIndex
+    previousBlueprintName = blueprintName
+  }
+
+  return false
 }
 
 function createDefaultBlueprintProgress() {
@@ -388,22 +435,38 @@ function getBlueprintItemType(item = {}) {
     item?.structuredData?.meta?.type ||
     item?.structuredData?.meta?.category ||
     ''
-  ).trim().toLowerCase()
+  ).trim()
 }
 
 function sortBlueprintItemsForWorkbook(blueprintItems = []) {
   return blueprintItems
     .map((item, index) => ({ item, index }))
     .sort((left, right) => {
+      const leftGroup = String(left.item?.classification?.group || left.item?.classification?.category || '').trim()
+      const rightGroup = String(right.item?.classification?.group || right.item?.classification?.category || '').trim()
+      const typeOrder = GROUP_TYPE_ORDER_INDEX.get(leftGroup) || GROUP_TYPE_ORDER_INDEX.get(rightGroup) || new Map()
       const leftType = getBlueprintItemType(left.item)
       const rightType = getBlueprintItemType(right.item)
+      const leftTypeIndex = typeOrder.get(leftType.toLowerCase())
+      const rightTypeIndex = typeOrder.get(rightType.toLowerCase())
 
-      if (leftType === 'staff' && rightType === 'wand') {
-        return -1
+      if (leftTypeIndex !== rightTypeIndex) {
+        if (leftTypeIndex === undefined) {
+          return 1
+        }
+
+        if (rightTypeIndex === undefined) {
+          return -1
+        }
+
+        return leftTypeIndex - rightTypeIndex
       }
 
-      if (leftType === 'wand' && rightType === 'staff') {
-        return 1
+      const leftName = String(left.item?.name || '')
+      const rightName = String(right.item?.name || '')
+      const nameCompare = leftName.localeCompare(rightName)
+      if (nameCompare !== 0) {
+        return nameCompare
       }
 
       return left.index - right.index
@@ -433,22 +496,12 @@ function buildWorkbookPayload(options = {}) {
 
   const payload = {}
   payload[README_SHEET_TITLE] = [[...README_ROWS[0]], ...README_ROWS.slice(1)]
-  payload.Weapons = buildBlueprintWorkbookRows(
-    blueprintItems.filter((item) => item?.classification?.category === 'Weapons'),
-    blueprintProgressByName
-  )
-  payload.Armor = buildBlueprintWorkbookRows(
-    blueprintItems.filter((item) => item?.classification?.category === 'Armor'),
-    blueprintProgressByName
-  )
-  payload.Accessories = buildBlueprintWorkbookRows(
-    blueprintItems.filter((item) => item?.classification?.category === 'Accessories'),
-    blueprintProgressByName
-  )
-  payload.Enchantments = buildBlueprintWorkbookRows(
-    blueprintItems.filter((item) => item?.classification?.category === 'Enchantments'),
-    blueprintProgressByName
-  )
+  BLUEPRINT_GROUP_TITLES.forEach((groupTitle) => {
+    payload[groupTitle] = buildBlueprintWorkbookRows(
+      blueprintItems.filter((item) => (item?.classification?.group || item?.classification?.category) === groupTitle),
+      blueprintProgressByName
+    )
+  })
   payload['Saved Views'] = buildWorkbookSheetRows(
     ['id', 'name', 'dependency', 'ownership', 'inventory', 'mastered', 'collectionBook'],
     savedViewRows
@@ -937,6 +990,7 @@ export async function readSyncTables(accessToken, spreadsheetId) {
     savedViews: [],
     blueprintProgress: {},
     requiresBlueprintSchemaMigration: false,
+    requiresBlueprintOrderNormalization: false,
   }
 
   for (const schema of getSyncWorkbookSchemaEntries()) {
@@ -964,7 +1018,7 @@ export async function readSyncTables(accessToken, spreadsheetId) {
       continue
     }
 
-    if (BLUEPRINT_CATEGORY_TITLES.includes(schema.title)) {
+    if (BLUEPRINT_GROUP_TITLES.includes(schema.title)) {
       const headerRow = rows[0] || []
       const normalizedHeaders = normalizeHeaderSet(headerRow)
       const hasBlueprintRows = dataRows.length > 0
@@ -985,6 +1039,10 @@ export async function readSyncTables(accessToken, spreadsheetId) {
 
       if (hasBlueprintRows && usesLegacyTypeHeader && !usesTypeHeader) {
         tables.requiresBlueprintSchemaMigration = true
+      }
+
+      if (hasBlueprintRows && isBlueprintRowsOutOfOrder(headerRow, dataRows, schema.title)) {
+        tables.requiresBlueprintOrderNormalization = true
       }
 
       tables.blueprintProgress[schema.title] = [rows[0] || [], ...dataRows]

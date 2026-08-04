@@ -952,6 +952,14 @@ body.theme-dark .overlay-card,
   padding: 10px;
 }
 
+.inventory-quality-label {
+  display: block;
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
 .inventory-field input {
   border: 1px solid rgba(17, 24, 39, 0.12);
   border-radius: 10px;

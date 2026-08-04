@@ -18,8 +18,9 @@ import { getBlueprintStageValue, getBlueprintStageOptions } from './blueprintSta
 import { initSettingsUi, applyTheme as applySharedTheme, applyFontPreference as applySharedFontPreference, getStoredTheme as getSharedStoredTheme, getStoredFontPreference as getSharedStoredFontPreference } from './settingsUi.js'
 import { SETTINGS_GEAR_ICON_MARKUP } from './settingsGearIcon.js'
 import { escapeHtml, cleanText, toInventoryCount } from './textUtils.js'
-import { getBlueprintItemIconName, getCategoryIconName, getTypeIconName } from './blueprintIcons.js'
+import { getBlueprintItemIconName, getGroupIconName, getTypeIconName } from './blueprintIcons.js'
 import { buildBlueprintItems, convertBlueprintRowToObject } from './blueprintParsing.js'
+import { BLUEPRINT_GROUP_TYPE_ORDER } from './assets/blueprintTypeOrder.js'
 import { RESOURCE_LABELS } from './resourceLabels.js'
 import { DEFAULT_SAVED_VIEW_CRITERIA, STARTER_VIEW_PRESETS, SAVED_FILTER_VIEWS_STORAGE_KEY, buildSavedViewsRows, getCollectionBookMatchDescription, hasActiveSavedViewFilters, loadSavedFilterViews, normalizeSavedViewCriteria, parseSavedViewsRows } from './savedViews.js'
 import { buildBlueprintSummary, buildDependencySummaryLine, getBlueprintVisuals, renderCollectionSection, renderInventorySection, renderLucideIcons, renderMaterialsSection, renderOverlaySectionCard, renderPreview, renderStatsCards, renderUpgradeSection } from './blueprintView.js'
@@ -28,30 +29,13 @@ const DEFAULT_SPREADSHEET_URL = 'https://playshoptitans.com/spreadsheet'
 const FALLBACK_GOOGLE_SHEET_URL = import.meta.env.VITE_BLUEPRINT_SHEET_URL || 'https://docs.google.com/spreadsheets/d/1WLa7X8h3O0-aGKxeAlCL7bnN8-FhGd3t7pz2RCzSg8c/edit'
 const GOOGLE_PICKER_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY || import.meta.env.VITE_GOOGLE_DRIVE_API_KEY || ''
 
-const CATEGORY_DEFINITIONS = [
-  {
-    title: 'Weapons',
-    types: ['Sword', 'Axe', 'Dagger', 'Mace', 'Spear', 'Bow', 'Staff', 'Wand', 'Gun', 'Crossbow', 'Instrument', 'Dual Wield', 'Catalyst'],
-  },
-  {
-    title: 'Armor',
-    types: ['Heavy Armor', 'Light Armor', 'Clothes', 'Helmet', 'Rogue Hat', 'Magician Hat', 'Gauntlets', 'Gloves', 'Heavy Footwear', 'Light Footwear'],
-  },
-  {
-    title: 'Accessories',
-    types: ['Herbal Remedy', 'Potion', 'Spell', 'Shield', 'Cloak', 'Ring', 'Amulet', 'Familiar', 'Aurasong', 'Quiver', 'Idol', 'Meal', 'Dessert'],
-  },
-  {
-    title: 'Enchantments',
-    types: ['Element', 'Spirit'],
-  },
-]
-const CATEGORY_ORDER_INDEX = new Map(
-  CATEGORY_DEFINITIONS.map((definition, index) => [definition.title, index])
+const GROUP_DEFINITIONS = BLUEPRINT_GROUP_TYPE_ORDER
+const GROUP_ORDER_INDEX = new Map(
+  GROUP_DEFINITIONS.map((definition, index) => [definition.group, index])
 )
-const CATEGORY_TYPE_ORDER_INDEX = new Map(
-  CATEGORY_DEFINITIONS.map((definition) => [
-    definition.title,
+const GROUP_TYPE_ORDER_INDEX = new Map(
+  GROUP_DEFINITIONS.map((definition) => [
+    definition.group,
     new Map(definition.types.map((type, index) => [type, index])),
   ])
 )
@@ -779,7 +763,7 @@ async function initializeGoogleSync(accessToken, options = {}) {
       const remote = await readSyncTables(currentAccessToken, ensured.spreadsheetId)
       if (hasRemoteSyncData(remote)) {
         applyRemoteSyncState(remote)
-        if (remote?.requiresBlueprintSchemaMigration) {
+        if (remote?.requiresBlueprintSchemaMigration || remote?.requiresBlueprintOrderNormalization) {
           await migrateBlueprintSchemaIfNeeded(currentAccessToken, remote)
         }
       } else if (hasLocalUserData()) {
@@ -971,7 +955,7 @@ async function syncFromGoogleSheet() {
     try {
       const remote = await readSyncTables(currentAccessToken, googleSyncState.spreadsheetId)
       applyRemoteSyncState(remote)
-      if (remote?.requiresBlueprintSchemaMigration) {
+      if (remote?.requiresBlueprintSchemaMigration || remote?.requiresBlueprintOrderNormalization) {
         await migrateBlueprintSchemaIfNeeded(currentAccessToken, remote)
       }
       googleSyncState.lastSyncedAt = new Date().toISOString()
@@ -1201,7 +1185,7 @@ async function writeCurrentSyncTables(accessToken) {
 }
 
 async function migrateBlueprintSchemaIfNeeded(accessToken, remoteTables = {}) {
-  if (!remoteTables?.requiresBlueprintSchemaMigration) {
+  if (!remoteTables?.requiresBlueprintSchemaMigration && !remoteTables?.requiresBlueprintOrderNormalization) {
     return
   }
 
@@ -1246,15 +1230,19 @@ async function importBlueprintData() {
 
     updateStatus('Downloading blueprints…')
     const { headers, rows, structuredBlueprints } = await importGoogleSheet(exportUrl)
-    blueprintVersionLabel = versionLabel || blueprintVersionLabel
-    await saveBlueprintCache({ headers, structuredBlueprints, versionLabel: blueprintVersionLabel })
     allBlueprintItems = buildBlueprintItems(headers, rows, structuredBlueprints)
+    if (isSuspiciousBlueprintDataset(allBlueprintItems)) {
+      throw new Error('The blueprint import looked incomplete (items classified as Unknown). Please import again in a moment.')
+    }
+
+    blueprintVersionLabel = versionLabel || blueprintVersionLabel
+    await saveBlueprintCache({ headers, rows, structuredBlueprints, versionLabel: blueprintVersionLabel })
     renderBlueprintVersionLabel(blueprintVersionLabel)
 
     renderPreview(allBlueprintItems, {
       previewEl,
       blueprintOverlay,
-      categoryDefinitions: CATEGORY_DEFINITIONS,
+      groupDefinitions: GROUP_DEFINITIONS,
       onOpenBlueprintOverlay: openBlueprintOverlay,
       onCloseBlueprintOverlay: closeBlueprintOverlay,
       renderLucideIcons,
@@ -1282,12 +1270,20 @@ async function initializeBlueprintDataFromCache() {
     return
   }
 
-  const { headers = [], structuredBlueprints = [] } = cached
-  allBlueprintItems = buildBlueprintItems(headers, [], structuredBlueprints)
+  const { headers = [], rows = [], structuredBlueprints = [] } = cached
+  allBlueprintItems = buildBlueprintItems(headers, rows, structuredBlueprints)
+  if (isSuspiciousBlueprintDataset(allBlueprintItems)) {
+    await removeItem(BLUEPRINT_CACHE_STORAGE_KEY)
+    allBlueprintItems = []
+    updateStatus('Cached blueprint data looked incomplete. Please import Blueprints again.', 'error')
+    renderBlueprintEmptyState('Cached blueprint data looked incomplete. Click "Import Blueprints" in Settings to refresh the library.')
+    return
+  }
+
   renderPreview(allBlueprintItems, {
     previewEl,
     blueprintOverlay,
-    categoryDefinitions: CATEGORY_DEFINITIONS,
+    groupDefinitions: GROUP_DEFINITIONS,
     onOpenBlueprintOverlay: openBlueprintOverlay,
     onCloseBlueprintOverlay: closeBlueprintOverlay,
     renderLucideIcons,
@@ -1301,6 +1297,7 @@ async function initializeBlueprintDataFromCache() {
 async function saveBlueprintCache(payload) {
   const safePayload = {
     headers: Array.isArray(payload?.headers) ? payload.headers : [],
+    rows: Array.isArray(payload?.rows) ? payload.rows : [],
     structuredBlueprints: Array.isArray(payload?.structuredBlueprints) ? payload.structuredBlueprints : [],
     versionLabel: typeof payload?.versionLabel === 'string' ? payload.versionLabel : '',
   }
@@ -1391,11 +1388,34 @@ async function loadBlueprintCache() {
       return null
     }
 
+    if ('rows' in cached && !Array.isArray(cached.rows)) {
+      return null
+    }
+
     return cached
   } catch (error) {
     console.warn('Unable to read blueprint cache.', error)
     return null
   }
+}
+
+function isSuspiciousBlueprintDataset(items = []) {
+  if (!Array.isArray(items) || !items.length) {
+    return true
+  }
+
+  const unknownItems = items.filter((item) => {
+    const group = String(item?.classification?.group || item?.classification?.category || '').trim().toLowerCase()
+    const type = String(item?.classification?.type || '').trim().toLowerCase()
+    return group === 'accessories' && type === 'unknown'
+  })
+
+  if (!unknownItems.length) {
+    return false
+  }
+
+  const ratio = unknownItems.length / items.length
+  return unknownItems.length === items.length || ratio >= 0.9
 }
 
 function bindBlueprintOverlayInteractions(item) {
@@ -1502,19 +1522,19 @@ function openBlueprintOverlay(item) {
     <div class="overlay-top-layout">
       <div class="overlay-hero">
         <div class="overlay-hero-background overlay-hero-symbol" aria-hidden="true">
-          <span class="icon-slot overlay-hero-icon"><i data-lucide="${escapeHtml(getCategoryIconName(visuals.category))}"></i></span>
+          <span class="icon-slot overlay-hero-icon"><i data-lucide="${escapeHtml(getGroupIconName(visuals.group))}"></i></span>
         </div>
         <div class="overlay-hero-content">
           <div class="overlay-visual-strip" aria-hidden="true">
             <div class="overlay-visual-tile overlay-visual-category">
-              <span class="icon-slot overlay-visual-icon"><i data-lucide="${escapeHtml(getCategoryIconName(visuals.group))}"></i></span>
+              <span class="icon-slot overlay-visual-icon"><i data-lucide="${escapeHtml(getGroupIconName(visuals.group))}"></i></span>
             </div>
             <div class="overlay-visual-tile overlay-visual-item">
               <span class="icon-slot overlay-item-icon"><i data-lucide="${escapeHtml(getBlueprintItemIconName(item))}"></i></span>
             </div>
           </div>
           <div class="overlay-title-block">
-            <p class="overlay-eyebrow">${escapeHtml(visuals.group)} / ${escapeHtml(visuals.category || 'Type')}</p>
+            <p class="overlay-eyebrow">${escapeHtml(visuals.group)} / ${escapeHtml(visuals.type || 'Type')}</p>
             <h3 id="blueprint-overlay-title">${escapeHtml(item.name)}</h3>
             <div class="overlay-meta-row">
               <span class="overlay-tier-badge">Tier ${escapeHtml(tierValue)}</span>
@@ -1723,33 +1743,33 @@ function renderSavedViewResults(items = [], dependencyIndex) {
   const grouped = new Map()
 
   items.forEach((item) => {
-    const category = item?.classification?.category || 'Accessories'
+    const group = item?.classification?.group || item?.classification?.category || 'Accessories'
     const type = item?.classification?.type || 'Unknown'
 
-    if (!grouped.has(category)) {
-      grouped.set(category, {
-        category,
+    if (!grouped.has(group)) {
+      grouped.set(group, {
+        group,
         types: new Map(),
         totalItems: 0,
       })
     }
 
-    const categoryGroup = grouped.get(category)
-    categoryGroup.totalItems += 1
+    const groupBucket = grouped.get(group)
+    groupBucket.totalItems += 1
 
-    if (!categoryGroup.types.has(type)) {
-      categoryGroup.types.set(type, {
+    if (!groupBucket.types.has(type)) {
+      groupBucket.types.set(type, {
         type,
         items: [],
       })
     }
 
-    categoryGroup.types.get(type).items.push(item)
+    groupBucket.types.get(type).items.push(item)
   })
 
-  const orderedCategoryGroups = Array.from(grouped.values()).sort((leftGroup, rightGroup) => {
-    const leftIndex = CATEGORY_ORDER_INDEX.get(leftGroup.category)
-    const rightIndex = CATEGORY_ORDER_INDEX.get(rightGroup.category)
+  const orderedGroupBuckets = Array.from(grouped.values()).sort((leftGroup, rightGroup) => {
+    const leftIndex = GROUP_ORDER_INDEX.get(leftGroup.group)
+    const rightIndex = GROUP_ORDER_INDEX.get(rightGroup.group)
 
     if (leftIndex !== undefined && rightIndex !== undefined) {
       return leftIndex - rightIndex
@@ -1763,14 +1783,14 @@ function renderSavedViewResults(items = [], dependencyIndex) {
       return 1
     }
 
-    return leftGroup.category.localeCompare(rightGroup.category)
+    return leftGroup.group.localeCompare(rightGroup.group)
   })
 
   return `
     <div class="blueprint-groups saved-view-groups">
-      ${orderedCategoryGroups.map((categoryGroup) => {
-    const typeOrderIndex = CATEGORY_TYPE_ORDER_INDEX.get(categoryGroup.category) || new Map()
-    const orderedTypeGroups = Array.from(categoryGroup.types.values()).sort((leftTypeGroup, rightTypeGroup) => {
+      ${orderedGroupBuckets.map((groupBucket) => {
+    const typeOrderIndex = GROUP_TYPE_ORDER_INDEX.get(groupBucket.group) || new Map()
+    const orderedTypeGroups = Array.from(groupBucket.types.values()).sort((leftTypeGroup, rightTypeGroup) => {
       const leftIndex = typeOrderIndex.get(leftTypeGroup.type)
       const rightIndex = typeOrderIndex.get(rightTypeGroup.type)
 
@@ -1823,7 +1843,7 @@ function renderSavedViewResults(items = [], dependencyIndex) {
         <details class="blueprint-type">
           <summary>
             <span class="group-summary-title">
-              <span class="icon-slot group-summary-icon" aria-hidden="true"><i data-lucide="${escapeHtml(getTypeIconName(typeGroup.type, categoryGroup.category))}"></i></span>
+              <span class="icon-slot group-summary-icon" aria-hidden="true"><i data-lucide="${escapeHtml(getTypeIconName(typeGroup.type, groupBucket.group))}"></i></span>
               <span>${escapeHtml(typeGroup.type)}</span>
             </span>
             <span class="group-count">${typeGroup.items.length}</span>
@@ -1837,10 +1857,10 @@ function renderSavedViewResults(items = [], dependencyIndex) {
       <details class="blueprint-category">
         <summary>
           <span class="group-summary-title">
-            <span class="icon-slot group-summary-icon" aria-hidden="true"><i data-lucide="${escapeHtml(getCategoryIconName(categoryGroup.category))}"></i></span>
-            <span>${escapeHtml(categoryGroup.category)}</span>
+            <span class="icon-slot group-summary-icon" aria-hidden="true"><i data-lucide="${escapeHtml(getGroupIconName(groupBucket.group))}"></i></span>
+            <span>${escapeHtml(groupBucket.group)}</span>
           </span>
-          <span class="group-count">${categoryGroup.totalItems}</span>
+          <span class="group-count">${groupBucket.totalItems}</span>
         </summary>
         <div class="category-body">${typeMarkup}</div>
       </details>

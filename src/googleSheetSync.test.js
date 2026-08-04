@@ -19,8 +19,8 @@ test('buildWorkbookPayload creates the requested sheet order and initializes blu
     blueprintItems: [
       {
         name: 'Test Sword',
-        classification: { category: 'Weapons', type: 'Sword' },
-        structuredData: { meta: { name: 'Test Sword', category: 'Sword', tier: 1 } },
+        classification: { group: 'Weapons', type: 'Sword' },
+        structuredData: { meta: { name: 'Test Sword', type: 'Sword', tier: 1 } },
       },
     ],
     blueprintProgressByName: {
@@ -61,13 +61,13 @@ test('buildWorkbookPayload includes imported blueprints even without any saved p
     blueprintItems: [
       {
         name: 'Starter Sword',
-        classification: { category: 'Weapons', type: 'Sword' },
-        structuredData: { meta: { name: 'Starter Sword', category: 'Sword', tier: 1 } },
+        classification: { group: 'Weapons', type: 'Sword' },
+        structuredData: { meta: { name: 'Starter Sword', type: 'Sword', tier: 1 } },
       },
       {
         name: 'Wooden Shield',
-        classification: { category: 'Armor', type: 'Shield' },
-        structuredData: { meta: { name: 'Wooden Shield', category: 'Shield', tier: 1 } },
+        classification: { group: 'Armor', type: 'Shield' },
+        structuredData: { meta: { name: 'Wooden Shield', type: 'Shield', tier: 1 } },
       },
     ],
     blueprintProgressByName: {},
@@ -79,27 +79,56 @@ test('buildWorkbookPayload includes imported blueprints even without any saved p
   assert.equal(payload.Armor[1][0], 'Wooden Shield')
 })
 
-test('buildWorkbookPayload places Staff entries before Wand entries for weapon exports', () => {
+test('buildWorkbookPayload follows configured weapon order for Wand and Staff', () => {
   const payload = buildWorkbookPayload({
     settingsRows: [],
     savedViewRows: [],
     blueprintItems: [
       {
         name: 'Wizard Wand',
-        classification: { category: 'Weapons', type: 'Wand' },
-        structuredData: { meta: { name: 'Wizard Wand', category: 'Wand', tier: 1 } },
+        classification: { group: 'Weapons', type: 'Wand' },
+        structuredData: { meta: { name: 'Wizard Wand', type: 'Wand', tier: 1 } },
       },
       {
         name: 'Oak Staff',
-        classification: { category: 'Weapons', type: 'Staff' },
-        structuredData: { meta: { name: 'Oak Staff', category: 'Staff', tier: 1 } },
+        classification: { group: 'Weapons', type: 'Staff' },
+        structuredData: { meta: { name: 'Oak Staff', type: 'Staff', tier: 1 } },
       },
     ],
     blueprintProgressByName: {},
   })
 
-  assert.equal(payload.Weapons[1][0], 'Oak Staff')
-  assert.equal(payload.Weapons[2][0], 'Wizard Wand')
+  assert.equal(payload.Weapons[1][0], 'Wizard Wand')
+  assert.equal(payload.Weapons[2][0], 'Oak Staff')
+})
+
+test('buildWorkbookPayload follows configured accessories order for Quiver', () => {
+  const payload = buildWorkbookPayload({
+    settingsRows: [],
+    savedViewRows: [],
+    blueprintItems: [
+      {
+        name: 'Archer Idol',
+        classification: { group: 'Accessories', type: 'Idol' },
+        structuredData: { meta: { name: 'Archer Idol', type: 'Idol', tier: 1 } },
+      },
+      {
+        name: 'Feather Quiver',
+        classification: { group: 'Accessories', type: 'Quiver' },
+        structuredData: { meta: { name: 'Feather Quiver', type: 'Quiver', tier: 1 } },
+      },
+      {
+        name: 'Songbook Aurasong',
+        classification: { group: 'Accessories', type: 'Aurasong' },
+        structuredData: { meta: { name: 'Songbook Aurasong', type: 'Aurasong', tier: 1 } },
+      },
+    ],
+    blueprintProgressByName: {},
+  })
+
+  assert.equal(payload.Accessories[1][0], 'Songbook Aurasong')
+  assert.equal(payload.Accessories[2][0], 'Feather Quiver')
+  assert.equal(payload.Accessories[3][0], 'Archer Idol')
 })
 
 test('parseWorkbookBlueprintProgress merges workbook rows by blueprint name and preserves existing progress', () => {
@@ -274,6 +303,45 @@ test('readSyncTables flags migration when legacy Category header is present', as
   try {
     const tables = await readSyncTables('token', 'spreadsheet-id')
     assert.equal(tables.requiresBlueprintSchemaMigration, true)
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('readSyncTables flags order normalization when blueprint rows are out of configured order', async () => {
+  const originalFetch = global.fetch
+
+  global.fetch = async (url) => {
+    const decodedUrl = decodeURIComponent(String(url))
+    const contentTypeHeaders = { get: () => 'application/json' }
+
+    if (decodedUrl.includes("'Weapons'!A:ZZ")) {
+      return {
+        ok: true,
+        status: 200,
+        headers: contentTypeHeaders,
+        json: async () => ({
+          values: [
+            ['Blueprint Name', 'Type', 'Tier', 'Owned', 'Starforge', 'Milestones', 'Improve'],
+            ['Wizard Wand', 'Wand', '1', 'TRUE', 'FALSE', '0', '0'],
+            ['Hunting Bow', 'Bow', '1', 'TRUE', 'FALSE', '0', '0'],
+          ],
+        }),
+      }
+    }
+
+    return {
+      ok: true,
+      status: 200,
+      headers: contentTypeHeaders,
+      json: async () => ({ values: [] }),
+    }
+  }
+
+  try {
+    const tables = await readSyncTables('token', 'spreadsheet-id')
+    assert.equal(tables.requiresBlueprintSchemaMigration, false)
+    assert.equal(tables.requiresBlueprintOrderNormalization, true)
   } finally {
     global.fetch = originalFetch
   }
