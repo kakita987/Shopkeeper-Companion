@@ -3,7 +3,15 @@ import { initAnalytics, recordView } from './analytics.js'
 import { mountAdBanner } from './adBanner.js'
 import { getRandomTavernText } from './kofiText.js'
 import { useGoogleAuth } from './useGoogleAuth.js'
-import { ensureUserSyncSpreadsheet, getGoogleSyncErrorMessage, parseWorkbookBlueprintProgress, readSyncTables, writeSyncTables } from './googleSheetSync.js'
+import {
+  ensureUserSyncSpreadsheet,
+  getGoogleSyncErrorMessage,
+  isTokenExpiredError,
+  parseWorkbookBlueprintProgress,
+  readSyncTables,
+  shouldWipeSpreadsheetId,
+  writeSyncTables,
+} from './googleSheetSync.js'
 import { pickFolderFromDrive, pickSpreadsheetFromDrive } from './googleDrivePicker.js'
 import { getItem, setItem, removeItem } from './storage.js'
 import { getBlueprintStageValue, getBlueprintStageOptions } from './blueprintStageOptions.js'
@@ -700,11 +708,39 @@ async function handleGoogleAuthStateChange(state) {
   }
 
   if (!googleSyncState.isReady && !googleSyncState.isSyncing) {
+    if (googleSyncState.spreadsheetId) {
+      setGoogleSyncNotice('Reconnecting to your Google Sync sheet...')
+    }
+
     await initializeGoogleSync(state.accessToken, {
       preferredSpreadsheetId: googleSyncState.selectedSpreadsheetId || googleSyncState.spreadsheetId,
       reason: googleSyncState.selectedSpreadsheetId || googleSyncState.spreadsheetId ? 'recovery' : 'new-user',
     })
   }
+}
+
+async function refreshGoogleTokenForRetry({ interactive = false } = {}) {
+  try {
+    const token = await googleAuth.refreshAccessToken({ interactive })
+    if (typeof token === 'string' && token.trim()) {
+      return token
+    }
+  } catch (error) {
+    if (interactive) {
+      throw error
+    }
+  }
+
+  return ''
+}
+
+async function getRetryAccessToken() {
+  const silentToken = await refreshGoogleTokenForRetry({ interactive: false })
+  if (silentToken) {
+    return silentToken
+  }
+
+  return refreshGoogleTokenForRetry({ interactive: true })
 }
 
 async function initializeGoogleSync(accessToken, options = {}) {
@@ -724,12 +760,11 @@ async function initializeGoogleSync(accessToken, options = {}) {
   const targetFolderId = typeof options?.targetFolderId === 'string'
     ? options.targetFolderId.trim()
     : ''
+  const hasRetriedAuth = Boolean(options?.hasRetriedAuth)
 
   pendingGoogleSyncInitPromise = (async () => {
-    try {
-      beginGoogleSyncRun({ clearNotice: true })
-
-      const ensured = await ensureUserSyncSpreadsheet(accessToken, preferredSpreadsheetId, {
+    const runInitialization = async (currentAccessToken) => {
+      const ensured = await ensureUserSyncSpreadsheet(currentAccessToken, preferredSpreadsheetId, {
         reason: syncReason,
         targetFolderId,
         confirmCreate: async (message) => {
@@ -741,27 +776,57 @@ async function initializeGoogleSync(accessToken, options = {}) {
       googleSyncState.spreadsheetUrl = ensured.spreadsheetUrl
       await persistGoogleSyncSpreadsheetId(ensured.spreadsheetId)
 
-      const remote = await readSyncTables(accessToken, ensured.spreadsheetId)
+      const remote = await readSyncTables(currentAccessToken, ensured.spreadsheetId)
       if (hasRemoteSyncData(remote)) {
         applyRemoteSyncState(remote)
         if (remote?.requiresBlueprintSchemaMigration) {
-          await migrateBlueprintSchemaIfNeeded(accessToken, remote)
+          await migrateBlueprintSchemaIfNeeded(currentAccessToken, remote)
         }
       } else if (hasLocalUserData()) {
-        await pushLocalStateToGoogleSheet(accessToken)
+        await pushLocalStateToGoogleSheet(currentAccessToken)
       }
 
       googleSyncState.isReady = true
       googleSyncState.notice = ''
       googleSyncState.lastSyncedAt = new Date().toISOString()
       refreshGoogleAuthUi()
-    } catch (error) {
-      setGoogleSyncError(error, { clearNotice: true })
-      googleSyncState.isReady = false
-      googleSyncState.spreadsheetId = ''
-      googleSyncState.spreadsheetUrl = ''
-      await clearStoredGoogleSyncSpreadsheetId()
-      console.error(error)
+
+      return true
+    }
+
+    try {
+      beginGoogleSyncRun({ clearNotice: true })
+
+      try {
+        await runInitialization(accessToken, hasRetriedAuth)
+      } catch (error) {
+        if (isTokenExpiredError(error) && !hasRetriedAuth) {
+          try {
+            const refreshedToken = await getRetryAccessToken()
+            if (refreshedToken) {
+              googleSyncState.notice = ''
+              await runInitialization(refreshedToken, true)
+              return
+            }
+          } catch (refreshError) {
+            setGoogleSyncError(refreshError, { clearNotice: true })
+            googleSyncState.isReady = false
+            console.error(refreshError)
+            return
+          }
+        }
+
+        setGoogleSyncError(error, { clearNotice: true })
+        googleSyncState.isReady = false
+
+        if (shouldWipeSpreadsheetId(error)) {
+          googleSyncState.spreadsheetId = ''
+          googleSyncState.spreadsheetUrl = ''
+          await clearStoredGoogleSyncSpreadsheetId()
+        }
+
+        console.error(error)
+      }
     } finally {
       finishGoogleSyncRun()
     }
@@ -892,14 +957,9 @@ function clearCookieValue(name) {
 }
 
 async function syncFromGoogleSheet() {
-  const authState = googleAuth.getState()
-  if (!authState?.isAuthenticated || !authState?.accessToken) {
-    return
-  }
-
-  try {
+  async function runSync(currentAccessToken, hasRetriedAuth = false) {
     if (!googleSyncState.isReady || !googleSyncState.spreadsheetId) {
-      await initializeGoogleSync(authState.accessToken)
+      await initializeGoogleSync(currentAccessToken)
     }
 
     if (!googleSyncState.spreadsheetId) {
@@ -908,20 +968,37 @@ async function syncFromGoogleSheet() {
 
     beginGoogleSyncRun({ clearNotice: true })
 
-    const remote = await readSyncTables(authState.accessToken, googleSyncState.spreadsheetId)
-    applyRemoteSyncState(remote)
-    if (remote?.requiresBlueprintSchemaMigration) {
-      await migrateBlueprintSchemaIfNeeded(authState.accessToken, remote)
+    try {
+      const remote = await readSyncTables(currentAccessToken, googleSyncState.spreadsheetId)
+      applyRemoteSyncState(remote)
+      if (remote?.requiresBlueprintSchemaMigration) {
+        await migrateBlueprintSchemaIfNeeded(currentAccessToken, remote)
+      }
+      googleSyncState.lastSyncedAt = new Date().toISOString()
+      refreshGoogleAuthUi()
+      updateStatus('Synced user data from Google Sheet.', 'info')
+    } catch (error) {
+      if (isTokenExpiredError(error) && !hasRetriedAuth) {
+        const refreshedToken = await getRetryAccessToken()
+        if (refreshedToken) {
+          await runSync(refreshedToken, true)
+          return
+        }
+      }
+
+      setGoogleSyncError(error)
+      console.error(error)
+    } finally {
+      finishGoogleSyncRun()
     }
-    googleSyncState.lastSyncedAt = new Date().toISOString()
-    refreshGoogleAuthUi()
-    updateStatus('Synced user data from Google Sheet.', 'info')
-  } catch (error) {
-    setGoogleSyncError(error)
-    console.error(error)
-  } finally {
-    finishGoogleSyncRun()
   }
+
+  const authState = googleAuth.getState()
+  if (!authState?.isAuthenticated || !authState?.accessToken) {
+    return
+  }
+
+  await runSync(authState.accessToken)
 }
 
 function hasRemoteSyncData(remote) {
@@ -1023,24 +1100,36 @@ async function pushLocalStateToGoogleSheet(accessToken) {
     return
   }
 
-  try {
+  async function runWrite(currentAccessToken, hasRetriedAuth = false) {
     ensureSavedFilterViewsLoaded()
     beginGoogleSyncRun()
 
-    await writeSyncTables(accessToken, googleSyncState.spreadsheetId, {
-      settings: buildSettingsRows(),
-      savedViews: buildSavedViewsRows(savedFilterViews),
-      blueprintItems: allBlueprintItems,
-      blueprintProgressByName,
-    })
+    try {
+      await writeSyncTables(currentAccessToken, googleSyncState.spreadsheetId, {
+        settings: buildSettingsRows(),
+        savedViews: buildSavedViewsRows(savedFilterViews),
+        blueprintItems: allBlueprintItems,
+        blueprintProgressByName,
+      })
 
-    googleSyncState.lastSyncedAt = new Date().toISOString()
-  } catch (error) {
-    setGoogleSyncError(error)
-    console.error(error)
-  } finally {
-    finishGoogleSyncRun()
+      googleSyncState.lastSyncedAt = new Date().toISOString()
+    } catch (error) {
+      if (isTokenExpiredError(error) && !hasRetriedAuth) {
+        const refreshedToken = await getRetryAccessToken()
+        if (refreshedToken) {
+          await runWrite(refreshedToken, true)
+          return
+        }
+      }
+
+      setGoogleSyncError(error)
+      console.error(error)
+    } finally {
+      finishGoogleSyncRun()
+    }
   }
+
+  await runWrite(accessToken)
 }
 
 function buildSettingsRows() {

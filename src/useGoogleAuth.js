@@ -38,6 +38,8 @@ export function useGoogleAuth({ clientId }) {
   const listeners = new Set()
   let tokenClient = null
   let pendingSignIn = null
+  let pendingTokenRequest = null
+  let pendingSilentRestore = null
   let initializePromise = null
 
   const state = {
@@ -57,6 +59,60 @@ export function useGoogleAuth({ clientId }) {
   function updateState(patch) {
     Object.assign(state, patch)
     notify()
+  }
+
+  async function requestToken({ prompt = '', suppressErrors = false } = {}) {
+    if (!tokenClient) {
+      return null
+    }
+
+    if (pendingTokenRequest) {
+      return pendingTokenRequest
+    }
+
+    if (!suppressErrors) {
+      updateState({ isAuthenticating: true, error: null })
+    }
+
+    pendingTokenRequest = new Promise((resolve, reject) => {
+      pendingSignIn = { resolve, reject, suppressErrors }
+      tokenClient.requestAccessToken({ prompt })
+    })
+
+    try {
+      return await pendingTokenRequest
+    } finally {
+      pendingTokenRequest = null
+    }
+  }
+
+  async function silentlyRestoreSession() {
+    if (pendingSilentRestore) {
+      return pendingSilentRestore
+    }
+
+    pendingSilentRestore = (async () => {
+      if (!tokenClient || state.isAuthenticated) {
+        return null
+      }
+
+      try {
+        return await requestToken({ prompt: '', suppressErrors: true })
+      } catch {
+        updateState({
+          isAuthenticated: false,
+          accessToken: null,
+          error: null,
+        })
+        return null
+      }
+    })()
+
+    try {
+      return await pendingSilentRestore
+    } finally {
+      pendingSilentRestore = null
+    }
   }
 
   async function initialize() {
@@ -82,15 +138,18 @@ export function useGoogleAuth({ clientId }) {
           client_id: clientId,
           scope: GOOGLE_AUTH_SCOPES,
           callback: (response) => {
+            const currentRequest = pendingSignIn
             state.isAuthenticating = false
 
             if (!response || response.error) {
+              const errorMessage = response?.error || 'Google sign-in failed.'
+              const nextError = currentRequest?.suppressErrors ? null : errorMessage
               updateState({
                 isAuthenticated: false,
                 accessToken: null,
-                error: response?.error || 'Google sign-in failed.',
+                error: nextError,
               })
-              pendingSignIn?.reject(new Error(response?.error || 'Google sign-in failed.'))
+              currentRequest?.reject(new Error(errorMessage))
               pendingSignIn = null
               return
             }
@@ -100,10 +159,12 @@ export function useGoogleAuth({ clientId }) {
               accessToken: response.access_token,
               error: null,
             })
-            pendingSignIn?.resolve(response.access_token)
+            currentRequest?.resolve(response.access_token)
             pendingSignIn = null
           },
         })
+
+        await silentlyRestoreSession()
 
         updateState({
           isLoading: false,
@@ -139,13 +200,34 @@ export function useGoogleAuth({ clientId }) {
       return null
     }
 
-    updateState({ isAuthenticating: true, error: null })
+    const prompt = state.accessToken ? '' : 'consent'
+    return requestToken({ prompt, suppressErrors: false })
+  }
 
-    return new Promise((resolve, reject) => {
-      pendingSignIn = { resolve, reject }
-      const prompt = state.accessToken ? '' : 'consent'
-      tokenClient.requestAccessToken({ prompt })
-    })
+  async function refreshAccessToken({ interactive = false } = {}) {
+    if (state.clientIdMissing) {
+      updateState({ error: MISSING_CLIENT_ID_MESSAGE })
+      return null
+    }
+
+    if (!tokenClient) {
+      await initialize()
+    }
+
+    if (!tokenClient) {
+      return null
+    }
+
+    if (!interactive) {
+      try {
+        return await requestToken({ prompt: '', suppressErrors: true })
+      } catch {
+        return null
+      }
+    }
+
+    const prompt = state.accessToken ? '' : 'consent'
+    return requestToken({ prompt, suppressErrors: false })
   }
 
   async function signOut() {
@@ -212,6 +294,7 @@ export function useGoogleAuth({ clientId }) {
     getState: () => ({ ...state }),
     subscribe,
     renderSignInButton,
+    refreshAccessToken,
     signIn,
     signOut,
   }

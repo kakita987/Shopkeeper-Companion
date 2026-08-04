@@ -554,6 +554,16 @@ function shouldRecoverSpreadsheet(error) {
   return status === 404 || status === 410
 }
 
+export function isTokenExpiredError(error) {
+  const status = getGoogleApiErrorStatus(error)
+  return status === 401
+}
+
+export function shouldWipeSpreadsheetId(error) {
+  const status = getGoogleApiErrorStatus(error)
+  return status === 404 || status === 410
+}
+
 export function getGoogleSyncErrorMessage(error) {
   const payload = parseGoogleApiErrorPayload(error)
   const message = payload?.message || error?.message || ''
