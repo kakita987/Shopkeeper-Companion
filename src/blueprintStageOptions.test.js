@@ -49,15 +49,15 @@ test('falls back to generic labels when entries are empty', () => {
 })
 
 test('locks later stages until the previous one has any progress', () => {
-  const options = getBlueprintStageOptions('starforge', { milestones: 0 }, CRAFT_ENTRIES)
+  const options = getBlueprintStageOptions('starforge', { milestones: 0, starforgeUnlocked: false }, CRAFT_ENTRIES)
   assert.deepEqual(options, [{ value: 0, label: 'Locked' }])
 })
 
-test('requires five milestones before Starforge becomes available', () => {
-  const lockedOptions = getBlueprintStageOptions('starforge', { milestones: 4 }, CRAFT_ENTRIES)
+test('requires the Starforge unlock key before Starforge becomes available', () => {
+  const lockedOptions = getBlueprintStageOptions('starforge', { milestones: 5, starforgeUnlocked: false }, CRAFT_ENTRIES)
   assert.deepEqual(lockedOptions, [{ value: 0, label: 'Locked' }])
 
-  const unlockedOptions = getBlueprintStageOptions('starforge', { milestones: 5 }, CRAFT_ENTRIES)
+  const unlockedOptions = getBlueprintStageOptions('starforge', { milestones: 0, starforgeUnlocked: true }, CRAFT_ENTRIES)
   assert.equal(unlockedOptions.length, CRAFT_ENTRIES.length + 1)
 })
 

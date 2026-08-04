@@ -748,6 +748,11 @@ body.theme-dark .overlay-card,
   gap: 12px;
 }
 
+.upgrade-group-top--milestones {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
 .upgrade-stage-control {
   display: inline-flex;
   align-items: center;
@@ -755,6 +760,48 @@ body.theme-dark .overlay-card,
   width: 220px;
   max-width: 220px;
   margin-left: 0;
+}
+
+.upgrade-stage-control--wide {
+  width: 100%;
+  max-width: none;
+}
+
+.upgrade-unlock-toggle {
+  justify-content: flex-end;
+  gap: 8px;
+  width: auto;
+  flex: 0 0 auto;
+  margin-top: 0;
+  margin-bottom: 0;
+  margin-right: 12px;
+  white-space: nowrap;
+}
+
+.upgrade-lock-note {
+  margin: 0;
+  font-size: 0.74rem;
+  color: #6b7280;
+}
+
+.upgrade-stage-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.upgrade-stage-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 220px);
+  align-items: center;
+  gap: 12px;
+}
+
+.upgrade-stage-label {
+  font-size: 0.76rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6b7280;
 }
 
 .upgrade-stage-select {
@@ -800,10 +847,20 @@ body.theme-dark .overlay-card,
     align-items: flex-start;
   }
 
+  .upgrade-group-top.upgrade-group-top--milestones {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
   .upgrade-stage-control {
     justify-content: flex-start;
     max-width: none;
     width: 100%;
+  }
+
+  .upgrade-stage-row {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
   }
 
   .upgrade-stage-select {

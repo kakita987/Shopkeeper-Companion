@@ -9,7 +9,7 @@ import { getItem, setItem, removeItem } from './storage.js'
 import { getBlueprintStageValue, getBlueprintStageOptions } from './blueprintStageOptions.js'
 import { initSettingsUi, applyTheme as applySharedTheme, applyFontPreference as applySharedFontPreference, getStoredTheme as getSharedStoredTheme, getStoredFontPreference as getSharedStoredFontPreference } from './settingsUi.js'
 import { SETTINGS_GEAR_ICON_MARKUP } from './settingsGearIcon.js'
-import { escapeHtml, cleanText } from './textUtils.js'
+import { escapeHtml, cleanText, toInventoryCount } from './textUtils.js'
 import { getBlueprintItemIconName, getCategoryIconName, getTypeIconName } from './blueprintIcons.js'
 import { buildBlueprintItems, convertBlueprintRowToObject } from './blueprintParsing.js'
 import { RESOURCE_LABELS } from './resourceLabels.js'
@@ -23,7 +23,7 @@ const GOOGLE_PICKER_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY || import.meta
 const CATEGORY_DEFINITIONS = [
   {
     title: 'Weapons',
-    types: ['Sword', 'Axe', 'Dagger', 'Mace', 'Spear', 'Bow', 'Wand', 'Staff', 'Gun', 'Crossbow', 'Instrument', 'Dual Wield', 'Catalyst'],
+    types: ['Sword', 'Axe', 'Dagger', 'Mace', 'Spear', 'Bow', 'Staff', 'Wand', 'Gun', 'Crossbow', 'Instrument', 'Dual Wield', 'Catalyst'],
   },
   {
     title: 'Armor',
@@ -244,6 +244,7 @@ let savedViewDraftName = ''
 let isSavedViewFiltersPanelOpen = true
 let pendingGoogleSyncWriteTimer = null
 let pendingGoogleSyncInitPromise = null
+let hasPendingBlueprintSchemaMigration = false
 let isApplyingRemoteSyncState = false
 let latestSavedViewItems = []
 let hasBoundSavedViewDelegates = false
@@ -310,8 +311,8 @@ window.addEventListener('hashchange', () => {
   recordView()
 })
 
-applyTheme(getStoredTheme())
-applyFontPreference(getStoredFontPreference())
+applyTheme(getSharedStoredTheme())
+applyFontPreference(getSharedStoredFontPreference())
 initializeAdBanners()
 initializeKofiSupportButton()
 
@@ -743,7 +744,10 @@ async function initializeGoogleSync(accessToken, options = {}) {
       const remote = await readSyncTables(accessToken, ensured.spreadsheetId)
       if (hasRemoteSyncData(remote)) {
         applyRemoteSyncState(remote)
-      } else if (hasLocalUserData() || allBlueprintItems.length) {
+        if (remote?.requiresBlueprintSchemaMigration) {
+          await migrateBlueprintSchemaIfNeeded(accessToken, remote)
+        }
+      } else if (hasLocalUserData()) {
         await pushLocalStateToGoogleSheet(accessToken)
       }
 
@@ -906,6 +910,9 @@ async function syncFromGoogleSheet() {
 
     const remote = await readSyncTables(authState.accessToken, googleSyncState.spreadsheetId)
     applyRemoteSyncState(remote)
+    if (remote?.requiresBlueprintSchemaMigration) {
+      await migrateBlueprintSchemaIfNeeded(authState.accessToken, remote)
+    }
     googleSyncState.lastSyncedAt = new Date().toISOString()
     refreshGoogleAuthUi()
     updateStatus('Synced user data from Google Sheet.', 'info')
@@ -955,9 +962,7 @@ function hasLocalUserData() {
     Boolean(savedFilterViews.length) ||
     Boolean(hiddenStarterViewPresetIds.size) ||
     Boolean(trackedUpgradeKeys.size) ||
-    Boolean(Object.keys(blueprintProgressByName).length) ||
-    Boolean(localStorage.getItem(FONT_PREFERENCE_STORAGE_KEY)) ||
-    Boolean(localStorage.getItem(THEME_PREFERENCE_STORAGE_KEY))
+    Boolean(Object.keys(blueprintProgressByName).length)
   )
 }
 
@@ -966,14 +971,6 @@ function applyRemoteSyncState(remoteTables) {
 
   try {
     const settings = parseSettingsRows(remoteTables.settings)
-    const nextTheme = settings.theme
-    const nextFont = settings.font
-    if (nextTheme) {
-      applyTheme(nextTheme, { skipSync: true })
-    }
-    if (nextFont) {
-      applyFontPreference(nextFont, { skipSync: true })
-    }
 
     hiddenStarterViewPresetIds = new Set(parseHiddenStarterViewPresetRows(settings))
     localStorage.setItem(HIDDEN_STARTER_VIEW_PRESETS_STORAGE_KEY, JSON.stringify([...hiddenStarterViewPresetIds]))
@@ -986,7 +983,7 @@ function applyRemoteSyncState(remoteTables) {
     trackedUpgradeKeys = new Set(parseTrackedUpgradeRows(settings))
     localStorage.setItem(TRACKED_UPGRADES_STORAGE_KEY, JSON.stringify([...trackedUpgradeKeys]))
 
-    blueprintProgressByName = parseBlueprintProgressRows(remoteTables.blueprintProgress, blueprintProgressByName)
+    blueprintProgressByName = parseWorkbookBlueprintProgress(remoteTables.blueprintProgress, blueprintProgressByName)
     localStorage.setItem(BLUEPRINT_PROGRESS_STORAGE_KEY, JSON.stringify(blueprintProgressByName))
   } finally {
     isApplyingRemoteSyncState = false
@@ -1048,8 +1045,6 @@ async function pushLocalStateToGoogleSheet(accessToken) {
 
 function buildSettingsRows() {
   return [
-    ['theme', getStoredTheme()],
-    ['font', getStoredFontPreference()],
     ['tracked-upgrades', JSON.stringify([...trackedUpgradeKeys])],
     [HIDDEN_STARTER_VIEW_PRESETS_SETTINGS_KEY, JSON.stringify([...hiddenStarterViewPresetIds])],
   ]
@@ -1106,8 +1101,46 @@ function parseHiddenStarterViewPresetRows(settings = {}) {
   return []
 }
 
-function parseBlueprintProgressRows(rows = [], existingProgress = {}) {
-  return parseWorkbookBlueprintProgress(rows, existingProgress)
+async function writeCurrentSyncTables(accessToken) {
+  ensureSavedFilterViewsLoaded()
+  await writeSyncTables(accessToken, googleSyncState.spreadsheetId, {
+    settings: buildSettingsRows(),
+    savedViews: buildSavedViewsRows(savedFilterViews),
+    blueprintItems: allBlueprintItems,
+    blueprintProgressByName,
+  })
+}
+
+async function migrateBlueprintSchemaIfNeeded(accessToken, remoteTables = {}) {
+  if (!remoteTables?.requiresBlueprintSchemaMigration) {
+    return
+  }
+
+  if (!allBlueprintItems.length) {
+    hasPendingBlueprintSchemaMigration = true
+    return
+  }
+
+  hasPendingBlueprintSchemaMigration = false
+  await writeCurrentSyncTables(accessToken)
+}
+
+async function flushPendingBlueprintSchemaMigration(accessToken) {
+  if (!hasPendingBlueprintSchemaMigration) {
+    return
+  }
+
+  const normalizedAccessToken = typeof accessToken === 'string' ? accessToken.trim() : ''
+  if (!normalizedAccessToken) {
+    return
+  }
+
+  if (!allBlueprintItems.length || !googleSyncState.spreadsheetId) {
+    return
+  }
+
+  hasPendingBlueprintSchemaMigration = false
+  await writeCurrentSyncTables(normalizedAccessToken)
 }
 
 function updateStatus(message, tone = 'info') {
@@ -1138,6 +1171,7 @@ async function importBlueprintData() {
       renderLucideIcons,
     })
     renderSavedViews(allBlueprintItems)
+    await flushPendingBlueprintSchemaMigration(googleAuth.getState()?.accessToken)
     scheduleGoogleSyncWrite()
     updateStatus(`Blueprints downloaded (${allBlueprintItems.length} items).`, 'info')
     closeSettings()
@@ -1170,6 +1204,7 @@ async function initializeBlueprintDataFromCache() {
     renderLucideIcons,
   })
   renderSavedViews(allBlueprintItems)
+  await flushPendingBlueprintSchemaMigration(googleAuth.getState()?.accessToken)
   scheduleGoogleSyncWrite()
   updateStatus('', 'info')
 }
@@ -1285,6 +1320,12 @@ function bindBlueprintOverlayInteractions(item) {
   blueprintOverlayContent.querySelectorAll('.tracking-checkbox').forEach((input) => {
     input.addEventListener('change', (event) => {
       const target = event.currentTarget
+      if (target.classList.contains('starforge-unlock-checkbox')) {
+        persistBlueprintStarforgeUnlock(item.name, target.checked)
+        openBlueprintOverlay(item)
+        return
+      }
+
       if (target.classList.contains('owned-checkbox')) {
         persistBlueprintOwnership(item.name, target.checked)
         openBlueprintOverlay(item)
@@ -1298,7 +1339,14 @@ function bindBlueprintOverlayInteractions(item) {
   blueprintOverlayContent.querySelectorAll('.upgrade-stage-select').forEach((select) => {
     select.addEventListener('change', (event) => {
       const target = event.currentTarget
-      persistBlueprintStage(item.name, target.dataset.stageKey, Number(target.value))
+      const stageKey = target.dataset.stageKey || ''
+      if (stageKey === 'milestones-starforge') {
+        persistMilestonesStarforgeStage(item.name, target.value)
+      } else if (stageKey === 'ascension-transcendence') {
+        persistAscensionTranscendenceStage(item.name, target.value)
+      } else {
+        persistBlueprintStage(item.name, stageKey, Number(target.value))
+      }
       openBlueprintOverlay(item)
     })
   })
@@ -1377,7 +1425,7 @@ function openBlueprintOverlay(item) {
             </div>
           </div>
           <div class="overlay-title-block">
-            <p class="overlay-eyebrow">${escapeHtml(visuals.group)} / ${escapeHtml(visuals.category || 'Category')}</p>
+            <p class="overlay-eyebrow">${escapeHtml(visuals.group)} / ${escapeHtml(visuals.category || 'Type')}</p>
             <h3 id="blueprint-overlay-title">${escapeHtml(item.name)}</h3>
             <div class="overlay-meta-row">
               <span class="overlay-tier-badge">Tier ${escapeHtml(tierValue)}</span>
@@ -1447,7 +1495,7 @@ function renderSavedViews(items = []) {
     return
   }
 
-  const dependencyIndex = getDependencyIndex(items)
+  const dependencyIndex = buildDependencyIndex(items)
   const filteredItems = filterBlueprintItems(items, savedViewCriteria, dependencyIndex)
   const totalCount = items.length
   const starterViewPresets = getVisibleStarterViewPresets()
@@ -2052,6 +2100,18 @@ function renderCollectionBookFilterOptions(selectedValues = []) {
 }
 
 function buildDependencyIndex(items = []) {
+  if (!Array.isArray(items) || !items.length) {
+    return {
+      dependentsByComponent: new Map(),
+      blueprintNames: new Set(),
+    }
+  }
+
+  const cached = dependencyIndexCache.get(items)
+  if (cached) {
+    return cached
+  }
+
   const dependentsByComponent = new Map()
   const blueprintNames = new Set(
     items
@@ -2077,23 +2137,11 @@ function buildDependencyIndex(items = []) {
     })
   })
 
-  return {
+  const next = {
     dependentsByComponent,
     blueprintNames,
   }
-}
 
-function getDependencyIndex(items = []) {
-  if (!Array.isArray(items)) {
-    return buildDependencyIndex([])
-  }
-
-  const cached = dependencyIndexCache.get(items)
-  if (cached) {
-    return cached
-  }
-
-  const next = buildDependencyIndex(items)
   dependencyIndexCache.set(items, next)
   return next
 }
@@ -2386,6 +2434,64 @@ function persistBlueprintStage(blueprintName, stageKey, value) {
   saveBlueprintProgressState(blueprintName, { [stageKey]: normalizedValue })
 }
 
+function persistMilestonesStarforgeStage(blueprintName, encodedValue = '') {
+  const [stageType, rawValue] = String(encodedValue || '').split(':')
+  const normalizedValue = Number.isFinite(Number(rawValue)) ? Math.max(0, Math.round(Number(rawValue))) : 0
+  const progress = getBlueprintProgressState(blueprintName)
+
+  if (stageType === 'starforge') {
+    if (!progress?.starforgeUnlocked) {
+      saveBlueprintProgressState(blueprintName, { starforge: 0 })
+      return
+    }
+
+    saveBlueprintProgressState(blueprintName, {
+      milestones: Math.max(getBlueprintStageValue(progress, 'milestones'), 5),
+      starforge: normalizedValue,
+    })
+    return
+  }
+
+  saveBlueprintProgressState(blueprintName, {
+    milestones: normalizedValue,
+    starforge: 0,
+  })
+}
+
+function persistAscensionTranscendenceStage(blueprintName, encodedValue = '') {
+  const [stageType, rawValue] = String(encodedValue || '').split(':')
+  const normalizedValue = Number.isFinite(Number(rawValue)) ? Math.max(0, Math.round(Number(rawValue))) : 0
+  const progress = getBlueprintProgressState(blueprintName)
+
+  if (stageType === 'transcendence') {
+    saveBlueprintProgressState(blueprintName, {
+      ascension: Math.max(getBlueprintStageValue(progress, 'ascension'), 1),
+      transcendence: normalizedValue,
+    })
+    return
+  }
+
+  saveBlueprintProgressState(blueprintName, {
+    ascension: normalizedValue,
+    transcendence: 0,
+  })
+}
+
+function persistBlueprintStarforgeUnlock(blueprintName, unlocked) {
+  const nextUnlocked = Boolean(unlocked)
+  if (!nextUnlocked) {
+    saveBlueprintProgressState(blueprintName, {
+      starforgeUnlocked: false,
+      starforge: 0,
+    })
+    return
+  }
+
+  saveBlueprintProgressState(blueprintName, {
+    starforgeUnlocked: true,
+  })
+}
+
 function getQualityClass(label) {
   switch (label) {
     case 'Superior':
@@ -2475,15 +2581,6 @@ function isBlueprintOwned(blueprint) {
   return Boolean(blueprint?.own ?? blueprint?.owned)
 }
 
-function toInventoryCount(value) {
-  const parsed = Number(value)
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    return 0
-  }
-
-  return parsed
-}
-
 function formatQualityLabel(quality) {
   const normalized = String(quality || '').trim().toLowerCase()
   return normalized.charAt(0).toUpperCase() + normalized.slice(1)
@@ -2566,14 +2663,6 @@ function applyFontPreference(fontPreference, options = {}) {
   if (!skipSync) {
     scheduleGoogleSyncWrite()
   }
-}
-
-function getStoredTheme() {
-  return getSharedStoredTheme()
-}
-
-function getStoredFontPreference() {
-  return getSharedStoredFontPreference()
 }
 
 async function resolveSpreadsheetUrl(rawUrl) {

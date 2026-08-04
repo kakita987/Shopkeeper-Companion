@@ -5,7 +5,7 @@ import { buildBlueprintItems, convertBlueprintRowToObject } from './blueprintPar
 test('convertBlueprintRowToObject parses row data into blueprint structure', () => {
   const headers = [
     'Name',
-    'Category',
+    'Type',
     'Tier',
     'Value',
     'Crafting Time (seconds)',
@@ -56,7 +56,7 @@ test('buildBlueprintItems classifies cached and tabular blueprint data', () => {
   assert.equal(cachedItems[0].classification.category, 'Weapons')
 
   const tabularItems = buildBlueprintItems(
-    ['Name', 'Category', 'Tier'],
+    ['Name', 'Type', 'Tier'],
     [['Blue Cloak', 'Cloak', '2']],
     [],
   )
@@ -64,4 +64,49 @@ test('buildBlueprintItems classifies cached and tabular blueprint data', () => {
   assert.equal(tabularItems[0].name, 'Blue Cloak')
   assert.equal(tabularItems[0].classification.category, 'Accessories')
   assert.equal(tabularItems[0].classification.type, 'Cloak')
+})
+
+test('buildBlueprintItems still supports legacy Category column headers', () => {
+  const tabularItems = buildBlueprintItems(
+    ['Name', 'Category', 'Tier'],
+    [['Legacy Dagger', 'Dagger', '1']],
+    [],
+  )
+
+  assert.equal(tabularItems[0].classification.category, 'Weapons')
+  assert.equal(tabularItems[0].classification.type, 'Dagger')
+})
+
+test('buildBlueprintItems keeps strict source types for non-enchantments', () => {
+  const tabularItems = buildBlueprintItems(
+    ['Name', 'Type', 'Tier'],
+    [
+      ['Cutlass', 'Weapon', '8'],
+      ["Mundra's Remedy", 'Potion', '12'],
+    ],
+    [],
+  )
+
+  assert.equal(tabularItems[0].classification.category, 'Weapons')
+  assert.equal(tabularItems[0].classification.type, 'Weapon')
+
+  assert.equal(tabularItems[1].classification.category, 'Accessories')
+  assert.equal(tabularItems[1].classification.type, 'Potion')
+})
+
+test('buildBlueprintItems resolves enchantment type from name only', () => {
+  const tabularItems = buildBlueprintItems(
+    ['Name', 'Type', 'Tier'],
+    [
+      ['Spirit Barrier', 'Element', '6'],
+      ['Elemental Echo', 'Enchantment', '6'],
+    ],
+    [],
+  )
+
+  assert.equal(tabularItems[0].classification.category, 'Enchantments')
+  assert.equal(tabularItems[0].classification.type, 'Spirit')
+
+  assert.equal(tabularItems[1].classification.category, 'Enchantments')
+  assert.equal(tabularItems[1].classification.type, 'Element')
 })

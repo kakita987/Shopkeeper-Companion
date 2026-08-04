@@ -6,6 +6,7 @@ import {
   getGoogleSyncErrorMessage,
   getSyncWorkbookSchemaEntries,
   parseWorkbookBlueprintProgress,
+  readSyncTables,
   resolveUserSyncSpreadsheet,
 } from './googleSheetSync.js'
 
@@ -23,6 +24,11 @@ test('buildWorkbookPayload creates the requested sheet order and initializes blu
     blueprintProgressByName: {
       'Test Sword': {
         owned: true,
+        starforgeUnlocked: true,
+        milestones: 5,
+        starforge: 2,
+        ascension: 3,
+        transcendence: 1,
         inventory: { normal: 2 },
         collectionBookComplete: true,
       },
@@ -35,10 +41,13 @@ test('buildWorkbookPayload creates the requested sheet order and initializes blu
   assert.equal(getSyncWorkbookSchemaEntries()[0].title, 'ReadMe')
   assert.ok(Array.isArray(payload.Weapons))
   assert.equal(payload.Weapons[0][0], 'Blueprint Name')
-  assert.equal(payload.Weapons[0][1], 'Category')
+  assert.equal(payload.Weapons[0][1], 'Type')
   assert.equal(payload.Weapons[1][0], 'Test Sword')
   assert.equal(payload.Weapons[1][1], 'Sword')
   assert.equal(payload.Weapons[1][payload.Weapons[0].indexOf('Owned')], 'TRUE')
+  assert.equal(payload.Weapons[1][payload.Weapons[0].indexOf('Starforge')], 'TRUE')
+  assert.equal(payload.Weapons[1][payload.Weapons[0].indexOf('Milestones')], '7')
+  assert.equal(payload.Weapons[1][payload.Weapons[0].indexOf('Improve')], '4')
   assert.equal(payload.Weapons[1][payload.Weapons[0].indexOf('Inventory Normal')], '2')
   assert.equal(payload.Weapons[1][payload.Weapons[0].indexOf('Collection Legendary')], 'TRUE')
 })
@@ -68,6 +77,29 @@ test('buildWorkbookPayload includes imported blueprints even without any saved p
   assert.equal(payload.Armor[1][0], 'Wooden Shield')
 })
 
+test('buildWorkbookPayload places Staff entries before Wand entries for weapon exports', () => {
+  const payload = buildWorkbookPayload({
+    settingsRows: [],
+    savedViewRows: [],
+    blueprintItems: [
+      {
+        name: 'Wizard Wand',
+        classification: { category: 'Weapons', type: 'Wand' },
+        structuredData: { meta: { name: 'Wizard Wand', category: 'Wand', tier: 1 } },
+      },
+      {
+        name: 'Oak Staff',
+        classification: { category: 'Weapons', type: 'Staff' },
+        structuredData: { meta: { name: 'Oak Staff', category: 'Staff', tier: 1 } },
+      },
+    ],
+    blueprintProgressByName: {},
+  })
+
+  assert.equal(payload.Weapons[1][0], 'Oak Staff')
+  assert.equal(payload.Weapons[2][0], 'Wizard Wand')
+})
+
 test('parseWorkbookBlueprintProgress merges workbook rows by blueprint name and preserves existing progress', () => {
   const progress = parseWorkbookBlueprintProgress({
     Weapons: [
@@ -85,19 +117,47 @@ test('parseWorkbookBlueprintProgress merges workbook rows by blueprint name and 
   assert.equal(progress.Beta.owned, false)
 })
 
-test('parseWorkbookBlueprintProgress initializes progression stages as numeric values', () => {
+test('parseWorkbookBlueprintProgress reads legacy progression stages as numeric values', () => {
   const progress = parseWorkbookBlueprintProgress({
     Weapons: [
-      ['Blueprint Name', 'Milestones', 'Starforge', 'Ascension', 'Transcendence'],
-      ['Alpha', '', '', '', ''],
+      ['Blueprint Name', 'Starforge Unlocked', 'Milestones', 'Starforge', 'Ascension', 'Transcendence'],
+      ['Alpha', 'TRUE', '', '', '', ''],
     ],
   }, {})
 
+  assert.equal(progress.Alpha.starforgeUnlocked, true)
   assert.equal(progress.Alpha.milestones, 0)
   assert.equal(progress.Alpha.starforge, 0)
   assert.equal(progress.Alpha.ascension, 0)
   assert.equal(progress.Alpha.transcendence, 0)
   assert.equal(typeof progress.Alpha.milestones, 'number')
+})
+
+test('parseWorkbookBlueprintProgress converts new schema into internal milestone/improve segments', () => {
+  const progress = parseWorkbookBlueprintProgress({
+    Weapons: [
+      ['Blueprint Name', 'Milestones', 'Improve', 'Starforge'],
+      ['Alpha', '7', '5', 'TRUE'],
+    ],
+  }, {})
+
+  assert.equal(progress.Alpha.milestones, 5)
+  assert.equal(progress.Alpha.starforge, 2)
+  assert.equal(progress.Alpha.starforgeUnlocked, true)
+  assert.equal(progress.Alpha.ascension, 3)
+  assert.equal(progress.Alpha.transcendence, 2)
+})
+
+test('parseWorkbookBlueprintProgress infers starforge unlock from legacy starforge progress', () => {
+  const progress = parseWorkbookBlueprintProgress({
+    Weapons: [
+      ['Blueprint Name', 'Starforge'],
+      ['Alpha', '2'],
+    ],
+  }, {})
+
+  assert.equal(progress.Alpha.starforgeUnlocked, true)
+  assert.equal(progress.Alpha.starforge, 2)
 })
 
 test('buildSpreadsheetCreationPromptMessage explains the new-sheet workflow for new users and recovery', () => {
@@ -149,6 +209,43 @@ test('resolveUserSyncSpreadsheet ignores missing Sheets files and creates a fres
     const spreadsheet = await resolveUserSyncSpreadsheet('token', 'deleted-id')
     assert.equal(spreadsheet.spreadsheetId, 'fresh-id')
     assert.equal(calls.length, 2)
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('readSyncTables flags migration when legacy Category header is present', async () => {
+  const originalFetch = global.fetch
+
+  global.fetch = async (url) => {
+    const decodedUrl = decodeURIComponent(String(url))
+    const contentTypeHeaders = { get: () => 'application/json' }
+
+    if (decodedUrl.includes("'Weapons'!A:ZZ")) {
+      return {
+        ok: true,
+        status: 200,
+        headers: contentTypeHeaders,
+        json: async () => ({
+          values: [
+            ['Blueprint Name', 'Category', 'Tier', 'Owned', 'Milestones', 'Improve', 'Starforge'],
+            ['Alpha Sword', 'Sword', '1', 'TRUE', '3', '2', 'TRUE'],
+          ],
+        }),
+      }
+    }
+
+    return {
+      ok: true,
+      status: 200,
+      headers: contentTypeHeaders,
+      json: async () => ({ values: [] }),
+    }
+  }
+
+  try {
+    const tables = await readSyncTables('token', 'spreadsheet-id')
+    assert.equal(tables.requiresBlueprintSchemaMigration, true)
   } finally {
     global.fetch = originalFetch
   }

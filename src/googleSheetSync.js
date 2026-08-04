@@ -1,4 +1,4 @@
-import { cleanText } from './textUtils.js'
+import { cleanText, toInventoryCount } from './textUtils.js'
 
 const SHEETS_API_BASE = 'https://sheets.googleapis.com/v4/spreadsheets'
 const DRIVE_API_BASE = 'https://www.googleapis.com/drive/v3/files'
@@ -17,7 +17,7 @@ const README_ROWS = [
   ['Tabs'],
   ['1) Weapons / Armor / Accessories / Enchantments: blueprint data plus per-blueprint user progress.'],
   ['2) Saved Views: your saved filter presets.'],
-  ['3) Settings: theme/font preferences and other small app settings.'],
+  ['3) Settings: tracked upgrades and small app metadata.'],
   [''],
   ['Tips'],
   ['- Bulk edit with copy/paste or formulas, then click Sync Now in the app.'],
@@ -32,9 +32,8 @@ const PROGRESS_COLUMNS = [
   { key: 'inventoryLegendary', label: 'Inventory Legendary' },
   { key: 'owned', label: 'Owned' },
   { key: 'milestones', label: 'Milestones' },
-  { key: 'ascension', label: 'Ascension' },
+  { key: 'improve', label: 'Improve' },
   { key: 'starforge', label: 'Starforge' },
-  { key: 'transcendence', label: 'Transcendence' },
   { key: 'collectionSuperior', label: 'Collection Superior' },
   { key: 'collectionFlawless', label: 'Collection Flawless' },
   { key: 'collectionEpic', label: 'Collection Epic' },
@@ -43,7 +42,7 @@ const PROGRESS_COLUMNS = [
 
 const MASTER_BLUEPRINT_COLUMNS = [
   { key: 'blueprintName', label: 'Blueprint Name' },
-  { key: 'category', label: 'Category' },
+  { key: 'type', label: 'Type' },
   { key: 'tier', label: 'Tier' },
 ]
 
@@ -68,15 +67,6 @@ function getBlueprintHeaders() {
 
 function toSheetRange(sheetTitle, range) {
   return `'${sheetTitle}'!${range}`
-}
-
-function toInventoryCount(value) {
-  const parsed = Number(value)
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    return 0
-  }
-
-  return parsed
 }
 
 function parseBooleanCell(value) {
@@ -113,6 +103,38 @@ function getProgressCount(value) {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
 }
 
+function clampProgressCount(value, maxValue) {
+  return Math.min(getProgressCount(value), maxValue)
+}
+
+function toCombinedMilestones(progress = {}) {
+  const baseMilestones = clampProgressCount(progress?.milestones, 5)
+  const starforgeProgress = clampProgressCount(progress?.starforge, 5)
+  if (starforgeProgress > 0) {
+    return Math.min(10, 5 + starforgeProgress)
+  }
+
+  return baseMilestones
+}
+
+function toCombinedImprove(progress = {}) {
+  const ascensionProgress = clampProgressCount(progress?.ascension, 3)
+  const transcendenceProgress = clampProgressCount(progress?.transcendence, 3)
+  if (transcendenceProgress > 0) {
+    return Math.min(6, 3 + transcendenceProgress)
+  }
+
+  return ascensionProgress
+}
+
+function normalizeHeaderSet(headers = []) {
+  return new Set(
+    (Array.isArray(headers) ? headers : [])
+      .map((value) => String(value || '').trim().toLowerCase())
+      .filter(Boolean)
+  )
+}
+
 function normalizeSheetRows(values = []) {
   const rows = Array.isArray(values) ? values : []
   return rows.filter((row) => Array.isArray(row) && row.some((cell) => cell !== '' && cell !== null && cell !== undefined))
@@ -144,6 +166,7 @@ function createDefaultBlueprintProgress() {
     },
     milestones: 0,
     ascension: 0,
+    starforgeUnlocked: false,
     starforge: 0,
     transcendence: 0,
     collectionBookComplete: false,
@@ -198,19 +221,56 @@ export function parseWorkbookBlueprintProgress(workbookBlueprintProgress = [], e
 
       currentProgress.inventory = nextInventory
 
-      const milestoneFields = [
-        ['Milestones', 'milestones'],
-        ['Ascension', 'ascension'],
-        ['Starforge', 'starforge'],
-        ['Transcendence', 'transcendence'],
-      ]
+      const normalizedHeaders = normalizeHeaderSet(headerRow)
+      const hasImproveColumn = normalizedHeaders.has('improve')
 
-      milestoneFields.forEach(([label, key]) => {
-        const rawValue = getRowValue(row, headerRow, [label])
-        if (rawValue !== '') {
-          currentProgress[key] = getProgressCount(rawValue)
+      if (hasImproveColumn) {
+        const milestonesCombinedValue = getRowValue(row, headerRow, ['Milestones', 'milestones'])
+        if (milestonesCombinedValue !== '') {
+          const combinedMilestones = clampProgressCount(milestonesCombinedValue, 10)
+          currentProgress.milestones = Math.min(combinedMilestones, 5)
+          currentProgress.starforge = combinedMilestones > 5 ? combinedMilestones - 5 : 0
         }
-      })
+
+        const improveCombinedValue = getRowValue(row, headerRow, ['Improve', 'improve'])
+        if (improveCombinedValue !== '') {
+          const combinedImprove = clampProgressCount(improveCombinedValue, 6)
+          currentProgress.ascension = Math.min(combinedImprove, 3)
+          currentProgress.transcendence = combinedImprove > 3 ? combinedImprove - 3 : 0
+        }
+
+        const starforgeBooleanValue = getRowValue(row, headerRow, ['Starforge', 'starforge'])
+        if (starforgeBooleanValue !== '') {
+          currentProgress.starforgeUnlocked = parseBooleanCell(starforgeBooleanValue)
+        }
+
+        if (currentProgress.starforge > 0) {
+          currentProgress.starforgeUnlocked = true
+        }
+      } else {
+        const milestoneFields = [
+          ['Milestones', 'milestones'],
+          ['Ascension', 'ascension'],
+          ['Starforge', 'starforge'],
+          ['Transcendence', 'transcendence'],
+        ]
+
+        const starforgeUnlockedValue = getRowValue(row, headerRow, ['Starforge Unlocked', 'starforgeUnlocked'])
+        if (starforgeUnlockedValue !== '') {
+          currentProgress.starforgeUnlocked = parseBooleanCell(starforgeUnlockedValue)
+        }
+
+        milestoneFields.forEach(([label, key]) => {
+          const rawValue = getRowValue(row, headerRow, [label])
+          if (rawValue !== '') {
+            currentProgress[key] = getProgressCount(rawValue)
+          }
+        })
+
+        if (starforgeUnlockedValue === '' && getProgressCount(currentProgress.starforge) > 0) {
+          currentProgress.starforgeUnlocked = true
+        }
+      }
 
       const collectionBookFields = [
         ['Collection Superior', 'superior'],
@@ -294,7 +354,7 @@ function buildBlueprintRow(item = {}, progress = {}) {
 
   const baseValues = {
     blueprintName: item?.name || '',
-    category: structuredData?.meta?.category || classification?.type || '',
+    type: structuredData?.meta?.type || structuredData?.meta?.category || classification?.type || '',
     tier: structuredData?.meta?.tier ?? '',
   }
 
@@ -305,10 +365,9 @@ function buildBlueprintRow(item = {}, progress = {}) {
     inventoryEpic: formatInventoryCell(progress?.inventory?.epic ?? 0),
     inventoryLegendary: formatInventoryCell(progress?.inventory?.legendary ?? 0),
     owned: formatBooleanCell(progress?.owned),
-    milestones: formatInventoryCell(progress?.milestones ?? 0),
-    ascension: formatInventoryCell(progress?.ascension ?? 0),
-    starforge: formatInventoryCell(progress?.starforge ?? 0),
-    transcendence: formatInventoryCell(progress?.transcendence ?? 0),
+    milestones: formatInventoryCell(toCombinedMilestones(progress)),
+    improve: formatInventoryCell(toCombinedImprove(progress)),
+    starforge: formatBooleanCell(progress?.starforgeUnlocked),
     collectionSuperior: formatBooleanCell(isCollectionBookQualityComplete(progress, 'superior')),
     collectionFlawless: formatBooleanCell(isCollectionBookQualityComplete(progress, 'flawless')),
     collectionEpic: formatBooleanCell(isCollectionBookQualityComplete(progress, 'epic')),
@@ -323,9 +382,38 @@ function buildBlueprintRow(item = {}, progress = {}) {
   return rowValues
 }
 
+function getBlueprintItemType(item = {}) {
+  return String(
+    item?.classification?.type ||
+    item?.structuredData?.meta?.type ||
+    item?.structuredData?.meta?.category ||
+    ''
+  ).trim().toLowerCase()
+}
+
+function sortBlueprintItemsForWorkbook(blueprintItems = []) {
+  return blueprintItems
+    .map((item, index) => ({ item, index }))
+    .sort((left, right) => {
+      const leftType = getBlueprintItemType(left.item)
+      const rightType = getBlueprintItemType(right.item)
+
+      if (leftType === 'staff' && rightType === 'wand') {
+        return -1
+      }
+
+      if (leftType === 'wand' && rightType === 'staff') {
+        return 1
+      }
+
+      return left.index - right.index
+    })
+    .map((entry) => entry.item)
+}
+
 function buildBlueprintWorkbookRows(blueprintItems = [], blueprintProgressByName = {}) {
   const headers = getBlueprintHeaders()
-  const rows = blueprintItems
+  const rows = sortBlueprintItemsForWorkbook(blueprintItems)
     .map((item) => {
       const progress = blueprintProgressByName?.[item?.name] || {}
       return buildBlueprintRow(item, progress)
@@ -838,6 +926,7 @@ export async function readSyncTables(accessToken, spreadsheetId) {
     settings: [],
     savedViews: [],
     blueprintProgress: {},
+    requiresBlueprintSchemaMigration: false,
   }
 
   for (const schema of getSyncWorkbookSchemaEntries()) {
@@ -866,6 +955,28 @@ export async function readSyncTables(accessToken, spreadsheetId) {
     }
 
     if (BLUEPRINT_CATEGORY_TITLES.includes(schema.title)) {
+      const headerRow = rows[0] || []
+      const normalizedHeaders = normalizeHeaderSet(headerRow)
+      const hasBlueprintRows = dataRows.length > 0
+      const usesLegacyTypeHeader = normalizedHeaders.has('category') || normalizedHeaders.has('item category')
+      const usesTypeHeader = normalizedHeaders.has('type') || normalizedHeaders.has('item type')
+      const usesLegacyProgressColumns =
+        normalizedHeaders.has('starforge unlocked') ||
+        normalizedHeaders.has('ascension') ||
+        normalizedHeaders.has('transcendence')
+      const usesNewProgressColumns =
+        normalizedHeaders.has('improve') &&
+        normalizedHeaders.has('milestones') &&
+        normalizedHeaders.has('starforge')
+
+      if (hasBlueprintRows && usesLegacyProgressColumns && !usesNewProgressColumns) {
+        tables.requiresBlueprintSchemaMigration = true
+      }
+
+      if (hasBlueprintRows && usesLegacyTypeHeader && !usesTypeHeader) {
+        tables.requiresBlueprintSchemaMigration = true
+      }
+
       tables.blueprintProgress[schema.title] = [rows[0] || [], ...dataRows]
     }
   }
