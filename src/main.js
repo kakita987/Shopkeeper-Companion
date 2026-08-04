@@ -7,6 +7,7 @@ import {
   ensureUserSyncSpreadsheet,
   getGoogleSyncErrorMessage,
   isTokenExpiredError,
+  migrateLegacyBlueprintSchemaInPlace,
   parseWorkbookBlueprintProgress,
   readSyncTables,
   shouldWipeSpreadsheetId,
@@ -1189,8 +1190,12 @@ async function migrateBlueprintSchemaIfNeeded(accessToken, remoteTables = {}) {
     return
   }
 
+  if (remoteTables?.requiresBlueprintSchemaMigration && googleSyncState.spreadsheetId) {
+    await migrateLegacyBlueprintSchemaInPlace(accessToken, googleSyncState.spreadsheetId)
+  }
+
   if (!allBlueprintItems.length) {
-    hasPendingBlueprintSchemaMigration = true
+    hasPendingBlueprintSchemaMigration = Boolean(remoteTables?.requiresBlueprintOrderNormalization)
     return
   }
 
