@@ -11,7 +11,7 @@ export function renderLucideIcons(root = document) {
 
 export function getBlueprintVisuals(item) {
   const category = item?.classification?.category || 'Accessories'
-  const categoryLabel = item?.classification?.type || item?.structuredData?.meta?.category || ''
+  const categoryLabel = item?.classification?.type || item?.structuredData?.meta?.type || item?.structuredData?.meta?.category || ''
 
   return {
     group: category,
@@ -100,39 +100,141 @@ export function renderMaterialsSection(materials = {}, { formatMaterialLabel, fo
 }
 
 export function renderUpgradeSection(upgrades = {}, blueprintName = '', progress = {}, owned = false, { getBlueprintStageValue, getBlueprintStageOptions, escapeHtml: escapeMarkup } = {}) {
-  const groups = [
-    { key: 'crafting', stageKey: 'milestones', label: 'Milestones' },
-    { key: 'starforged', stageKey: 'starforge', label: 'Starforge' },
-    { key: 'ascension', stageKey: 'ascension', label: 'Ascension' },
-    { key: 'transcendence', stageKey: 'transcendence', label: 'Transcendence' },
-  ]
-
-  const markup = groups.map(({ key, stageKey, label }) => {
-    const entries = Array.isArray(upgrades[key]) ? upgrades[key] : []
-
-    if (!entries.length) {
-      return ''
-    }
-
+  const renderStageSelect = ({ label = '', stageKey = '', entries = [] }) => {
     const stageValue = getBlueprintStageValue(progress, stageKey)
     const options = getBlueprintStageOptions(stageKey, progress, entries)
 
     return `
+      <label class="upgrade-stage-control">
+        <span class="sr-only">${escapeMarkup(label)} status</span>
+        <select class="upgrade-stage-select" data-stage-key="${escapeMarkup(stageKey)}" data-blueprint-name="${escapeMarkup(blueprintName)}" ${owned ? '' : 'disabled'}>
+          ${options.map((option) => `<option value="${option.value}" ${stageValue === option.value ? 'selected' : ''}>${escapeMarkup(option.label)}</option>`).join('')}
+        </select>
+      </label>
+    `
+  }
+
+  const markup = []
+
+  const milestoneEntries = Array.isArray(upgrades.crafting) ? upgrades.crafting : []
+  const starforgeEntries = Array.isArray(upgrades.starforged) ? upgrades.starforged : []
+  if (milestoneEntries.length || starforgeEntries.length) {
+    const milestoneValue = getBlueprintStageValue(progress, 'milestones')
+    const starforgeValue = getBlueprintStageValue(progress, 'starforge')
+    const starforgeUnlocked = Boolean(progress?.starforgeUnlocked)
+    const milestoneOptions = getBlueprintStageOptions('milestones', progress, milestoneEntries)
+    const starforgeOptions = getBlueprintStageOptions(
+      'starforge',
+      { ...progress, starforgeUnlocked: true },
+      starforgeEntries,
+    )
+    const milestoneStageCount = Math.max(...milestoneOptions.map((option) => Number(option.value) || 0), 0)
+
+    const combinedOptions = []
+    milestoneOptions.forEach((option) => {
+      const numericValue = Number(option.value) || 0
+      const stageLabel = numericValue > 0 ? `${numericValue}. ` : ''
+      combinedOptions.push({
+        value: `milestones:${option.value}`,
+        label: `${stageLabel}Milestones · ${option.label}`,
+        disabled: false,
+      })
+    })
+
+    starforgeOptions
+      .filter((option) => Number(option.value) > 0)
+      .forEach((option, index) => {
+        const stageNumber = milestoneStageCount + index + 1
+        combinedOptions.push({
+          value: `starforge:${option.value}`,
+          label: `${stageNumber}. Starforge · ${option.label}${starforgeUnlocked ? '' : ' (Locked)'}`,
+          disabled: !starforgeUnlocked,
+        })
+      })
+
+    const selectedValue = starforgeValue > 0
+      ? `starforge:${starforgeValue}`
+      : `milestones:${milestoneValue}`
+    const resolvedSelectedValue = combinedOptions.some((option) => option.value === selectedValue)
+      ? selectedValue
+      : combinedOptions[0]?.value
+
+    markup.push(`
+      <div class="upgrade-group ${owned ? '' : 'is-locked'}">
+        <div class="upgrade-group-top upgrade-group-top--milestones">
+          <h5>Milestones</h5>
+          <label class="tracking-label upgrade-unlock-toggle">
+            <span>Starforge</span>
+            <input class="tracking-checkbox starforge-unlock-checkbox" type="checkbox" data-starforge-unlock="true" ${starforgeUnlocked ? 'checked' : ''} ${owned ? '' : 'disabled'} />
+          </label>
+        </div>
+        <label class="upgrade-stage-control upgrade-stage-control--wide">
+          <span class="sr-only">Milestones and Starforge status</span>
+          <select class="upgrade-stage-select" data-stage-key="milestones-starforge" data-blueprint-name="${escapeMarkup(blueprintName)}" ${owned ? '' : 'disabled'}>
+            ${combinedOptions.map((option) => `<option value="${option.value}" ${resolvedSelectedValue === option.value ? 'selected' : ''} ${option.disabled ? 'disabled' : ''}>${escapeMarkup(option.label)}</option>`).join('')}
+          </select>
+        </label>
+        ${starforgeUnlocked ? '' : '<p class="upgrade-lock-note">Unlock the Starforge key to progress Starforge upgrades (milestone tree stages 6+).</p>'}
+      </div>
+    `)
+  }
+
+  const ascensionEntries = Array.isArray(upgrades.ascension) ? upgrades.ascension : []
+  const transcendenceEntries = Array.isArray(upgrades.transcendence) ? upgrades.transcendence : []
+  if (ascensionEntries.length || transcendenceEntries.length) {
+    const ascensionValue = getBlueprintStageValue(progress, 'ascension')
+    const transcendenceValue = getBlueprintStageValue(progress, 'transcendence')
+    const ascensionOptions = getBlueprintStageOptions('ascension', progress, ascensionEntries)
+    const transcendenceOptions = getBlueprintStageOptions('transcendence', progress, transcendenceEntries)
+    const ascensionStageCount = Math.max(...ascensionOptions.map((option) => Number(option.value) || 0), 0)
+
+    const combinedOptions = []
+    ascensionOptions.forEach((option) => {
+      const numericValue = Number(option.value) || 0
+      const stageLabel = numericValue > 0 ? `${numericValue}. ` : ''
+      combinedOptions.push({
+        value: `ascension:${option.value}`,
+        label: `${stageLabel}Improve · ${option.label}`,
+      })
+    })
+
+    transcendenceOptions
+      .filter((option) => Number(option.value) > 0)
+      .forEach((option, index) => {
+        const stageNumber = ascensionStageCount + index + 1
+        combinedOptions.push({
+          value: `transcendence:${option.value}`,
+          label: `${stageNumber}. Transcendence · ${option.label}`,
+        })
+      })
+
+    const selectedValue = transcendenceValue > 0
+      ? `transcendence:${transcendenceValue}`
+      : `ascension:${ascensionValue}`
+    const resolvedSelectedValue = combinedOptions.some((option) => option.value === selectedValue)
+      ? selectedValue
+      : combinedOptions[0]?.value
+
+    markup.push(`
       <div class="upgrade-group ${owned ? '' : 'is-locked'}">
         <div class="upgrade-group-top">
-          <h5>${escapeMarkup(label)}</h5>
+          <h5>Improve</h5>
           <label class="upgrade-stage-control">
-            <span class="sr-only">${escapeMarkup(label)} status</span>
-            <select class="upgrade-stage-select" data-stage-key="${escapeMarkup(stageKey)}" data-blueprint-name="${escapeMarkup(blueprintName)}" ${owned ? '' : 'disabled'}>
-              ${options.map((option) => `<option value="${option.value}" ${stageValue === option.value ? 'selected' : ''}>${escapeMarkup(option.label)}</option>`).join('')}
+            <span class="sr-only">Improve and Transcendence status</span>
+            <select class="upgrade-stage-select" data-stage-key="ascension-transcendence" data-blueprint-name="${escapeMarkup(blueprintName)}" ${owned ? '' : 'disabled'}>
+              ${combinedOptions.map((option) => `<option value="${option.value}" ${resolvedSelectedValue === option.value ? 'selected' : ''}>${escapeMarkup(option.label)}</option>`).join('')}
             </select>
           </label>
         </div>
       </div>
-    `
-  }).filter(Boolean).join('')
+    `)
+  }
 
-  return `<div class="upgrade-groups-grid">${markup}</div>` || '<p class="empty-state">No upgrade milestones listed.</p>'
+  if (!markup.length) {
+    return '<p class="empty-state">No upgrade milestones listed.</p>'
+  }
+
+  return `<div class="upgrade-groups-grid">${markup.join('')}</div>`
 }
 
 export function renderInventorySection(progress = {}, { qualityLabels = ['Normal', 'Superior', 'Flawless', 'Epic', 'Legendary'], getQualityClass, escapeHtml: escapeMarkup } = {}) {

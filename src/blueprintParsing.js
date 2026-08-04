@@ -5,7 +5,7 @@ const CATEGORY_TYPE_LOOKUP = new Map(
   [
     {
       title: 'Weapons',
-      types: ['Sword', 'Axe', 'Dagger', 'Mace', 'Spear', 'Bow', 'Wand', 'Staff', 'Gun', 'Crossbow', 'Instrument', 'Dual Wield', 'Catalyst'],
+      types: ['Sword', 'Axe', 'Dagger', 'Mace', 'Spear', 'Bow', 'Staff', 'Wand', 'Gun', 'Crossbow', 'Instrument', 'Dual Wield', 'Catalyst'],
     },
     {
       title: 'Armor',
@@ -26,7 +26,7 @@ export function buildBlueprintItems(headers, rows, structuredBlueprints = []) {
   if (!rows.length && structuredBlueprints.length) {
     return structuredBlueprints.map((structuredData) => {
       const name = structuredData.meta?.name || 'Unknown'
-      const category = structuredData.meta?.category || 'Unknown'
+      const category = structuredData.meta?.type || structuredData.meta?.category || 'Unknown'
       const tier = structuredData.meta?.tier
 
       const classification = classifyBlueprint(category, name)
@@ -40,7 +40,7 @@ export function buildBlueprintItems(headers, rows, structuredBlueprints = []) {
   }
 
   const nameIndex = getColumnIndex(headers, 'Name', 'Item Name', 'Blueprint Name')
-  const categoryIndex = getColumnIndex(headers, 'Category', 'Item Category')
+  const categoryIndex = getColumnIndex(headers, 'Type', 'Category', 'Item Type', 'Item Category')
   const tierIndex = getColumnIndex(headers, 'Tier', 'Rank', 'Level')
 
   const resolvedNameIndex = nameIndex >= 0 ? nameIndex : 0
@@ -104,7 +104,13 @@ export function convertBlueprintRowToObject(headers, row) {
   }
 
   addMeta('Name', 'name', (value) => cleanText(value))
-  addMeta('Category', 'category', (value) => cleanText(value))
+  addMeta('Type', 'category', (value) => cleanText(value))
+  if (!blueprint.meta.category) {
+    addMeta('Category', 'category', (value) => cleanText(value))
+  }
+  if (blueprint.meta.category) {
+    blueprint.meta.type = blueprint.meta.category
+  }
   addMeta('Tier', 'tier', (value) => parseNumericValue(value))
   addMeta('Unlock Prerequisite', 'unlockPrerequisite', (value) => cleanText(value))
   addMeta('Research Scrolls', 'researchScrolls', (value) => parseNumericValue(value))
@@ -318,99 +324,55 @@ function getCellValue(row, index) {
 function classifyBlueprint(type, name) {
   const normalizedType = (type || '').toString().trim()
   const normalizedName = (name || '').toString().trim()
-  const haystack = `${normalizedType} ${normalizedName}`.toLowerCase()
   const normalizedTypeKey = normalizeTypeKey(normalizedType)
-
-  if (normalizedTypeKey === 'potion' && /herbal|remedy/.test(haystack)) {
-    return { category: 'Accessories', type: 'Herbal Remedy' }
-  }
-
-  if (normalizedTypeKey === 'enchantment' || normalizedTypeKey === 'enchantments') {
-    return { category: 'Enchantments', type: resolveEnchantmentType(normalizedName) }
-  }
 
   const directMatch = CATEGORY_TYPE_LOOKUP.get(normalizedTypeKey)
   if (directMatch) {
+    if (directMatch.category === 'Enchantments') {
+      return { category: 'Enchantments', type: resolveEnchantmentType(normalizedName, directMatch.type) }
+    }
     return directMatch
   }
 
-  if (/enchant|spirit|element/i.test(haystack)) {
-    return { category: 'Enchantments', type: resolveEnchantmentType(normalizedName) }
+  if (normalizedTypeKey === 'enchantment' || normalizedTypeKey === 'enchantments') {
+    return { category: 'Enchantments', type: resolveEnchantmentType(normalizedName, normalizedType) }
   }
 
-  if (/sword|axe|dagger|mace|spear|bow|wand|staff|gun|crossbow|instrument|dual wield|catalyst|weapon/i.test(haystack)) {
-    return { category: 'Weapons', type: resolveCanonicalType('Weapons', normalizedType, normalizedName) }
+  if (normalizedTypeKey === 'weapon' || normalizedTypeKey === 'weapons') {
+    return { category: 'Weapons', type: normalizedType || 'Weapon' }
   }
 
-  if (/herbal|potion|spell|shield|cloak|ring|amulet|familiar|idol|quiver|aura|meal|dessert|remedy|accessory/i.test(haystack)) {
-    return { category: 'Accessories', type: resolveCanonicalType('Accessories', normalizedType, normalizedName) }
+  if (normalizedTypeKey === 'armor' || normalizedTypeKey === 'armors' || normalizedTypeKey === 'armour' || normalizedTypeKey === 'armours') {
+    return { category: 'Armor', type: normalizedType || 'Armor' }
   }
 
-  if (/armor|helmet|hat|glove|gauntlet|footwear|heavy armor|light armor|clothes|robe|boot|shoe/i.test(haystack)) {
-    return { category: 'Armor', type: resolveCanonicalType('Armor', normalizedType, normalizedName) }
+  if (normalizedTypeKey === 'accessory' || normalizedTypeKey === 'accessories') {
+    return { category: 'Accessories', type: normalizedType || 'Accessory' }
   }
 
-  return { category: 'Accessories', type: resolveCanonicalType('Accessories', normalizedType, normalizedName) }
+  if (normalizedType) {
+    return { category: 'Accessories', type: normalizedType }
+  }
+
+  return { category: 'Accessories', type: 'Unknown' }
 }
 
 function normalizeTypeKey(value) {
   return (value || '').toString().toLowerCase().replace(/[^a-z0-9]/g, '')
 }
 
-function resolveEnchantmentType(name) {
-  return /spirit/i.test(name) ? 'Spirit' : 'Element'
-}
-
-function resolveCanonicalType(category, type, name) {
-  const haystack = `${type || ''} ${name || ''}`.toLowerCase()
-
-  if (category === 'Weapons') {
-    if (/dual\s*wield/.test(haystack)) return 'Dual Wield'
-    if (/crossbow/.test(haystack)) return 'Crossbow'
-    if (/instrument/.test(haystack)) return 'Instrument'
-    if (/catalyst/.test(haystack)) return 'Catalyst'
-    if (/sword/.test(haystack)) return 'Sword'
-    if (/axe/.test(haystack)) return 'Axe'
-    if (/dagger/.test(haystack)) return 'Dagger'
-    if (/mace/.test(haystack)) return 'Mace'
-    if (/spear/.test(haystack)) return 'Spear'
-    if (/bow/.test(haystack)) return 'Bow'
-    if (/wand/.test(haystack)) return 'Wand'
-    if (/staff/.test(haystack)) return 'Staff'
-    if (/gun/.test(haystack)) return 'Gun'
-    return 'Sword'
+function resolveEnchantmentType(name, typeHint = '') {
+  if (/spirit/i.test(name)) {
+    return 'Spirit'
   }
 
-  if (category === 'Armor') {
-    if (/heavy\s*armor|heavyarmor|plate|mail|cuirass/.test(haystack)) return 'Heavy Armor'
-    if (/light\s*armor|lightarmor/.test(haystack)) return 'Light Armor'
-    if (/clothes|robe/.test(haystack)) return 'Clothes'
-    if (/rogue/.test(haystack)) return 'Rogue Hat'
-    if (/magician|mage|wizard|sorcer/.test(haystack)) return 'Magician Hat'
-    if (/gauntlet/.test(haystack)) return 'Gauntlets'
-    if (/glove/.test(haystack)) return 'Gloves'
-    if (/heavy\s*footwear|heavyfootwear|boot|shoe/.test(haystack)) return 'Heavy Footwear'
-    if (/light\s*footwear|lightfootwear|sandals/.test(haystack)) return 'Light Footwear'
-    if (/helmet|hood/.test(haystack)) return 'Helmet'
-    return 'Clothes'
+  if (/element/i.test(name)) {
+    return 'Element'
   }
 
-  if (category === 'Accessories') {
-    if (/herbal|remedy/.test(haystack)) return 'Herbal Remedy'
-    if (/potion/.test(haystack)) return 'Potion'
-    if (/spell/.test(haystack)) return 'Spell'
-    if (/shield/.test(haystack)) return 'Shield'
-    if (/cloak/.test(haystack)) return 'Cloak'
-    if (/ring/.test(haystack)) return 'Ring'
-    if (/amulet/.test(haystack)) return 'Amulet'
-    if (/familiar/.test(haystack)) return 'Familiar'
-    if (/aura\s*song|aurasong/.test(haystack)) return 'Aurasong'
-    if (/quiver/.test(haystack)) return 'Quiver'
-    if (/idol/.test(haystack)) return 'Idol'
-    if (/meal/.test(haystack)) return 'Meal'
-    if (/dessert/.test(haystack)) return 'Dessert'
-    return 'Potion'
+  if (/spirit/i.test(typeHint)) {
+    return 'Spirit'
   }
 
-  return type || 'Unknown'
+  return 'Element'
 }

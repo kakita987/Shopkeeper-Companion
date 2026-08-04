@@ -8,10 +8,10 @@ export function getBlueprintStageValue(progress = {}, stageKey = '') {
 export function getBlueprintStageOptions(stageKey = '', progress = {}, entries = []) {
   const stageIndex = STAGE_ORDER.indexOf(stageKey)
   const options = [{ value: 0, label: 'Not started' }]
+  const skipPreviousStageLock = stageKey === 'starforge'
 
   if (stageKey === 'starforge') {
-    const milestonesValue = getBlueprintStageValue(progress, 'milestones')
-    if (milestonesValue < 5) {
+    if (!progress?.starforgeUnlocked) {
       return [{ value: 0, label: 'Locked' }]
     }
   }
@@ -31,7 +31,7 @@ export function getBlueprintStageOptions(stageKey = '', progress = {}, entries =
     return options
   }
 
-  const previousKey = stageIndex > 0 ? STAGE_ORDER[stageIndex - 1] : null
+  const previousKey = skipPreviousStageLock ? null : (stageIndex > 0 ? STAGE_ORDER[stageIndex - 1] : null)
   const previousValue = previousKey ? getBlueprintStageValue(progress, previousKey) : Infinity
 
   if (previousValue < 1) {
