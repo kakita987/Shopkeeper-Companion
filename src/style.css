@@ -1591,6 +1591,15 @@ body.theme-dark .saved-view-results.overlay-card,
   justify-content: flex-start;
 }
 
+.saved-view-item .saved-view-item-title-row {
+  justify-content: flex-start;
+}
+
+.saved-view-item-title-row .item-name {
+  flex: 1;
+  text-align: left;
+}
+
 .saved-view-item-meta {
   display: flex;
   flex-direction: column;

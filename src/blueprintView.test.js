@@ -24,8 +24,9 @@ test('getBlueprintVisuals prefers classification data and falls back to structur
 
 test('buildDependencySummaryLine summarizes dependency relationships', () => {
   assert.equal(buildDependencySummaryLine({}), 'No dependency relation')
-  assert.equal(buildDependencySummaryLine({ isDependentOn: true }), 'Dependent')
-  assert.equal(buildDependencySummaryLine({ isNeededFor: true, dependentNames: ['Alpha', 'Beta'] }), 'Needed (2)')
+  assert.equal(buildDependencySummaryLine({ isDependentOn: true }), 'Dependent on another blueprint')
+  assert.equal(buildDependencySummaryLine({ isDependentOn: true, dependencyNames: ['Squire Sword'] }), 'Dependent on: Squire Sword')
+  assert.equal(buildDependencySummaryLine({ isNeededFor: true, dependentNames: ['Alpha', 'Beta'] }), 'Needed for: Alpha, Beta')
 })
 
 test('buildBlueprintGroups preserves source-sheet order within each type while keeping configured type order', () => {
@@ -76,6 +77,7 @@ test('buildBlueprintSummary combines progress, inventory, and dependency state',
   assert.equal(summary.isOwned, true)
   assert.equal(summary.isMastered, true)
   assert.equal(summary.isDependentOn, true)
+  assert.deepEqual(summary.dependencyNames, ['Beta'])
   assert.equal(summary.isNeededFor, true)
   assert.equal(summary.totalInventory, 2)
   assert.equal(summary.hasSuperiorOrBetterInventory, true)

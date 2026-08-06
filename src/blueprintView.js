@@ -275,13 +275,25 @@ export function renderCollectionSection(progress = {}, isOwned = false, { getQua
 export function buildDependencySummaryLine(summary = {}) {
   const parts = []
 
-  if (summary.isDependentOn) {
-    parts.push('Dependent')
+  const dependencies = Array.isArray(summary.dependencyNames)
+    ? summary.dependencyNames.filter(Boolean)
+    : []
+  const dependents = Array.isArray(summary.dependentNames)
+    ? summary.dependentNames.filter(Boolean)
+    : []
+
+  if (summary.isDependentOn && dependencies.length) {
+    parts.push(`Dependent on: ${dependencies.join(', ')}`)
+  } else if (summary.isDependentOn) {
+    parts.push('Dependent on another blueprint')
   }
 
   if (summary.isNeededFor) {
-    const dependentCount = summary.dependentNames?.length || 0
-    parts.push(`Needed (${dependentCount})`)
+    if (dependents.length) {
+      parts.push(`Needed for: ${dependents.join(', ')}`)
+    } else {
+      parts.push('Needed for another blueprint')
+    }
   }
 
   if (!parts.length) {
@@ -318,12 +330,18 @@ export function buildBlueprintSummary(item, dependencyIndex, { getBlueprintProgr
   const hasSuperiorOrBetterInventory = ['superior', 'flawless', 'epic', 'legendary'].some((qualityKey) => Number(blueprintState.inventory?.[qualityKey] || 0) > 0)
   const components = Array.isArray(materials.components) ? materials.components : []
   const blueprintNames = dependencyIndex?.blueprintNames instanceof Set ? dependencyIndex.blueprintNames : new Set()
-  const isDependentOn = components.some((component) => blueprintNames.has(cleanText(component?.name).toLowerCase()))
+  const dependencyNames = [...new Set(
+    components
+      .map((component) => cleanText(component?.name))
+      .filter((componentName) => blueprintNames.has(componentName.toLowerCase())),
+  )]
+  const isDependentOn = dependencyNames.length > 0
 
   return {
     isOwned: Boolean(progress.owned),
     isMastered,
     isDependentOn,
+    dependencyNames,
     isNeededFor: dependentNames.length > 0,
     dependentNames,
     hasInventory: totalInventory > 0,
