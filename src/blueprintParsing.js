@@ -7,21 +7,32 @@ const GROUP_TYPE_LOOKUP = new Map(
     .flatMap((definition) => definition.types.map((type) => [normalizeTypeKey(type), { group: definition.group, type }]))
 )
 
+const TYPE_ALIASES = new Map([
+  ['herbalremedy', 'Herbal Medicine'],
+  ['herbalmedicine', 'Herbal Medicine'],
+])
+
+const EXCLUDED_TYPE_KEYS = new Set(['moonstone', 'moonstones', 'runestone', 'runestones'])
+
 export function buildBlueprintItems(headers, rows, structuredBlueprints = []) {
   if (!rows.length && structuredBlueprints.length) {
-    return structuredBlueprints.map((structuredData, index) => {
+    return structuredBlueprints.flatMap((structuredData, index) => {
       const name = structuredData.meta?.name || 'Unknown'
       const blueprintType = structuredData.meta?.type || structuredData.meta?.category || 'Unknown'
       const tier = structuredData.meta?.tier
 
+      if (isExcludedBlueprintType(blueprintType, name)) {
+        return []
+      }
+
       const classification = classifyBlueprint(blueprintType, name)
-      return {
+      return [{
         name,
         meta: tier ? `Tier ${tier}` : 'No tier',
         structuredData,
         classification,
         sourceIndex: index,
-      }
+      }]
     })
   }
 
@@ -42,6 +53,10 @@ export function buildBlueprintItems(headers, rows, structuredBlueprints = []) {
     const structuredData = structuredBlueprints[rowIndex] || {}
 
     if (!name) {
+      return
+    }
+
+    if (isExcludedBlueprintType(blueprintType, name)) {
       return
     }
 
@@ -309,8 +324,11 @@ function classifyBlueprint(type, name) {
   const normalizedType = (type || '').toString().trim()
   const normalizedName = (name || '').toString().trim()
   const normalizedTypeKey = normalizeTypeKey(normalizedType)
+  const aliasType = TYPE_ALIASES.get(normalizedTypeKey)
+  const resolvedType = aliasType || normalizedType
+  const resolvedTypeKey = normalizeTypeKey(resolvedType)
 
-  const directMatch = GROUP_TYPE_LOOKUP.get(normalizedTypeKey)
+  const directMatch = GROUP_TYPE_LOOKUP.get(resolvedTypeKey)
   if (directMatch) {
     if (directMatch.group === 'Enchantments') {
       return { group: 'Enchantments', type: resolveEnchantmentType(normalizedName, directMatch.type) }
@@ -339,6 +357,16 @@ function classifyBlueprint(type, name) {
   }
 
   return { group: 'Accessories', type: 'Unknown' }
+}
+
+function isExcludedBlueprintType(type, name) {
+  const normalizedTypeKey = normalizeTypeKey(type)
+  if (EXCLUDED_TYPE_KEYS.has(normalizedTypeKey)) {
+    return true
+  }
+
+  const normalizedNameKey = normalizeTypeKey(name)
+  return EXCLUDED_TYPE_KEYS.has(normalizedNameKey)
 }
 
 function normalizeTypeKey(value) {

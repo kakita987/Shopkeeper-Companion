@@ -1588,23 +1588,25 @@ body.theme-dark .saved-view-results.overlay-card,
 
 .saved-view-item-title-row {
   width: 100%;
-  justify-content: flex-start;
+  justify-content: center;
 }
 
 .saved-view-item .saved-view-item-title-row {
-  justify-content: flex-start;
+  justify-content: center;
 }
 
 .saved-view-item-title-row .item-name {
   flex: 1;
-  text-align: left;
+  text-align: center;
 }
 
 .saved-view-item-meta {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding-left: 2.6rem;
+  padding-left: 0;
+  align-items: center;
+  text-align: center;
 }
 
 .saved-view-item-meta-line {
@@ -1799,20 +1801,25 @@ body.theme-dark .inventory-field input,
   flex-direction: column;
   min-width: 0;
   flex: 1;
+  align-items: center;
+  text-align: center;
 }
 
 .item-title-row {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   gap: 8px;
   margin-bottom: 0;
+  width: 100%;
 }
 
 .item-name {
   font-weight: 700;
   font-size: 1.15rem;
   line-height: 1.1;
+  text-align: center;
 }
 
 .settings-card {
@@ -2416,6 +2423,13 @@ body.theme-dark .import-form button,
   height: 100%;
 }
 
+.icon-slot img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
 .group-summary-icon {
   width: 1.4rem;
   height: 1.4rem;
@@ -2423,10 +2437,10 @@ body.theme-dark .import-form button,
 }
 
 .item-card-icon {
-  width: 2rem;
-  height: 2rem;
+  width: clamp(4rem, 6vw, 5.25rem);
+  height: clamp(4rem, 6vw, 5.25rem);
   flex-shrink: 0;
-  margin-right: 6px;
+  margin-right: 0;
 }
 
 .overlay-item-icon {
@@ -2465,25 +2479,27 @@ body.theme-dark .import-form button,
   list-style: none;
   margin: 0;
   padding: 0 12px 0 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px;
   background: inherit;
 }
 
 .blueprint-item {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: stretch;
+  justify-content: flex-start;
   gap: 12px;
-  padding: 8px 10px;
+  padding: 12px;
   margin-right: 4px;
-  border-radius: 10px;
+  border-radius: 14px;
   border: 1px solid rgba(183, 159, 121, 0.45);
   background: linear-gradient(165deg, rgba(251, 242, 222, 0.98), rgba(240, 223, 191, 0.95));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
   cursor: pointer;
   transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease, border-color 140ms ease;
+  min-height: 198px;
+  height: 100%;
 }
 
 .blueprint-item:hover {
@@ -2529,6 +2545,7 @@ body.theme-dark .group-count,
 .attribution-details {
   display: grid;
   gap: 8px;
+  justify-content: flex-start;
 }
 
 .attribution-details > summary {
@@ -2542,6 +2559,21 @@ body.theme-dark .group-count,
   align-items: center;
   justify-content: flex-start;
   gap: 6px;
+  flex: 1;
+}
+
+.item-tier-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(122, 78, 23, 0.32);
+  background: rgba(255, 255, 255, 0.7);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .advanced-sync-details {
@@ -2915,6 +2947,10 @@ body.theme-dark .site-footer-link,
     align-items: flex-start;
   }
 
+  .blueprint-items {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .app-header {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
@@ -3011,6 +3047,10 @@ body.theme-dark .site-footer-link,
     order: 3;
     justify-self: start;
     white-space: normal;
+  }
+
+  .blueprint-items {
+    grid-template-columns: 1fr;
   }
 }
 

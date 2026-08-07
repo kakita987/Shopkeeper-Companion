@@ -19,9 +19,10 @@ import { getBlueprintStageValue, getBlueprintStageOptions } from './blueprintSta
 import { initSettingsUi, applyTheme as applySharedTheme, applyFontPreference as applySharedFontPreference, getStoredTheme as getSharedStoredTheme, getStoredFontPreference as getSharedStoredFontPreference } from './settingsUi.js'
 import { SETTINGS_GEAR_ICON_MARKUP } from './settingsGearIcon.js'
 import { escapeHtml, cleanText, toInventoryCount } from './textUtils.js'
-import { getBlueprintItemIconName, getGroupIconName, getTypeIconName } from './blueprintIcons.js'
+import { getBlueprintItemIconPath, getGroupIconPath, getTypeIconPath } from './blueprintIcons.js'
 import { buildBlueprintItems, convertBlueprintRowToObject } from './blueprintParsing.js'
 import { BLUEPRINT_GROUP_TYPE_ORDER } from './assets/blueprintTypeOrder.js'
+import { applyAurasongAmuletTypeMap, buildAurasongAmuletIconMapFromImport } from './assets/accessoryIconMap.js'
 import { RESOURCE_LABELS } from './resourceLabels.js'
 import { DEFAULT_SAVED_VIEW_CRITERIA, STARTER_VIEW_PRESETS, SAVED_FILTER_VIEWS_STORAGE_KEY, buildSavedViewsRows, getCollectionBookMatchDescription, hasActiveSavedViewFilters, loadSavedFilterViews, normalizeSavedViewCriteria, parseSavedViewsRows } from './savedViews.js'
 import { buildBlueprintSummary, buildDependencySummaryLine, getBlueprintVisuals, renderCollectionSection, renderInventorySection, renderLucideIcons, renderMaterialsSection, renderOverlaySectionCard, renderPreview, renderStatsCards, renderUpgradeSection } from './blueprintView.js'
@@ -1235,7 +1236,11 @@ async function importBlueprintData() {
 
     updateStatus('Downloading blueprints…')
     const { headers, rows, structuredBlueprints } = await importGoogleSheet(exportUrl)
-    allBlueprintItems = buildBlueprintItems(headers, rows, structuredBlueprints)
+    const aurasongAmuletMapRows = buildAurasongAmuletIconMapFromImport(headers, rows, structuredBlueprints)
+    allBlueprintItems = applyAurasongAmuletTypeMap(
+      buildBlueprintItems(headers, rows, structuredBlueprints),
+      aurasongAmuletMapRows,
+    )
     if (isSuspiciousBlueprintDataset(allBlueprintItems)) {
       throw new Error('The blueprint import looked incomplete (items classified as Unknown). Please import again in a moment.')
     }
@@ -1276,7 +1281,11 @@ async function initializeBlueprintDataFromCache() {
   }
 
   const { headers = [], rows = [], structuredBlueprints = [] } = cached
-  allBlueprintItems = buildBlueprintItems(headers, rows, structuredBlueprints)
+  const aurasongAmuletMapRows = buildAurasongAmuletIconMapFromImport(headers, rows, structuredBlueprints)
+  allBlueprintItems = applyAurasongAmuletTypeMap(
+    buildBlueprintItems(headers, rows, structuredBlueprints),
+    aurasongAmuletMapRows,
+  )
   if (isSuspiciousBlueprintDataset(allBlueprintItems)) {
     await removeItem(BLUEPRINT_CACHE_STORAGE_KEY)
     allBlueprintItems = []
@@ -1527,15 +1536,15 @@ function openBlueprintOverlay(item) {
     <div class="overlay-top-layout">
       <div class="overlay-hero">
         <div class="overlay-hero-background overlay-hero-symbol" aria-hidden="true">
-          <span class="icon-slot overlay-hero-icon"><i data-lucide="${escapeHtml(getGroupIconName(visuals.group))}"></i></span>
+          <span class="icon-slot overlay-hero-icon">${getGroupIconPath(visuals.group) ? `<img src="${escapeHtml(getGroupIconPath(visuals.group))}" alt="" aria-hidden="true" />` : ''}</span>
         </div>
         <div class="overlay-hero-content">
           <div class="overlay-visual-strip" aria-hidden="true">
             <div class="overlay-visual-tile overlay-visual-category">
-              <span class="icon-slot overlay-visual-icon"><i data-lucide="${escapeHtml(getGroupIconName(visuals.group))}"></i></span>
+              <span class="icon-slot overlay-visual-icon">${getGroupIconPath(visuals.group) ? `<img src="${escapeHtml(getGroupIconPath(visuals.group))}" alt="" aria-hidden="true" />` : ''}</span>
             </div>
             <div class="overlay-visual-tile overlay-visual-item">
-              <span class="icon-slot overlay-item-icon"><i data-lucide="${escapeHtml(getBlueprintItemIconName(item))}"></i></span>
+              <span class="icon-slot overlay-item-icon">${getBlueprintItemIconPath(item) ? `<img src="${escapeHtml(getBlueprintItemIconPath(item))}" alt="" aria-hidden="true" onerror="this.style.display='none'; this.onerror=null;" />` : ''}</span>
             </div>
           </div>
           <div class="overlay-title-block">
@@ -1837,7 +1846,7 @@ function renderSavedViewResults(items = [], dependencyIndex) {
           <li class="blueprint-item saved-view-item" data-blueprint-name="${escapeHtml(item.name)}">
             <div class="item-copy saved-view-item-copy">
               <div class="item-title-row saved-view-item-title-row">
-                <span class="icon-slot item-card-icon" aria-hidden="true"><i data-lucide="${escapeHtml(getBlueprintItemIconName(item))}"></i></span>
+                <span class="icon-slot item-card-icon" aria-hidden="true">${getBlueprintItemIconPath(item) ? `<img src="${escapeHtml(getBlueprintItemIconPath(item))}" alt="" aria-hidden="true" onerror="this.style.display='none'; this.onerror=null;" />` : ''}</span>
                 <span class="item-name">${escapeHtml(item.name)}</span>
               </div>
               <div class="saved-view-item-meta">
@@ -1853,7 +1862,7 @@ function renderSavedViewResults(items = [], dependencyIndex) {
         <details class="blueprint-type">
           <summary>
             <span class="group-summary-title">
-              <span class="icon-slot group-summary-icon" aria-hidden="true"><i data-lucide="${escapeHtml(getTypeIconName(typeGroup.type, groupBucket.group))}"></i></span>
+              <span class="icon-slot group-summary-icon" aria-hidden="true">${getTypeIconPath(typeGroup.type) ? `<img src="${escapeHtml(getTypeIconPath(typeGroup.type))}" alt="" aria-hidden="true" />` : ''}</span>
               <span>${escapeHtml(typeGroup.type)}</span>
             </span>
             <span class="group-count">${typeGroup.items.length}</span>
@@ -1867,7 +1876,7 @@ function renderSavedViewResults(items = [], dependencyIndex) {
       <details class="blueprint-category">
         <summary>
           <span class="group-summary-title">
-            <span class="icon-slot group-summary-icon" aria-hidden="true"><i data-lucide="${escapeHtml(getGroupIconName(groupBucket.group))}"></i></span>
+            <span class="icon-slot group-summary-icon" aria-hidden="true">${getGroupIconPath(groupBucket.group) ? `<img src="${escapeHtml(getGroupIconPath(groupBucket.group))}" alt="" aria-hidden="true" />` : ''}</span>
             <span>${escapeHtml(groupBucket.group)}</span>
           </span>
           <span class="group-count">${groupBucket.totalItems}</span>

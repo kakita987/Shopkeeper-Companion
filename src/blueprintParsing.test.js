@@ -110,3 +110,38 @@ test('buildBlueprintItems resolves enchantment type from name only', () => {
   assert.equal(tabularItems[1].classification.group, 'Enchantments')
   assert.equal(tabularItems[1].classification.type, 'Element')
 })
+
+test('buildBlueprintItems maps Herbal Medicine to canonical Herbal Medicine type', () => {
+  const tabularItems = buildBlueprintItems(
+    ['Name', 'Type', 'Tier'],
+    [['Mundra Herb', 'Herbal Medicine', '4']],
+    [],
+  )
+
+  assert.equal(tabularItems[0].classification.group, 'Accessories')
+  assert.equal(tabularItems[0].classification.type, 'Herbal Medicine')
+})
+
+test('buildBlueprintItems excludes moonstones and runestones from import data', () => {
+  const tabularItems = buildBlueprintItems(
+    ['Name', 'Type', 'Tier'],
+    [
+      ['Moonstone', 'Moonstone', '1'],
+      ['Runestone', 'Runestone', '1'],
+      ['Cutlass', 'Sword', '8'],
+    ],
+    [],
+  )
+
+  assert.equal(tabularItems.length, 1)
+  assert.equal(tabularItems[0].name, 'Cutlass')
+
+  const cachedItems = buildBlueprintItems([], [], [
+    { meta: { name: 'Moonstone', type: 'Moonstone', tier: 1 } },
+    { meta: { name: 'Runestone', type: 'Runestone', tier: 1 } },
+    { meta: { name: 'Saved Sword', type: 'Sword', tier: 1 } },
+  ])
+
+  assert.equal(cachedItems.length, 1)
+  assert.equal(cachedItems[0].name, 'Saved Sword')
+})
