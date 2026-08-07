@@ -1841,7 +1841,7 @@ function renderSavedViewResults(items = [], dependencyIndex) {
                 <span class="item-name">${escapeHtml(item.name)}</span>
               </div>
               <div class="saved-view-item-meta">
-                <small class="saved-view-item-meta-line">${escapeHtml(`${ownershipText} · Inventory ${summary.totalInventory} · ${collectionText}`)}</small>
+                <small class="saved-view-item-meta-line">${escapeHtml(`${ownershipText} · Inventory Total: ${summary.totalInventory} · ${collectionText}`)}</small>
                 <small class="saved-view-item-meta-line">${escapeHtml(dependencyText)}</small>
               </div>
             </div>
