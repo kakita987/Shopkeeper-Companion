@@ -22,7 +22,7 @@ import { escapeHtml, cleanText, toInventoryCount } from './textUtils.js'
 import { getBlueprintItemIconPath, getGroupIconPath, getTypeIconPath } from './blueprintIcons.js'
 import { buildBlueprintItems, convertBlueprintRowToObject } from './blueprintParsing.js'
 import { BLUEPRINT_GROUP_TYPE_ORDER } from './assets/blueprintTypeOrder.js'
-import { applyAurasongAmuletTypeMap, buildAurasongAmuletIconMapFromImport } from './assets/aurasongAmuletIconMap.js'
+import { applyAurasongAmuletTypeMap, buildAurasongAmuletIconMapFromImport } from './assets/accessoryIconMap.js'
 import { RESOURCE_LABELS } from './resourceLabels.js'
 import { DEFAULT_SAVED_VIEW_CRITERIA, STARTER_VIEW_PRESETS, SAVED_FILTER_VIEWS_STORAGE_KEY, buildSavedViewsRows, getCollectionBookMatchDescription, hasActiveSavedViewFilters, loadSavedFilterViews, normalizeSavedViewCriteria, parseSavedViewsRows } from './savedViews.js'
 import { buildBlueprintSummary, buildDependencySummaryLine, getBlueprintVisuals, renderCollectionSection, renderInventorySection, renderLucideIcons, renderMaterialsSection, renderOverlaySectionCard, renderPreview, renderStatsCards, renderUpgradeSection } from './blueprintView.js'
@@ -1544,7 +1544,7 @@ function openBlueprintOverlay(item) {
               <span class="icon-slot overlay-visual-icon">${getGroupIconPath(visuals.group) ? `<img src="${escapeHtml(getGroupIconPath(visuals.group))}" alt="" aria-hidden="true" />` : ''}</span>
             </div>
             <div class="overlay-visual-tile overlay-visual-item">
-              <span class="icon-slot overlay-item-icon">${getBlueprintItemIconPath(item) ? `<img src="${escapeHtml(getBlueprintItemIconPath(item))}" alt="" aria-hidden="true" />` : ''}</span>
+              <span class="icon-slot overlay-item-icon">${getBlueprintItemIconPath(item) ? `<img src="${escapeHtml(getBlueprintItemIconPath(item))}" alt="" aria-hidden="true" onerror="this.style.display='none'; this.onerror=null;" />` : ''}</span>
             </div>
           </div>
           <div class="overlay-title-block">
@@ -1846,7 +1846,7 @@ function renderSavedViewResults(items = [], dependencyIndex) {
           <li class="blueprint-item saved-view-item" data-blueprint-name="${escapeHtml(item.name)}">
             <div class="item-copy saved-view-item-copy">
               <div class="item-title-row saved-view-item-title-row">
-                <span class="icon-slot item-card-icon" aria-hidden="true">${getBlueprintItemIconPath(item) ? `<img src="${escapeHtml(getBlueprintItemIconPath(item))}" alt="" aria-hidden="true" />` : ''}</span>
+                <span class="icon-slot item-card-icon" aria-hidden="true">${getBlueprintItemIconPath(item) ? `<img src="${escapeHtml(getBlueprintItemIconPath(item))}" alt="" aria-hidden="true" onerror="this.style.display='none'; this.onerror=null;" />` : ''}</span>
                 <span class="item-name">${escapeHtml(item.name)}</span>
               </div>
               <div class="saved-view-item-meta">

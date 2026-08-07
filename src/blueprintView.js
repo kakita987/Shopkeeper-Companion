@@ -503,7 +503,7 @@ export function renderPreview(items = [], {
         listItem.innerHTML = `
           <div class="item-copy">
             <div class="item-title-row">
-              <span class="icon-slot item-card-icon" aria-hidden="true">${getBlueprintItemIconPath(item) ? `<img src="${escapeHtml(getBlueprintItemIconPath(item))}" alt="" aria-hidden="true" />` : ''}</span>
+              <span class="icon-slot item-card-icon" aria-hidden="true">${getBlueprintItemIconPath(item) ? `<img src="${escapeHtml(getBlueprintItemIconPath(item))}" alt="" aria-hidden="true" onerror="this.style.display='none'; this.onerror=null;" />` : ''}</span>
               <span class="item-name">${escapeHtml(item.name)}</span>
               <span class="item-tier-badge">${escapeHtml(tierText)}</span>
             </div>
