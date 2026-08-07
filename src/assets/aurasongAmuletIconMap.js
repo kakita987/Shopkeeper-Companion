@@ -1,9 +1,9 @@
 import { getTypeIconPath } from '../blueprintIcons.js'
 import { BLUEPRINT_GROUP_TYPE_ORDER } from './blueprintTypeOrder.js'
-import { AURASONG_AMULET_ITEM_ICON_ASSETS } from './accessoryItemIconAssets.js'
+import { AURASONG_AMULET_ITEM_ICON_ASSETS } from './aurasongAmuletItemIconAssets.js'
 
 const TARGET_GROUP = 'Accessories'
-const TARGET_TYPES = ['Amulet', 'Aurasong', 'Spell', 'Shield', 'Quiver', 'Potion', 'Ring', 'Meal', 'Herbal Medicine', 'Familiar', 'Dessert', 'Cloak']
+const TARGET_TYPES = ['Amulet', 'Aurasong', 'Spell']
 const TARGET_TYPE_SET = new Set(TARGET_TYPES)
 const ACCESSORY_TYPE_KEYS = new Set(['accessory', 'accessories'])
 const ACCESSORY_TYPE_ORDER = buildAccessoryTypeOrder()
@@ -88,38 +88,6 @@ function resolveTargetType(type, name = '', tier = null) {
 
   if (normalized === 'spell' || normalized === 'spells') {
     return 'Spell'
-  }
-
-  if (normalized === 'quiver' || normalized === 'quivers') {
-    return 'Quiver'
-  }
-
-  if (normalized === 'potion' || normalized === 'potions') {
-    return 'Potion'
-  }
-
-  if (normalized === 'ring' || normalized === 'rings') {
-    return 'Ring'
-  }
-
-  if (normalized === 'meal' || normalized === 'meals') {
-    return 'Meal'
-  }
-
-  if (normalized === 'herbal medicine' || normalized === 'herbal medicines' || normalized === 'herbal remedy') {
-    return 'Herbal Medicine'
-  }
-
-  if (normalized === 'familiar' || normalized === 'familiars') {
-    return 'Familiar'
-  }
-
-  if (normalized === 'dessert' || normalized === 'desserts') {
-    return 'Dessert'
-  }
-
-  if (normalized === 'cloak' || normalized === 'cloaks') {
-    return 'Cloak'
   }
 
   if (!ACCESSORY_TYPE_KEYS.has(normalized)) {

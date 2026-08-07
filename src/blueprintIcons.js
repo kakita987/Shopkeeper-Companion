@@ -83,7 +83,7 @@ function buildItemIconIndex() {
     const itemKey = String(entry?.itemKey || '').trim()
     const relativePath = String(entry?.relativePath || '').trim()
 
-    if (!['Amulet', 'Aurasong', 'Spell', 'Shield', 'Quiver', 'Potion', 'Ring', 'Meal', 'Herbal Medicine', 'Familiar'].includes(type) || tier === null || !itemKey || !relativePath) {
+    if (!['Amulet', 'Aurasong', 'Spell', 'Shield', 'Quiver', 'Potion', 'Ring', 'Meal', 'Herbal Medicine', 'Familiar', 'Dessert', 'Cloak'].includes(type) || tier === null || !itemKey || !relativePath) {
       return
     }
 
@@ -162,7 +162,7 @@ export function getBlueprintItemIconPath(item) {
   const tier = getBlueprintTier(item)
   const name = String(item?.name || '').trim()
 
-  if (!['Amulet', 'Aurasong', 'Spell', 'Shield', 'Quiver', 'Potion', 'Ring', 'Meal', 'Herbal Medicine', 'Familiar'].includes(type) || !tier || !name) {
+  if (!['Amulet', 'Aurasong', 'Spell', 'Shield', 'Quiver', 'Potion', 'Ring', 'Meal', 'Herbal Medicine', 'Familiar', 'Dessert', 'Cloak'].includes(type) || !tier || !name) {
     return ''
   }
 

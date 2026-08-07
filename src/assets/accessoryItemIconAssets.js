@@ -424,6 +424,68 @@ const FAMILIAR_ITEM_ICON_ASSET_FILE_NAMES = [
   'accessory_familiar_t16_xzyurnip.png',
 ]
 
+const DESSERT_ITEM_ICON_ASSET_FILE_NAMES = [
+  'accessory_dessert_t3_cookie.png',
+  'accessory_dessert_t4_shavedice.png',
+  'accessory_dessert_t5_taiyaki.png',
+  'accessory_dessert_t6_cheesecake.png',
+  'accessory_dessert_t6_chocolatebox.png',
+  'accessory_dessert_t7_macaron.png',
+  'accessory_dessert_t7_pricklyicecream.png',
+  'accessory_dessert_t8_strawberrymochi.png',
+  'accessory_dessert_t9_matchaswissroll.png',
+  'accessory_dessert_t10_pineapplecake.png',
+  'accessory_dessert_t11_tuxedocake.png',
+  'accessory_dessert_t12_coconutcreamcake.png',
+  'accessory_dessert_t12_glazedmirrorcake.png',
+  'accessory_dessert_t12_halo_halo.png',
+  'accessory_dessert_t12_opulentchurros.png',
+  'accessory_dessert_t13_cornucopia.png',
+  'accessory_dessert_t13_summersmores.png',
+  'accessory_dessert_t13_ultimatefruitsalad.png',
+  'accessory_dessert_t14_platinumstrudel.png',
+  'accessory_dessert_t14_prince_baklava.png',
+  'accessory_dessert_t14_starberrypie.png',
+  'accessory_dessert_t15_chocodragonsummit.png',
+  'accessory_dessert_t15_krampuscookie.png',
+  'accessory_dessert_t15_obsidianlavacake.png',
+  'accessory_dessert_t16_glorkberry_parfait.png',
+  'accessory_dessert_t16_poisonedapplepie.png',
+]
+
+const CLOAK_ITEM_ICON_ASSET_FILE_NAMES = [
+  'accessory_cloak_t3_adventurercloak.png',
+  'accessory_cloak_t4_admin_cloak.png',
+  'accessory_cloak_t5_druidcloak.png',
+  'accessory_cloak_t6_imperialcloak.png',
+  'accessory_cloak_t6_vampirewings.png',
+  'accessory_cloak_t7_elvencloak.png',
+  'accessory_cloak_t8_beastkingcloak.png',
+  'accessory_cloak_t9_dragonlordcrest.png',
+  'accessory_cloak_t9_tyrantcloak.png',
+  'accessory_cloak_t10_bishopmantle.png',
+  'accessory_cloak_t11_opulentcloak.png',
+  'accessory_cloak_t11_voidcloth_beyond.png',
+  'accessory_cloak_t11_wovenlilycloak.png',
+  'accessory_cloak_t12_fairywings.png',
+  'accessory_cloak_t12_herald_mantle.png',
+  'accessory_cloak_t12_sakuracloak.png',
+  'accessory_cloak_t13_banner_nilea.png',
+  'accessory_cloak_t13_coastaltowel.png',
+  'accessory_cloak_t13_dragon_emperor.png',
+  'accessory_cloak_t13_everflowing.png',
+  'accessory_cloak_t14_donovan_cloak.png',
+  'accessory_cloak_t14_elysiummantle.png',
+  'accessory_cloak_t14_giantmothwings.png',
+  'accessory_cloak_t15_budgetcloak.png',
+  'accessory_cloak_t15_lord_wildwoods.png',
+  'accessory_cloak_t15_platinumcloak.png',
+  'accessory_cloak_t15_sia_royalmantle.png',
+  'accessory_cloak_t16_mantle_splendor.png',
+  'accessory_cloak_t16_mantledgalaxica.png',
+  'accessory_cloak_t16_shroud_underking.png',
+]
+
 function buildQuiverItemIconAssets() {
   return QUIVER_ITEM_ICON_ASSET_FILE_NAMES.map((fileName) => {
     const match = fileName.match(/^accessory_quiver_t(\d+)_(.+)\.png$/)
@@ -526,6 +588,40 @@ function buildFamiliarItemIconAssets() {
 
 const FAMILIAR_ITEM_ICON_ASSETS = buildFamiliarItemIconAssets()
 
+function buildDessertItemIconAssets() {
+  return DESSERT_ITEM_ICON_ASSET_FILE_NAMES.map((fileName) => {
+    const match = fileName.match(/^accessory_dessert_t(\d+)_(.+)\.png$/)
+    const tier = match?.[1] ? Number(match[1]) : 0
+    const itemKey = String(match?.[2] || '').trim()
+
+    return {
+      type: 'Dessert',
+      tier,
+      itemKey,
+      relativePath: `./assets/Accessory/${fileName}`,
+    }
+  }).filter((entry) => entry.tier > 0 && entry.itemKey)
+}
+
+const DESSERT_ITEM_ICON_ASSETS = buildDessertItemIconAssets()
+
+function buildCloakItemIconAssets() {
+  return CLOAK_ITEM_ICON_ASSET_FILE_NAMES.map((fileName) => {
+    const match = fileName.match(/^accessory_cloak_t(\d+)_(.+)\.png$/)
+    const tier = match?.[1] ? Number(match[1]) : 0
+    const itemKey = String(match?.[2] || '').trim()
+
+    return {
+      type: 'Cloak',
+      tier,
+      itemKey,
+      relativePath: `./assets/Accessory/${fileName}`,
+    }
+  }).filter((entry) => entry.tier > 0 && entry.itemKey)
+}
+
+const CLOAK_ITEM_ICON_ASSETS = buildCloakItemIconAssets()
+
 const ACCESSORY_ICON_BASENAME_OVERRIDES = new Map([
   ['accessory_amulet_t16_fellspectator.png', 'accessory_amulet_t16_fell_spectator.png'],
   ['accessory_amulet_t16_universaltranslator.png', 'accessory_amulet_t16_universal_translator.png'],
@@ -551,4 +647,6 @@ export const AURASONG_AMULET_ITEM_ICON_ASSETS = AURASONG_AMULET_ITEM_ICON_ASSETS
   MEAL_ITEM_ICON_ASSETS,
   HERBAL_MEDICINE_ITEM_ICON_ASSETS,
   FAMILIAR_ITEM_ICON_ASSETS,
+  DESSERT_ITEM_ICON_ASSETS,
+  CLOAK_ITEM_ICON_ASSETS,
 )

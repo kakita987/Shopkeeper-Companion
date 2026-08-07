@@ -86,6 +86,16 @@ test('getBlueprintItemIconPath uses mapped item icons for accessory types and bl
   }), /\/assets\/Accessory\/accessory_familiar_t3_troublin\.png$/)
 
   assert.match(getBlueprintItemIconPath({
+    classification: { type: 'Dessert', group: 'Accessories' },
+    iconMapping: { itemIconRelativePath: './assets/Accessory/accessory_dessert_t3_cookie.png' },
+  }), /\/assets\/Accessory\/accessory_dessert_t3_cookie\.png$/)
+
+  assert.match(getBlueprintItemIconPath({
+    classification: { type: 'Cloak', group: 'Accessories' },
+    iconMapping: { itemIconRelativePath: './assets/Accessory/accessory_cloak_t3_adventurercloak.png' },
+  }), /\/assets\/Accessory\/accessory_cloak_t3_adventurercloak\.png$/)
+
+  assert.match(getBlueprintItemIconPath({
     name: 'Scroll of Cleansing',
     classification: { type: 'Spell', group: 'Accessories' },
     structuredData: { meta: { tier: 1 } },
@@ -126,6 +136,18 @@ test('getBlueprintItemIconPath uses mapped item icons for accessory types and bl
     classification: { type: 'Familiar', group: 'Accessories' },
     structuredData: { meta: { tier: 3 } },
   }), /\/assets\/Accessory\/accessory_familiar_t3_troublin\.png$/)
+
+  assert.match(getBlueprintItemIconPath({
+    name: 'Cookie',
+    classification: { type: 'Dessert', group: 'Accessories' },
+    structuredData: { meta: { tier: 3 } },
+  }), /\/assets\/Accessory\/accessory_dessert_t3_cookie\.png$/)
+
+  assert.match(getBlueprintItemIconPath({
+    name: 'Adventurer Cloak',
+    classification: { type: 'Cloak', group: 'Accessories' },
+    structuredData: { meta: { tier: 3 } },
+  }), /\/assets\/Accessory\/accessory_cloak_t3_adventurercloak\.png$/)
 
   assert.equal(getBlueprintItemIconPath({
     classification: { type: 'Helmet', group: 'Armor' },
