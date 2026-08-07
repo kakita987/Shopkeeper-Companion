@@ -2416,6 +2416,13 @@ body.theme-dark .import-form button,
   height: 100%;
 }
 
+.icon-slot img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
 .group-summary-icon {
   width: 1.4rem;
   height: 1.4rem;

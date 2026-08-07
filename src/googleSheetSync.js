@@ -187,9 +187,14 @@ function getBlueprintTypeOrderIndex(groupTitle, blueprintType) {
   return index === undefined ? Number.MAX_SAFE_INTEGER : index
 }
 
+function getTierOrderIndex(value) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : Number.MAX_SAFE_INTEGER
+}
+
 function isBlueprintRowsOutOfOrder(headerRow = [], dataRows = [], groupTitle = '') {
   let previousTypeIndex = -1
-  let previousBlueprintName = ''
+  let previousTierIndex = -1
 
   for (const row of dataRows) {
     if (!Array.isArray(row)) {
@@ -203,17 +208,24 @@ function isBlueprintRowsOutOfOrder(headerRow = [], dataRows = [], groupTitle = '
 
     const blueprintType = getRowValue(row, headerRow, ['Type', 'Category', 'Item Type', 'Item Category'])
     const typeIndex = getBlueprintTypeOrderIndex(groupTitle, blueprintType)
+    const tierValue = getRowValue(row, headerRow, ['Tier', 'Rank', 'Level'])
+    const tierIndex = getTierOrderIndex(tierValue)
 
     if (typeIndex < previousTypeIndex) {
       return true
     }
 
-    if (typeIndex === previousTypeIndex && blueprintName.localeCompare(previousBlueprintName) < 0) {
+    if (typeIndex !== previousTypeIndex) {
+      previousTypeIndex = typeIndex
+      previousTierIndex = tierIndex
+      continue
+    }
+
+    if (tierIndex < previousTierIndex) {
       return true
     }
 
-    previousTypeIndex = typeIndex
-    previousBlueprintName = blueprintName
+    previousTierIndex = tierIndex
   }
 
   return false
@@ -457,6 +469,22 @@ function getBlueprintItemType(item = {}) {
   ).trim()
 }
 
+function getBlueprintItemTier(item = {}) {
+  return getTierOrderIndex(item?.structuredData?.meta?.tier)
+}
+
+function getBlueprintItemSourceOrder(item = {}, fallbackIndex = 0) {
+  if (typeof item?.sourceIndex === 'number') {
+    return item.sourceIndex
+  }
+
+  if (typeof item?.rowIndex === 'number') {
+    return item.rowIndex
+  }
+
+  return fallbackIndex
+}
+
 function sortBlueprintItemsForWorkbook(blueprintItems = []) {
   return blueprintItems
     .map((item, index) => ({ item, index }))
@@ -481,14 +509,15 @@ function sortBlueprintItemsForWorkbook(blueprintItems = []) {
         return leftTypeIndex - rightTypeIndex
       }
 
-      const leftName = String(left.item?.name || '')
-      const rightName = String(right.item?.name || '')
-      const nameCompare = leftName.localeCompare(rightName)
-      if (nameCompare !== 0) {
-        return nameCompare
+      const leftTierIndex = getBlueprintItemTier(left.item)
+      const rightTierIndex = getBlueprintItemTier(right.item)
+      if (leftTierIndex !== rightTierIndex) {
+        return leftTierIndex - rightTierIndex
       }
 
-      return left.index - right.index
+      const leftSourceOrder = getBlueprintItemSourceOrder(left.item, left.index)
+      const rightSourceOrder = getBlueprintItemSourceOrder(right.item, right.index)
+      return leftSourceOrder - rightSourceOrder
     })
     .map((entry) => entry.item)
 }

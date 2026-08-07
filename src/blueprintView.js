@@ -1,5 +1,5 @@
 import { createIcons } from 'lucide'
-import { LUCIDE_ICONS, getBlueprintItemIconName, getGroupIconName, getTypeIconName } from './blueprintIcons.js'
+import { LUCIDE_ICONS, getBlueprintItemIconPath, getGroupIconPath, getTypeIconPath } from './blueprintIcons.js'
 import { cleanText, escapeHtml } from './textUtils.js'
 
 export function renderLucideIcons(root = document) {
@@ -462,7 +462,7 @@ export function renderPreview(items = [], {
     const summary = document.createElement('summary')
     summary.innerHTML = `
       <span class="group-summary-title">
-        <span class="icon-slot group-summary-icon" aria-hidden="true"><i data-lucide="${escapeHtml(getGroupIconName(group.title))}"></i></span>
+        <span class="icon-slot group-summary-icon" aria-hidden="true">${getGroupIconPath(group.title) ? `<img src="${escapeHtml(getGroupIconPath(group.title))}" alt="" aria-hidden="true" />` : ''}</span>
         <span>${escapeHtml(group.title)}</span>
       </span>
       <span class="group-count">${group.totalItems}</span>
@@ -486,7 +486,7 @@ export function renderPreview(items = [], {
       const subSummary = document.createElement('summary')
       subSummary.innerHTML = `
         <span class="group-summary-title">
-          <span class="icon-slot group-summary-icon" aria-hidden="true"><i data-lucide="${escapeHtml(getTypeIconName(typeGroup.title, group.title))}"></i></span>
+          <span class="icon-slot group-summary-icon" aria-hidden="true">${getTypeIconPath(typeGroup.title) ? `<img src="${escapeHtml(getTypeIconPath(typeGroup.title))}" alt="" aria-hidden="true" />` : ''}</span>
           <span>${escapeHtml(typeGroup.title)}</span>
         </span>
         <span class="group-count">${typeGroup.items.length}</span>
@@ -503,7 +503,7 @@ export function renderPreview(items = [], {
         listItem.innerHTML = `
           <div class="item-copy">
             <div class="item-title-row">
-              <span class="icon-slot item-card-icon" aria-hidden="true"><i data-lucide="${escapeHtml(getBlueprintItemIconName(item))}"></i></span>
+              <span class="icon-slot item-card-icon" aria-hidden="true">${getBlueprintItemIconPath(item) ? `<img src="${escapeHtml(getBlueprintItemIconPath(item))}" alt="" aria-hidden="true" />` : ''}</span>
               <span class="item-name">${escapeHtml(item.name)}</span>
               <span class="item-tier-badge">${escapeHtml(tierText)}</span>
             </div>

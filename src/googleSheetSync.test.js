@@ -133,6 +133,47 @@ test('buildWorkbookPayload follows configured accessories order for Quiver', () 
   assert.equal(payload.Accessories[3][0], 'Archer Idol')
 })
 
+test('buildWorkbookPayload sorts by type then tier then source order (never alphabetically)', () => {
+  const payload = buildWorkbookPayload({
+    settingsRows: [],
+    savedViewRows: [],
+    blueprintItems: [
+      {
+        name: 'Zeta Sword T1',
+        sourceIndex: 0,
+        classification: { group: 'Weapons', type: 'Sword' },
+        structuredData: { meta: { name: 'Zeta Sword T1', type: 'Sword', tier: 1 } },
+      },
+      {
+        name: 'Alpha Sword T1',
+        sourceIndex: 1,
+        classification: { group: 'Weapons', type: 'Sword' },
+        structuredData: { meta: { name: 'Alpha Sword T1', type: 'Sword', tier: 1 } },
+      },
+      {
+        name: 'Beta Sword T2',
+        sourceIndex: 2,
+        classification: { group: 'Weapons', type: 'Sword' },
+        structuredData: { meta: { name: 'Beta Sword T2', type: 'Sword', tier: 2 } },
+      },
+      {
+        name: 'Gamma Axe T1',
+        sourceIndex: 3,
+        classification: { group: 'Weapons', type: 'Axe' },
+        structuredData: { meta: { name: 'Gamma Axe T1', type: 'Axe', tier: 1 } },
+      },
+    ],
+    blueprintProgressByName: {},
+  })
+
+  // Weapons type order in blueprintTypeOrder is Sword before Axe.
+  // Within Sword: tier 1 before tier 2, and same-tier keeps source order.
+  assert.equal(payload.Weapons[1][0], 'Zeta Sword T1')
+  assert.equal(payload.Weapons[2][0], 'Alpha Sword T1')
+  assert.equal(payload.Weapons[3][0], 'Beta Sword T2')
+  assert.equal(payload.Weapons[4][0], 'Gamma Axe T1')
+})
+
 test('parseWorkbookBlueprintProgress merges workbook rows by blueprint name and preserves existing progress', () => {
   const progress = parseWorkbookBlueprintProgress({
     Weapons: [
@@ -339,6 +380,45 @@ test('readSyncTables flags order normalization when blueprint rows are out of co
             ['Blueprint Name', 'Type', 'Tier', 'Owned', 'Starforge', 'Milestones', 'Improve'],
             ['Wizard Wand', 'Wand', '1', 'TRUE', 'FALSE', '0', '0'],
             ['Hunting Bow', 'Bow', '1', 'TRUE', 'FALSE', '0', '0'],
+          ],
+        }),
+      }
+    }
+
+    return {
+      ok: true,
+      status: 200,
+      headers: contentTypeHeaders,
+      json: async () => ({ values: [] }),
+    }
+  }
+
+  try {
+    const tables = await readSyncTables('token', 'spreadsheet-id')
+    assert.equal(tables.requiresBlueprintSchemaMigration, false)
+    assert.equal(tables.requiresBlueprintOrderNormalization, true)
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('readSyncTables flags order normalization when tiers are out of order within the same type', async () => {
+  const originalFetch = global.fetch
+
+  global.fetch = async (url) => {
+    const decodedUrl = decodeURIComponent(String(url))
+    const contentTypeHeaders = { get: () => 'application/json' }
+
+    if (decodedUrl.includes("'Weapons'!A:ZZ")) {
+      return {
+        ok: true,
+        status: 200,
+        headers: contentTypeHeaders,
+        json: async () => ({
+          values: [
+            ['Blueprint Name', 'Type', 'Tier', 'Owned', 'Starforge', 'Milestones', 'Improve'],
+            ['Sword Tier 3', 'Sword', '3', 'TRUE', 'FALSE', '0', '0'],
+            ['Sword Tier 1', 'Sword', '1', 'TRUE', 'FALSE', '0', '0'],
           ],
         }),
       }

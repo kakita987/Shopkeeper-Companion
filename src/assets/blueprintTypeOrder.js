@@ -11,7 +11,7 @@ export const BLUEPRINT_GROUP_TYPE_ORDER = [
   },
   {
     group: 'Accessories',
-    types: ['Herbal Remedy', 'Potion', 'Spell', 'Shield', 'Cloak', 'Ring', 'Amulet', 'Familiar', 'Aurasong', 'Quiver', 'Idol', 'Meal', 'Dessert'],
+    types: ['Herbal Medicine', 'Potion', 'Spell', 'Shield', 'Cloak', 'Ring', 'Amulet', 'Familiar', 'Aurasong', 'Quiver', 'Idol', 'Meal', 'Dessert'],
   },
   {
     group: 'Enchantments',
