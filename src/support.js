@@ -1,6 +1,6 @@
 import './style.css'
 import { initAnalytics } from './analytics.js'
-import { initSettingsUi, applyTheme, applyFontPreference, getStoredTheme, getStoredFontPreference } from './settingsUi.js'
+import { initSettingsUi, applyTheme, applyFontPreference, applySizePreference, getStoredTheme, getStoredFontPreference, getStoredSizePreference } from './settingsUi.js'
 import { SETTINGS_GEAR_ICON_MARKUP } from './settingsGearIcon.js'
 import { ALLOWED_ATTACHMENT_MIME_TYPES, getSupportTicketType, MAX_ATTACHMENT_COUNT, MAX_ATTACHMENT_SIZE_BYTES, validateSupportTicketSubmission } from './supportTicketSchema.js'
 import { mountPageAdBanner } from './pageAdBanner.js'
@@ -258,6 +258,7 @@ function initializeSupportPage() {
   const closeSettingsButton = document.querySelector('#close-settings')
   const themeInputs = document.querySelectorAll('input[name="theme"]')
   const fontSelect = document.querySelector('#font-select')
+  const sizeSlider = document.querySelector('#size-slider')
   const formRootEl = document.querySelector('#support-form-root')
 
   if (settingsToggle) {
@@ -270,15 +271,18 @@ function initializeSupportPage() {
     closeSettingsButton,
     themeInputs,
     fontSelect,
+    sizeSlider,
     onThemeChange: (nextTheme) => {
       applyTheme(nextTheme, { themeInputs })
       mountPageAdBanner()
     },
     onFontChange: (nextFont) => applyFontPreference(nextFont, { fontSelect }),
+    onSizeChange: (nextSize) => applySizePreference(nextSize, { sizeSlider }),
   })
 
   applyTheme(getStoredTheme(), { themeInputs })
   applyFontPreference(getStoredFontPreference(), { fontSelect })
+  applySizePreference(getStoredSizePreference(), { sizeSlider })
   renderSupportForm(formRootEl)
   mountPageAdBanner()
   initAnalytics({ trackInitialView: true })
