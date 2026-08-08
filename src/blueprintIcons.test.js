@@ -42,8 +42,8 @@ test('icon path helpers return blank for unknown types or groups', () => {
 test('getBlueprintItemIconPath uses mapped item icons for accessory types and blanks when unmatched', () => {
   assert.match(getBlueprintItemIconPath({
     classification: { type: 'Amulet', group: 'Accessories' },
-    iconMapping: { itemIconRelativePath: './assets/Accessory/accessory_amulet_t2_pendant.png' },
-  }), /\/assets\/Accessory\/accessory_amulet_t2_pendant\.png$/)
+    iconMapping: { itemIconRelativePath: './assets/Accessory/accessory_amulet_t2_jade_pendant.png' },
+  }), /\/assets\/Accessory\/accessory_amulet_t2_jade_pendant\.png$/)
 
   assert.match(getBlueprintItemIconPath({
     classification: { type: 'Spell', group: 'Accessories' },
@@ -77,13 +77,23 @@ test('getBlueprintItemIconPath uses mapped item icons for accessory types and bl
 
   assert.match(getBlueprintItemIconPath({
     classification: { type: 'Herbal Medicine', group: 'Accessories' },
-    iconMapping: { itemIconRelativePath: './assets/Accessory/accessory_herbal_medicine_t2_sweetgrass.png' },
-  }), /\/assets\/Accessory\/accessory_herbal_medicine_t2_sweetgrass\.png$/)
+    iconMapping: { itemIconRelativePath: './assets/Accessory/accessory_herbal_medicine_t2_sweet_grass.png' },
+  }), /\/assets\/Accessory\/accessory_herbal_medicine_t2_sweet_grass\.png$/)
 
   assert.match(getBlueprintItemIconPath({
     classification: { type: 'Familiar', group: 'Accessories' },
     iconMapping: { itemIconRelativePath: './assets/Accessory/accessory_familiar_t3_troublin.png' },
   }), /\/assets\/Accessory\/accessory_familiar_t3_troublin\.png$/)
+
+  assert.match(getBlueprintItemIconPath({
+    classification: { type: 'Dessert', group: 'Accessories' },
+    iconMapping: { itemIconRelativePath: './assets/Accessory/accessory_dessert_t3_cookie_plate.png' },
+  }), /\/assets\/Accessory\/accessory_dessert_t3_cookie_plate\.png$/)
+
+  assert.match(getBlueprintItemIconPath({
+    classification: { type: 'Cloak', group: 'Accessories' },
+    iconMapping: { itemIconRelativePath: './assets/Accessory/accessory_cloak_t3_adventurer_cloak.png' },
+  }), /\/assets\/Accessory\/accessory_cloak_t3_adventurer_cloak\.png$/)
 
   assert.match(getBlueprintItemIconPath({
     name: 'Scroll of Cleansing',
@@ -119,13 +129,43 @@ test('getBlueprintItemIconPath uses mapped item icons for accessory types and bl
     name: 'Sweetgrass',
     classification: { type: 'Herbal Medicine', group: 'Accessories' },
     structuredData: { meta: { tier: 2 } },
-  }), /\/assets\/Accessory\/accessory_herbal_medicine_t2_sweetgrass\.png$/)
+  }), /\/assets\/Accessory\/accessory_herbal_medicine_t2_sweet_grass\.png$/)
+
+  assert.match(getBlueprintItemIconPath({
+    name: 'Jade Pendant',
+    classification: { type: 'Amulet', group: 'Accessories' },
+    structuredData: { meta: { tier: 2 } },
+  }), /\/assets\/Accessory\/accessory_amulet_t2_jade_pendant\.png$/)
+
+  assert.match(getBlueprintItemIconPath({
+    name: 'Moon Powder',
+    classification: { type: 'Herbal Medicine', group: 'Accessories' },
+    structuredData: { meta: { tier: 3 } },
+  }), /\/assets\/Accessory\/accessory_herbal_medicine_t3_moon_powder\.png$/)
+
+  assert.match(getBlueprintItemIconPath({
+    name: 'Magical Mistletoe',
+    classification: { type: 'Herbal Medicine', group: 'Accessories' },
+    structuredData: { meta: { tier: 3 } },
+  }), /\/assets\/Accessory\/accessory_herbal_medicine_t3_magical_mistletoe\.png$/)
 
   assert.match(getBlueprintItemIconPath({
     name: 'Troublin',
     classification: { type: 'Familiar', group: 'Accessories' },
     structuredData: { meta: { tier: 3 } },
   }), /\/assets\/Accessory\/accessory_familiar_t3_troublin\.png$/)
+
+  assert.match(getBlueprintItemIconPath({
+    name: 'Cookie Plate',
+    classification: { type: 'Dessert', group: 'Accessories' },
+    structuredData: { meta: { tier: 3 } },
+  }), /\/assets\/Accessory\/accessory_dessert_t3_cookie_plate\.png$/)
+
+  assert.match(getBlueprintItemIconPath({
+    name: 'Adventurer Cloak',
+    classification: { type: 'Cloak', group: 'Accessories' },
+    structuredData: { meta: { tier: 3 } },
+  }), /\/assets\/Accessory\/accessory_cloak_t3_adventurer_cloak\.png$/)
 
   assert.equal(getBlueprintItemIconPath({
     classification: { type: 'Helmet', group: 'Armor' },
@@ -136,4 +176,18 @@ test('getBlueprintItemIconPath uses mapped item icons for accessory types and bl
     classification: { type: 'Aurasong', group: 'Accessories' },
     iconMapping: { itemIconRelativePath: '' },
   }), '')
+
+  assert.match(getBlueprintItemIconPath({
+    name: 'Scroll of Cleansing',
+    classification: { type: 'Spell', group: 'Accessories' },
+    structuredData: { meta: { tier: 1 } },
+    iconMapping: { itemIconRelativePath: './assets/Accessory/accessory_spell_t1_nonexistent.png' },
+  }), /\/assets\/Accessory\/accessory_spell_t1_scroll_of_cleansing\.png$/)
+
+  const gauntletFallbackPath = getBlueprintItemIconPath({
+    name: 'Berserker Gauntlets',
+    classification: { type: 'Gauntlets', group: 'Armor' },
+    structuredData: { meta: { tier: 12 } },
+  })
+  assert.equal(gauntletFallbackPath, '', 'assets without a tier segment in their filename are ignored')
 })

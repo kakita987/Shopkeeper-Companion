@@ -122,6 +122,17 @@ test('buildBlueprintItems maps Herbal Medicine to canonical Herbal Medicine type
   assert.equal(tabularItems[0].classification.type, 'Herbal Medicine')
 })
 
+test('buildBlueprintItems maps Clothing to canonical Clothes type', () => {
+  const tabularItems = buildBlueprintItems(
+    ['Name', 'Type', 'Tier'],
+    [['Wizard Outfit', 'Clothing', '6']],
+    [],
+  )
+
+  assert.equal(tabularItems[0].classification.group, 'Armor')
+  assert.equal(tabularItems[0].classification.type, 'Clothes')
+})
+
 test('buildBlueprintItems excludes moonstones and runestones from import data', () => {
   const tabularItems = buildBlueprintItems(
     ['Name', 'Type', 'Tier'],

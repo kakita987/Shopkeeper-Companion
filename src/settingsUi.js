@@ -11,7 +11,6 @@ export function initSettingsUi({
   onFontChange,
   onEscape,
 } = {}) {
-  const resolvedThemeInputs = Array.from(themeInputs || [])
   const settingsCard = settingsPanel ? settingsPanel.querySelector('.settings-card') : null
   const mobileLayoutQuery = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
     ? window.matchMedia('(max-width: 700px)')
@@ -105,7 +104,7 @@ export function initSettingsUi({
     closeSettingsButton.addEventListener('click', closeSettings)
   }
 
-  resolvedThemeInputs.forEach((input) => {
+  Array.from(themeInputs || []).forEach((input) => {
     input.addEventListener('change', () => {
       if (typeof onThemeChange === 'function') {
         onThemeChange(input.value)

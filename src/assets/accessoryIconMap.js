@@ -1,13 +1,13 @@
 import { getTypeIconPath } from '../blueprintIcons.js'
+import { normalizeKeyPart } from '../iconKey.js'
 import { BLUEPRINT_GROUP_TYPE_ORDER } from './blueprintTypeOrder.js'
-import { AURASONG_AMULET_ITEM_ICON_ASSETS } from './accessoryItemIconAssets.js'
+import { ACCESSORY_ITEM_ICON_ASSETS } from './accessoryItemIconInventory.js'
 
 const TARGET_GROUP = 'Accessories'
-const TARGET_TYPES = ['Amulet', 'Aurasong', 'Spell', 'Shield', 'Quiver', 'Potion', 'Ring', 'Meal', 'Herbal Medicine', 'Familiar']
+const TARGET_TYPES = ['Amulet', 'Aurasong', 'Spell', 'Shield', 'Quiver', 'Potion', 'Ring', 'Meal', 'Herbal Medicine', 'Familiar', 'Dessert', 'Cloak']
 const TARGET_TYPE_SET = new Set(TARGET_TYPES)
 const ACCESSORY_TYPE_KEYS = new Set(['accessory', 'accessories'])
 const ACCESSORY_TYPE_ORDER = buildAccessoryTypeOrder()
-const COMMON_WORDS = new Set(['a', 'an', 'the', 'of'])
 const ITEM_ICON_INDEX = buildItemIconIndex()
 const ITEM_ICON_TIER_INDEX = buildItemIconTierIndex()
 
@@ -78,40 +78,48 @@ function getCellValue(row, index) {
 
 function resolveTargetType(type, name = '', tier = null) {
   const normalized = String(type || '').trim().toLowerCase()
-  if (normalized === 'amulet' || normalized === 'amulets') {
+  if (normalized === 'amulet') {
     return 'Amulet'
   }
 
-  if (normalized === 'aurasong' || normalized === 'aurasongs') {
+  if (normalized === 'aurasong') {
     return 'Aurasong'
   }
 
-  if (normalized === 'spell' || normalized === 'spells') {
+  if (normalized === 'spell') {
     return 'Spell'
   }
 
-  if (normalized === 'quiver' || normalized === 'quivers') {
+  if (normalized === 'quiver') {
     return 'Quiver'
   }
 
-  if (normalized === 'potion' || normalized === 'potions') {
+  if (normalized === 'potion') {
     return 'Potion'
   }
 
-  if (normalized === 'ring' || normalized === 'rings') {
+  if (normalized === 'ring') {
     return 'Ring'
   }
 
-  if (normalized === 'meal' || normalized === 'meals') {
+  if (normalized === 'meal') {
     return 'Meal'
   }
 
-  if (normalized === 'herbal medicine' || normalized === 'herbal medicines' || normalized === 'herbal remedy') {
+  if (normalized === 'herbal medicine') {
     return 'Herbal Medicine'
   }
 
-  if (normalized === 'familiar' || normalized === 'familiars') {
+  if (normalized === 'familiar') {
     return 'Familiar'
+  }
+
+  if (normalized === 'dessert') {
+    return 'Dessert'
+  }
+
+  if (normalized === 'cloak') {
+    return 'Cloak'
   }
 
   if (!ACCESSORY_TYPE_KEYS.has(normalized)) {
@@ -249,31 +257,22 @@ function inferTypeBySimilarity(name, tier = null) {
 }
 
 function normalizeNameForKey(name) {
-  return String(name || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '')
+  return normalizeKeyPart(name)
 }
 
 function buildNameCandidates(name) {
-  const normalized = String(name || '').trim().toLowerCase()
-  if (!normalized) {
+  const compact = normalizeNameForKey(name)
+  if (!compact) {
     return []
   }
 
-  const compact = normalized.replace(/[^a-z0-9]/g, '')
-  const tokens = normalized
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean)
-
-  const noStopwords = tokens
-    .filter((token) => !COMMON_WORDS.has(token))
-    .join('')
-
-  return [...new Set([compact, noStopwords].filter(Boolean))]
+  return [compact]
 }
 
 function buildItemIconIndex() {
   const index = new Map()
 
-  AURASONG_AMULET_ITEM_ICON_ASSETS.forEach((entry) => {
+  ACCESSORY_ITEM_ICON_ASSETS.forEach((entry) => {
     const type = String(entry?.type || '').trim()
     const tier = toTierNumber(entry?.tier)
     const itemKey = String(entry?.itemKey || '').trim()
@@ -293,7 +292,7 @@ function buildItemIconIndex() {
 function buildItemIconTierIndex() {
   const index = new Map()
 
-  AURASONG_AMULET_ITEM_ICON_ASSETS.forEach((entry) => {
+  ACCESSORY_ITEM_ICON_ASSETS.forEach((entry) => {
     const type = String(entry?.type || '').trim()
     const tier = toTierNumber(entry?.tier)
     const relativePath = String(entry?.relativePath || '').trim()
@@ -324,17 +323,6 @@ function getMappedItemIconRelativePath(name, type, tier) {
         return match
       }
     }
-  }
-
-  const tierKey = `${type}::${tier}`
-  const tierMatches = ITEM_ICON_TIER_INDEX.get(tierKey) || []
-  if (tierMatches.length === 1) {
-    return tierMatches[0].relativePath
-  }
-
-  const bestTierEntry = pickBestEntryByName(name, tierMatches)
-  if (bestTierEntry?.relativePath) {
-    return bestTierEntry.relativePath
   }
 
   return ''

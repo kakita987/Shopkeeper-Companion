@@ -66,20 +66,6 @@ export function getCollectionBookMatchDescription(state = 'completed') {
     : 'Completed checks finished qualities.'
 }
 
-function parseCollectionBookCriteria(value) {
-  const raw = cleanText(value)
-  if (!raw) {
-    return []
-  }
-
-  try {
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return raw.split(',').map((entry) => cleanText(entry.toLowerCase())).filter(Boolean)
-  }
-}
-
 export function parseSavedViewsRows(rows = []) {
   return rows
     .map((row) => {
@@ -98,7 +84,19 @@ export function parseSavedViewsRows(rows = []) {
           ownership: cleanText(row?.[3]) || 'any',
           inventory: cleanText(row?.[4]) || 'any',
           mastered: cleanText(row?.[5]) || 'any',
-          collectionBook: parseCollectionBookCriteria(row?.[6]),
+          collectionBook: (() => {
+            const raw = cleanText(row?.[6])
+            if (!raw) {
+              return []
+            }
+
+            try {
+              const parsed = JSON.parse(raw)
+              return Array.isArray(parsed) ? parsed : []
+            } catch {
+              return raw.split(',').map((entry) => cleanText(entry.toLowerCase())).filter(Boolean)
+            }
+          })(),
         }),
       }
     })
