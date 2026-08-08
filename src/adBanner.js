@@ -8,11 +8,7 @@ const ADS_VISIBLE = import.meta.env.VITE_SHOW_ADS === 'true'
 let ethicalAdsScriptPromise = null
 
 function syncAdsVisibilityClass() {
-  if (!document.body) {
-    return
-  }
-
-  document.body.classList.toggle('ads-disabled', !ADS_VISIBLE)
+  document.body?.classList.toggle('ads-disabled', !ADS_VISIBLE)
 }
 
 function loadEthicalAdsScript() {

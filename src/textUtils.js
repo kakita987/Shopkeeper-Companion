@@ -8,11 +8,7 @@ export function escapeHtml(value) {
 }
 
 export function cleanText(value) {
-  if (value === null || value === undefined) {
-    return ''
-  }
-
-  const text = String(value).trim()
+  const text = value === null || value === undefined ? '' : String(value).trim()
   if (!text || text === '---') {
     return ''
   }
@@ -21,10 +17,10 @@ export function cleanText(value) {
 }
 
 export function toInventoryCount(value) {
-  const parsed = Number(value)
-  if (!Number.isFinite(parsed) || parsed < 0) {
+  const count = Number(value)
+  if (!Number.isFinite(count) || count < 0) {
     return 0
   }
 
-  return parsed
+  return count
 }

@@ -8,8 +8,14 @@ const GROUP_TYPE_LOOKUP = new Map(
 )
 
 const TYPE_ALIASES = new Map([
-  ['herbalremedy', 'Herbal Medicine'],
   ['herbalmedicine', 'Herbal Medicine'],
+  ['clothing', 'Clothes'],
+  ['clothings', 'Clothes'],
+  ['cloth', 'Clothes'],
+  ['garment', 'Clothes'],
+  ['garments', 'Clothes'],
+  ['raiment', 'Clothes'],
+  ['raiments', 'Clothes'],
 ])
 
 const EXCLUDED_TYPE_KEYS = new Set(['moonstone', 'moonstones', 'runestone', 'runestones'])

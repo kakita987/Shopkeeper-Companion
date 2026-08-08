@@ -965,7 +965,7 @@ export function buildSpreadsheetCreationPromptMessage(reason = 'new-user') {
   return 'A Google Drive sync sheet could not be found. Would you like to create one for backup and bulk editing?'
 }
 
-export async function createUserSyncSpreadsheet(accessToken, title = 'Shopkeeper Companion User Data') {
+async function createUserSyncSpreadsheet(accessToken, title = 'Shopkeeper Companion User Data') {
   const createdSpreadsheet = await requestSheetsApi('', accessToken, {
     method: 'POST',
     body: JSON.stringify({
@@ -1007,13 +1007,13 @@ async function moveSpreadsheetToFolder(accessToken, spreadsheetId, folderId) {
   })
 }
 
-export async function createUserSyncSpreadsheetInFolder(accessToken, folderId, title = 'Shopkeeper Companion User Data') {
+async function createUserSyncSpreadsheetInFolder(accessToken, folderId, title = 'Shopkeeper Companion User Data') {
   const createdSpreadsheet = await createUserSyncSpreadsheet(accessToken, title)
   await moveSpreadsheetToFolder(accessToken, createdSpreadsheet.spreadsheetId, folderId)
   return createdSpreadsheet
 }
 
-export function buildSpreadsheetUrl(spreadsheetId) {
+function buildSpreadsheetUrl(spreadsheetId) {
   return `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`
 }
 
@@ -1182,7 +1182,7 @@ async function trimWorkbookColumns(accessToken, spreadsheetId, sheets = []) {
   })
 }
 
-export async function ensureSheetsAndHeaders(accessToken, spreadsheetId, options = {}) {
+async function ensureSheetsAndHeaders(accessToken, spreadsheetId, options = {}) {
   const spreadsheet = await requestSheetsApi(
     `/${spreadsheetId}?fields=sheets(properties(sheetId,title,index,gridProperties(columnCount)))`,
     accessToken
