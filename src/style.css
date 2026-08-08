@@ -8,6 +8,17 @@
   --font-body: 'Philosopher', 'Georgia', 'Times New Roman', serif;
   --font-accent: 'Bokor', 'Philosopher', serif;
   --font-display: 'Bokor', 'Philosopher', serif;
+  --blueprint-grid-columns: 4;
+  --blueprint-card-min-width: 207px;
+  --blueprint-card-min-height: 158px;
+  --blueprint-card-padding-top: 6px;
+  --blueprint-card-padding-inline: 6px;
+  --blueprint-card-padding-bottom: 4px;
+  --blueprint-card-content-gap: 8px;
+  --blueprint-card-icon-size: 4.5rem;
+  --blueprint-card-title-size: 1.15rem;
+  --blueprint-card-title-max-width: 175px;
+  font-size: 118.75%;
   font-family: var(--font-body);
   line-height: 1.5;
   font-weight: 400;
@@ -15,6 +26,55 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: font-size 180ms ease-out;
+}
+
+:root[data-size-preference='small'] {
+  --blueprint-grid-columns: 5;
+  --blueprint-card-min-width: 184px;
+  --blueprint-card-min-height: 110px;
+  --blueprint-card-padding-top: 5px;
+  --blueprint-card-padding-inline: 5px;
+  --blueprint-card-padding-bottom: 3px;
+  --blueprint-card-content-gap: 6px;
+  --blueprint-card-icon-size: 3.5rem;
+  --blueprint-card-title-size: 1rem;
+  --blueprint-card-title-max-width: 130px;
+  font-size: 100%;
+}
+
+:root[data-size-preference='medium'] {
+  --blueprint-grid-columns: 4;
+  --blueprint-card-min-width: 207px;
+  --blueprint-card-min-height: 158px;
+  --blueprint-card-padding-top: 6px;
+  --blueprint-card-padding-inline: 6px;
+  --blueprint-card-padding-bottom: 4px;
+  --blueprint-card-content-gap: 8px;
+  --blueprint-card-icon-size: 4.5rem;
+  --blueprint-card-title-size: 1.15rem;
+  --blueprint-card-title-max-width: 175px;
+  font-size: 118.75%;
+}
+
+:root[data-size-preference='large'] {
+  --blueprint-grid-columns: 3;
+  --blueprint-card-min-width: 230px;
+  --blueprint-card-min-height: 210px;
+  --blueprint-card-padding-top: 8px;
+  --blueprint-card-padding-inline: 8px;
+  --blueprint-card-padding-bottom: 5px;
+  --blueprint-card-content-gap: 12px;
+  --blueprint-card-icon-size: 5.5rem;
+  --blueprint-card-title-size: 1.3rem;
+  --blueprint-card-title-max-width: 230px;
+  font-size: 137.5%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    transition: none;
+  }
 }
 
 /* Final text pass: keep light mode navy and dark mode cream across all UI text. */
@@ -420,6 +480,7 @@ body.theme-dark .top-tab.is-active,
 }
 
 .settings-panel {
+  --settings-panel-gutter: clamp(10px, 2vw, 16px);
   position: fixed;
   inset: 0;
   background: rgba(17, 24, 39, 0.45);
@@ -428,7 +489,7 @@ body.theme-dark .top-tab.is-active,
   gap: 14px;
   flex-wrap: nowrap;
   justify-content: flex-end;
-  padding: 16px;
+  padding: var(--settings-panel-gutter);
   overflow-y: auto;
   z-index: 10;
   opacity: 0;
@@ -1810,21 +1871,33 @@ body.theme-dark .inventory-field input,
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--blueprint-card-content-gap);
   margin-bottom: 0;
   width: 100%;
 }
 
 .item-name {
   font-weight: 700;
-  font-size: 1.15rem;
+  font-size: var(--blueprint-card-title-size);
   line-height: 1.1;
   text-align: center;
 }
 
+.blueprint-type > .blueprint-items > .blueprint-item:not(.saved-view-item) .item-name {
+  max-width: var(--blueprint-card-title-max-width);
+  overflow-wrap: break-word;
+}
+
+.blueprint-item .item-tier-badge {
+  position: absolute;
+  top: var(--blueprint-card-padding-top);
+  right: var(--blueprint-card-padding-inline);
+  z-index: 1;
+}
+
 .settings-card {
-  width: min(100%, 420px);
-  max-height: calc(100dvh - 32px);
+  width: min(100%, 480px);
+  max-height: calc(100dvh - var(--settings-panel-gutter) - var(--settings-panel-gutter));
   background: linear-gradient(170deg, #fbf2de 0%, #f2e2c4 100%);
   border-radius: 20px;
   padding: 20px;
@@ -1832,6 +1905,10 @@ body.theme-dark .inventory-field input,
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   box-shadow: 0 24px 60px rgba(17, 24, 39, 0.2);
+}
+
+:root[data-font-preference='default'] .settings-card {
+  font-size: calc(1rem - 1px);
 }
 
 body.theme-dark .settings-card,
@@ -1885,15 +1962,6 @@ body.theme-dark .settings-toggle-icon,
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .settings-panel {
-    justify-content: center;
-    padding: 10px;
-  }
-
-  .settings-card {
-    width: min(100%, 560px);
-    max-height: calc(100dvh - 20px);
-  }
 }
 
 body.settings-open .desktop-ad-rail,
@@ -1984,23 +2052,33 @@ body.theme-dark .item-name,
 
 .settings-section h3 {
   margin: 0 0 8px;
+  font-family: var(--font-accent);
   font-size: 1rem;
+  font-weight: 400;
+}
+
+:root[data-font-preference='default'] .settings-section h3 {
+  font-size: calc(1rem + 2px);
 }
 
 .settings-section--inline {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(60px, 1fr) minmax(225px, 290px) minmax(60px, 1fr);
   align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
 }
 
 .settings-section--inline h3 {
   margin: 0;
-  flex-shrink: 0;
+}
+
+.settings-section--inline > :last-child {
+  grid-column: 2;
+  justify-self: stretch;
 }
 
 .font-select {
-  width: auto;
+  width: 100%;
+  min-width: 0;
   border: 1px solid #cbd5e1;
   border-radius: 12px;
   padding: 9px 38px 9px 12px;
@@ -2038,8 +2116,11 @@ body.theme-dark .kofi-support-button,
 
 .theme-options {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  gap: 8px 4px;
+  width: 100%;
+  min-width: 0;
 }
 
 .theme-options label {
@@ -2047,6 +2128,146 @@ body.theme-dark .kofi-support-button,
   align-items: center;
   gap: 6px;
   font-weight: 500;
+}
+
+.size-slider-control {
+  --size-progress: 50%;
+  --size-track-filled: #8a6535;
+  --size-track-empty: rgba(99, 70, 32, 0.28);
+  --size-tick-color: #634620;
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+}
+
+.size-slider-control::before {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  top: 50%;
+  right: 8px;
+  left: 8px;
+  height: 0.35rem;
+  transform: translateY(-50%);
+  background: linear-gradient(to right, var(--size-track-filled) 0 var(--size-progress), var(--size-track-empty) var(--size-progress) 100%);
+  pointer-events: none;
+}
+
+@media (max-width: 419px) {
+  .settings-section--inline {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 8px;
+  }
+
+  .settings-section--inline > :last-child {
+    grid-column: 1;
+    width: min(100%, 290px);
+    justify-self: center;
+  }
+}
+
+@media (max-width: 379px) {
+  .settings-panel {
+    padding-inline: 0;
+  }
+}
+
+.size-slider {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  background: transparent;
+  cursor: grab;
+}
+
+.size-slider::-webkit-slider-runnable-track {
+  height: 0.35rem;
+  background: transparent;
+}
+
+.size-slider::-webkit-slider-thumb {
+  box-sizing: border-box;
+  width: 14px;
+  height: 20px;
+  margin-top: calc((0.35rem - 20px) / 2);
+  -webkit-appearance: none;
+  appearance: none;
+  border: 2px solid #174f48;
+  border-radius: 999px;
+  background: #3f9b89;
+  box-shadow: 0 1px 3px rgba(23, 79, 72, 0.4);
+}
+
+.size-slider::-moz-range-track,
+.size-slider::-moz-range-progress {
+  height: 0.35rem;
+  border: 0;
+  background: transparent;
+}
+
+.size-slider::-moz-range-thumb {
+  box-sizing: border-box;
+  width: 14px;
+  height: 20px;
+  border: 2px solid #174f48;
+  border-radius: 999px;
+  background: #3f9b89;
+  box-shadow: 0 1px 3px rgba(23, 79, 72, 0.4);
+}
+
+.size-slider:active {
+  cursor: grabbing;
+}
+
+.size-slider-ticks {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  right: 8px;
+  left: 8px;
+  height: 0.65rem;
+  transform: translateY(-50%);
+  background-image:
+    linear-gradient(var(--size-tick-color), var(--size-tick-color)),
+    linear-gradient(var(--size-tick-color), var(--size-tick-color)),
+    linear-gradient(var(--size-tick-color), var(--size-tick-color));
+  background-position: left center, center, right center;
+  background-repeat: no-repeat;
+  background-size: 2px 100%, 2px 100%, 2px 100%;
+  pointer-events: none;
+}
+
+.size-slider-control:has(.size-slider:focus-visible) {
+  outline: 3px solid #2563eb;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+body.theme-dark .size-slider-control,
+:root[data-theme='dark'] .size-slider-control {
+  --size-track-filled: #d9c39f;
+  --size-track-empty: rgba(217, 195, 159, 0.3);
+  --size-tick-color: #fff2d9;
+}
+
+body.theme-dark .size-slider::-webkit-slider-thumb,
+:root[data-theme='dark'] .size-slider::-webkit-slider-thumb {
+  border-color: #b8f1e5;
+  background: #267565;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+}
+
+body.theme-dark .size-slider::-moz-range-thumb,
+:root[data-theme='dark'] .size-slider::-moz-range-thumb {
+  border-color: #b8f1e5;
+  background: #267565;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
 }
 
 .google-auth {
@@ -2437,8 +2658,8 @@ body.theme-dark .import-form button,
 }
 
 .item-card-icon {
-  width: clamp(4rem, 6vw, 5.25rem);
-  height: clamp(4rem, 6vw, 5.25rem);
+  width: var(--blueprint-card-icon-size);
+  height: var(--blueprint-card-icon-size);
   flex-shrink: 0;
   margin-right: 0;
 }
@@ -2480,17 +2701,18 @@ body.theme-dark .import-form button,
   margin: 0;
   padding: 0 12px 0 8px;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  grid-template-columns: repeat(var(--blueprint-grid-columns), minmax(0, 1fr));
   gap: 10px;
   background: inherit;
 }
 
 .blueprint-item {
+  position: relative;
   display: flex;
   align-items: stretch;
   justify-content: flex-start;
   gap: 12px;
-  padding: 12px;
+  padding: var(--blueprint-card-padding-top) var(--blueprint-card-padding-inline) var(--blueprint-card-padding-bottom);
   margin-right: 4px;
   border-radius: 14px;
   border: 1px solid rgba(183, 159, 121, 0.45);
@@ -2498,7 +2720,7 @@ body.theme-dark .import-form button,
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
   cursor: pointer;
   transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease, border-color 140ms ease;
-  min-height: 198px;
+  min-height: var(--blueprint-card-min-height);
   height: 100%;
 }
 

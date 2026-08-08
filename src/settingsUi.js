@@ -1,5 +1,27 @@
 const THEME_PREFERENCE_STORAGE_KEY = 'shopkeeper-theme'
 const FONT_PREFERENCE_STORAGE_KEY = 'shopkeeper-font-preference'
+const SIZE_PREFERENCE_STORAGE_KEY = 'shopkeeper-size-preference'
+const SIZE_PREFERENCES = ['small', 'medium', 'large']
+
+function getSizeIndex(sizePreference) {
+  const sizeIndex = SIZE_PREFERENCES.indexOf(sizePreference)
+  return sizeIndex === -1 ? 1 : sizeIndex
+}
+
+function updateSizeSliderProgress(sizeSlider, sliderValue) {
+  const normalizedValue = Math.min(2, Math.max(0, Number(sliderValue) || 0))
+  const progress = `${normalizedValue * 50}%`
+  sizeSlider.parentElement?.style?.setProperty('--size-progress', progress)
+}
+
+function getCommittedSizePreference(sizeSlider) {
+  const appliedSize = document.documentElement.dataset.sizePreference
+  if (SIZE_PREFERENCES.includes(appliedSize)) {
+    return appliedSize
+  }
+
+  return SIZE_PREFERENCES[Math.round(Number(sizeSlider.value))] || 'medium'
+}
 
 export function initSettingsUi({
   settingsToggle,
@@ -7,24 +29,17 @@ export function initSettingsUi({
   closeSettingsButton,
   themeInputs = [],
   fontSelect,
+  sizeSlider,
   onThemeChange,
   onFontChange,
+  onSizeChange,
   onEscape,
 } = {}) {
   const settingsCard = settingsPanel ? settingsPanel.querySelector('.settings-card') : null
-  const mobileLayoutQuery = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
-    ? window.matchMedia('(max-width: 700px)')
-    : null
 
   // Shifts the card so the close button lands exactly where the gear icon is on screen.
-  // Skipped on narrow viewports, where the panel is intentionally centered instead.
   function alignCardWithToggle() {
     if (!settingsCard || !settingsToggle || !closeSettingsButton) {
-      return
-    }
-
-    if (mobileLayoutQuery && mobileLayoutQuery.matches) {
-      settingsCard.style.transform = ''
       return
     }
 
@@ -33,13 +48,28 @@ export function initSettingsUi({
 
     const toggleRect = settingsToggle.getBoundingClientRect()
     const closeRect = closeSettingsButton.getBoundingClientRect()
+    const cardRect = settingsCard.getBoundingClientRect()
+    const panelRect = settingsPanel.getBoundingClientRect()
 
     if (toggleRect.width === 0 || closeRect.width === 0) {
       return
     }
 
-    const deltaX = toggleRect.right - closeRect.right
-    const deltaY = toggleRect.top - closeRect.top
+    const panelStyle = window.getComputedStyle(settingsPanel)
+    const panelLeft = panelRect.left + (Number.parseFloat(panelStyle.paddingLeft) || 0)
+    const panelRight = panelRect.right - (Number.parseFloat(panelStyle.paddingRight) || 0)
+    const panelTop = panelRect.top + (Number.parseFloat(panelStyle.paddingTop) || 0)
+    const panelBottom = panelRect.bottom - (Number.parseFloat(panelStyle.paddingBottom) || 0)
+    const requestedDeltaX = toggleRect.right - closeRect.right
+    const requestedDeltaY = toggleRect.top - closeRect.top
+    const deltaX = Math.min(
+      panelRight - cardRect.right,
+      Math.max(panelLeft - cardRect.left, requestedDeltaX)
+    )
+    const deltaY = Math.min(
+      panelBottom - cardRect.bottom,
+      Math.max(panelTop - cardRect.top, requestedDeltaY)
+    )
     settingsCard.style.transform = `translate(${deltaX}px, ${deltaY}px)`
   }
 
@@ -120,6 +150,42 @@ export function initSettingsUi({
     })
   }
 
+  if (sizeSlider) {
+    sizeSlider.addEventListener('input', () => {
+      const selectedIndex = Math.min(2, Math.max(0, Math.round(Number(sizeSlider.value) || 0)))
+      const committedSize = getCommittedSizePreference(sizeSlider)
+      const nextSize = SIZE_PREFERENCES[selectedIndex]
+      sizeSlider.value = String(selectedIndex)
+      updateSizeSliderProgress(sizeSlider, selectedIndex)
+
+      if (nextSize !== committedSize && typeof onSizeChange === 'function') {
+        onSizeChange(nextSize)
+      }
+    })
+
+    sizeSlider.addEventListener('keydown', (event) => {
+      const committedIndex = getSizeIndex(getCommittedSizePreference(sizeSlider))
+      let nextIndex = committedIndex
+
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowDown' || event.key === 'PageDown') {
+        nextIndex = Math.max(0, committedIndex - 1)
+      } else if (event.key === 'ArrowRight' || event.key === 'ArrowUp' || event.key === 'PageUp') {
+        nextIndex = Math.min(SIZE_PREFERENCES.length - 1, committedIndex + 1)
+      } else if (event.key === 'Home') {
+        nextIndex = 0
+      } else if (event.key === 'End') {
+        nextIndex = SIZE_PREFERENCES.length - 1
+      } else {
+        return
+      }
+
+      event.preventDefault()
+      if (nextIndex !== committedIndex && typeof onSizeChange === 'function') {
+        onSizeChange(SIZE_PREFERENCES[nextIndex])
+      }
+    })
+  }
+
   return {
     openSettings,
     closeSettings,
@@ -153,10 +219,29 @@ export function applyFontPreference(fontPreference, { fontSelect } = {}) {
   localStorage.setItem(FONT_PREFERENCE_STORAGE_KEY, resolvedFont)
 }
 
+export function applySizePreference(sizePreference, { sizeSlider } = {}) {
+  const resolvedSize = SIZE_PREFERENCES.includes(sizePreference) ? sizePreference : 'medium'
+  document.documentElement.dataset.sizePreference = resolvedSize
+
+  if (sizeSlider) {
+    const sizeIndex = getSizeIndex(resolvedSize)
+    sizeSlider.value = String(sizeIndex)
+    updateSizeSliderProgress(sizeSlider, sizeIndex)
+    sizeSlider.setAttribute('aria-valuetext', resolvedSize[0].toUpperCase() + resolvedSize.slice(1))
+  }
+
+  localStorage.setItem(SIZE_PREFERENCE_STORAGE_KEY, resolvedSize)
+}
+
 export function getStoredTheme() {
   return localStorage.getItem(THEME_PREFERENCE_STORAGE_KEY) || 'device'
 }
 
 export function getStoredFontPreference() {
   return localStorage.getItem(FONT_PREFERENCE_STORAGE_KEY) || 'default'
+}
+
+export function getStoredSizePreference() {
+  const storedSize = localStorage.getItem(SIZE_PREFERENCE_STORAGE_KEY)
+  return SIZE_PREFERENCES.includes(storedSize) ? storedSize : 'medium'
 }

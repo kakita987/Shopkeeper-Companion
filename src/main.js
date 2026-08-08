@@ -16,7 +16,7 @@ import {
 import { pickFolderFromDrive, pickSpreadsheetFromDrive } from './googleDrivePicker.js'
 import { getItem, setItem, removeItem } from './storage.js'
 import { getBlueprintStageValue, getBlueprintStageOptions } from './blueprintStageOptions.js'
-import { initSettingsUi, applyTheme as applySharedTheme, applyFontPreference as applySharedFontPreference, getStoredTheme as getSharedStoredTheme, getStoredFontPreference as getSharedStoredFontPreference } from './settingsUi.js'
+import { initSettingsUi, applyTheme as applySharedTheme, applyFontPreference as applySharedFontPreference, applySizePreference as applySharedSizePreference, getStoredTheme as getSharedStoredTheme, getStoredFontPreference as getSharedStoredFontPreference, getStoredSizePreference as getSharedStoredSizePreference } from './settingsUi.js'
 import { SETTINGS_GEAR_ICON_MARKUP } from './settingsGearIcon.js'
 import { escapeHtml, cleanText, toInventoryCount } from './textUtils.js'
 import { getBlueprintItemIconPath, getGroupIconPath, getTypeIconPath } from './blueprintIcons.js'
@@ -137,6 +137,14 @@ app.innerHTML = `
           </select>
         </section>
 
+        <section class="settings-section settings-section--inline">
+          <h3><label for="size-slider">Size</label></h3>
+          <div class="size-slider-control">
+            <input id="size-slider" class="size-slider" type="range" min="0" max="2" step="1" value="1" aria-valuetext="Medium" />
+            <span class="size-slider-ticks" aria-hidden="true"></span>
+          </div>
+        </section>
+
         <section class="settings-section">
           <h3>Sync your progress with Google Sheets</h3>
           <div id="google-auth" class="google-auth"></div>
@@ -159,7 +167,7 @@ app.innerHTML = `
           <h3>Attribution</h3>
           <details class="attribution-details">
             <summary>Icons</summary>
-            <p class="settings-copy"><a class="inline-link" href="https://lucide.dev/" target="_blank" rel="noopener noreferrer">Lucide Icons</a> provides the monochrome SVG icon set used throughout the app.</p>
+            <p class="settings-copy">Most game icons and artwork are sourced from Kabam's official Shop Titans Fan Kit. Additional interface and fallback icons are provided by <a class="inline-link" href="https://lucide.dev/" target="_blank" rel="noopener noreferrer">Lucide Icons</a>.</p>
           </details>
           <details class="attribution-details">
             <summary>Fonts</summary>
@@ -194,6 +202,7 @@ const settingsPanel = document.querySelector('#settings-panel')
 const closeSettingsButton = document.querySelector('#close-settings')
 const themeInputs = document.querySelectorAll('input[name="theme"]')
 const fontSelect = document.querySelector('#font-select')
+const sizeSlider = document.querySelector('#size-slider')
 const statusEl = document.querySelector('#status')
 const previewEl = document.querySelector('#preview')
 const savedViewsContentEl = document.querySelector('#saved-views-content')
@@ -268,8 +277,10 @@ const { closeSettings } = initSettingsUi({
   closeSettingsButton,
   themeInputs,
   fontSelect,
+  sizeSlider,
   onThemeChange: (nextTheme) => applyTheme(nextTheme),
   onFontChange: (nextFont) => applyFontPreference(nextFont),
+  onSizeChange: (nextSize) => applySizePreference(nextSize),
   onEscape: () => {
     if (blueprintOverlay.classList.contains('is-open')) {
       closeBlueprintOverlay()
@@ -307,6 +318,7 @@ window.addEventListener('hashchange', () => {
 
 applyTheme(getSharedStoredTheme())
 applyFontPreference(getSharedStoredFontPreference())
+applySizePreference(getSharedStoredSizePreference())
 initializeAdBanners()
 initializeKofiSupportButton()
 
@@ -2791,6 +2803,10 @@ function applyFontPreference(fontPreference, options = {}) {
   if (!skipSync) {
     scheduleGoogleSyncWrite()
   }
+}
+
+function applySizePreference(sizePreference) {
+  applySharedSizePreference(sizePreference, { sizeSlider })
 }
 
 async function resolveSpreadsheetUrl(rawUrl) {
