@@ -73,10 +73,9 @@ export function mountAdBanner(rootEl, options = {}) {
   const kofiLabel = getRandomTavernText()
   const themeHint = options.theme === 'dark' ? 'dark' : options.theme === 'light' ? 'light' : ''
   const themeAttributeMarkup = themeHint ? ` data-ea-theme="${themeHint}"` : ''
-  const hiddenBannerClass = ADS_VISIBLE ? '' : ' ad-banner-shell--hidden'
 
   rootEl.innerHTML = `
-    <div class="ad-banner-shell${hiddenBannerClass}" aria-live="polite">
+    <div class="ad-banner-shell" aria-live="polite">
       <p class="ad-banner-label">Sponsored</p>
       <div class="ad-banner-slot" data-ad-slot data-ea-publisher="${publisher}" data-ea-type="image" data-ea-style="stickybox"${themeAttributeMarkup}></div>
       <div class="ad-banner-fallback is-hidden" data-ad-fallback>

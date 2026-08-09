@@ -217,7 +217,7 @@ export function renderUpgradeSection(upgrades = {}, blueprintName = '', progress
 
     markup.push(`
       <div class="upgrade-group ${owned ? '' : 'is-locked'}">
-        <div class="upgrade-group-top">
+        <div class="upgrade-group-top upgrade-group-top--improve">
           <h5>Improve</h5>
           <label class="upgrade-stage-control">
             <span class="sr-only">Improve and Transcendence status</span>
@@ -237,35 +237,34 @@ export function renderUpgradeSection(upgrades = {}, blueprintName = '', progress
   return `<div class="upgrade-groups-grid">${markup.join('')}</div>`
 }
 
-export function renderInventorySection(progress = {}, { qualityLabels = ['Normal', 'Superior', 'Flawless', 'Epic', 'Legendary'], getQualityClass, escapeHtml: escapeMarkup } = {}) {
-  return qualityLabels.map((label) => {
-    const key = label.toLowerCase()
-    const value = progress.inventory?.[key] ?? 0
-    const qualityClass = getQualityClass(label)
-    return `
-      <label class="inventory-field inventory-color-only ${qualityClass}" title="${escapeMarkup(label)}">
-        <span class="inventory-quality-label">${escapeMarkup(label)}</span>
-        <input class="quality-input" aria-label="${escapeMarkup(label)} quality inventory" type="number" min="0" step="1" value="${value}" data-quality-key="${escapeMarkup(key)}" />
-      </label>
-    `
-  }).join('')
-}
-
-export function renderCollectionSection(progress = {}, isOwned = false, { getQualityClass, escapeHtml: escapeMarkup } = {}) {
-  const qualities = ['superior', 'flawless', 'epic', 'legendary']
+export function renderInventoryCollectionSection(progress = {}, isOwned = false, { qualityLabels = ['Normal', 'Superior', 'Flawless', 'Epic', 'Legendary'], getQualityClass, escapeHtml: escapeMarkup } = {}) {
   const collectionValues = progress.collectionBook || {}
 
   return `
-    <div class="collection-notice">${isOwned ? 'Checked = complete in your collection book.' : 'Set Owned to enable this section.'}</div>
-    <div class="inventory-grid">
-      ${qualities.map((key) => {
-        const label = key.charAt(0).toUpperCase() + key.slice(1)
+    <div class="collection-notice">${isOwned ? 'Check qualities completed in your collection book.' : 'Set Owned to update collection status.'}</div>
+    <div class="inventory-collection-grid">
+      ${qualityLabels.map((label) => {
+        const key = label.toLowerCase()
+        const value = progress.inventory?.[key] ?? 0
         const qualityClass = getQualityClass(label)
+        const collectionControl = key === 'normal'
+          ? '<span class="collection-unavailable">Inventory only</span>'
+          : `
+            <label class="inventory-collection-check">
+              <input class="collection-input" aria-label="${escapeMarkup(label)} collection status" type="checkbox" data-quality-key="${escapeMarkup(key)}" ${collectionValues[key] ? 'checked' : ''} ${isOwned ? '' : 'disabled'} />
+              <span>Collected</span>
+            </label>
+          `
+
         return `
-          <label class="inventory-field collection-toggle-field ${qualityClass}" title="${escapeMarkup(label)}">
+          <div class="inventory-field inventory-collection-field ${qualityClass}">
             <span class="inventory-quality-label">${escapeMarkup(label)}</span>
-            <input class="collection-input" aria-label="${escapeMarkup(label)} collection status" type="checkbox" data-quality-key="${escapeMarkup(key)}" ${collectionValues[key] ? 'checked' : ''} ${isOwned ? '' : 'disabled'} />
-          </label>
+            <label class="inventory-count-control">
+              <span>Count</span>
+              <input class="quality-input" aria-label="${escapeMarkup(label)} quality inventory" type="number" min="0" step="1" value="${value}" data-quality-key="${escapeMarkup(key)}" />
+            </label>
+            ${collectionControl}
+          </div>
         `
       }).join('')}
     </div>
@@ -297,7 +296,7 @@ export function buildDependencySummaryLine(summary = {}) {
   }
 
   if (!parts.length) {
-    return 'No dependency relation'
+    return ''
   }
 
   return parts.join(' · ')
@@ -326,6 +325,9 @@ export function buildBlueprintSummary(item, dependencyIndex, { getBlueprintProgr
     .map(([quality]) => quality)
   const allCollectionQualities = ['superior', 'flawless', 'epic', 'legendary']
   const collectionBookNeededQualities = allCollectionQualities.filter((quality) => !collectionBookQualities.includes(quality))
+  const highestCollectionBookNeededQuality = collectionStatus === '✅ Complete'
+    ? ''
+    : cleanText(collectionStatus).toLowerCase() || 'legendary'
 
   const hasSuperiorOrBetterInventory = ['superior', 'flawless', 'epic', 'legendary'].some((qualityKey) => Number(blueprintState.inventory?.[qualityKey] || 0) > 0)
   const components = Array.isArray(materials.components) ? materials.components : []
@@ -351,6 +353,7 @@ export function buildBlueprintSummary(item, dependencyIndex, { getBlueprintProgr
     collectionStatus,
     collectionBookQualities,
     collectionBookNeededQualities,
+    highestCollectionBookNeededQuality,
   }
 }
 

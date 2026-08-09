@@ -31,6 +31,8 @@ Your sheet will be created automatically and will appear in Google Drive as:
 
 ### Opening Your Sheet
 
+After connecting, use the Google Sync controls in Settings to open the linked sheet. You can also use Google Picker to select an existing Shopkeeper Companion sheet or choose where a new sheet is created.
+
 ## Google Sheet Tabs
 
 ### ReadMe
@@ -40,7 +42,9 @@ Your sheet will be created automatically and will appear in Google Drive as:
 - Blueprint information and your personal progress data.
 - Each row represents one blueprint.
 - Inventory counts use whole numbers.
-- Checkbox fields use TRUE/FALSE values.
+- `Owned`, `Starforge`, and Collection Book fields use TRUE/FALSE values.
+- `Milestones` stores progress from 0–10: Milestones 1–5 followed by Starforge 1–5.
+- `Improve` stores progress from 0–6: Improve 1–3 followed by Transcendence 1–3.
 
 ### Saved Views
 - Stores saved filter and search configurations.
@@ -55,7 +59,7 @@ The app is the primary way to manage your companion data. The Google Sheet is an
 To make bulk changes:
 1. Open Shopkeeper Companion User Data in Google Drive.
 2. Edit the values you want to change.
-3. Force-save your changes in the sheet with Ctrl + S or Cmd + S.
+3. Wait for Google Sheets to show that the changes are saved.
 4. Return to Shopkeeper Companion.
 5. Open Settings.
 6. Select Sync Now.
@@ -66,3 +70,7 @@ Your changes will be imported into the app.
 Your Google Sheet is stored in your own Google Drive. It provides a backup of your companion progress and allows advanced spreadsheet editing when needed.
 
 ## Troubleshooting
+
+- If the Picker does not open, allow popups for the site and confirm the deployment has a Google API key configured.
+- If rows do not update, restore the original tab names, column headers, and Blueprint Name values.
+- If a sheet was moved or replaced, use Picker in Settings to link the correct spreadsheet and sync again.
