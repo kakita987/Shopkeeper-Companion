@@ -1,58 +1,16 @@
 import { Axe, BadgeAlert, BadgeInfo, BowArrow, CakeSlice, CircleDashed, Crosshair, Diamond, Drumstick, Footprints, Gem, Hand, HandMetal, HardHat, HatGlasses, Leaf, MoonStar, Music2, PillBottle, Pizza, Salad, ScrollText, Shield, Shirt, Sparkles, Swords, Sword, Target, UtensilsCrossed, Wand, WandSparkles } from 'lucide'
 import { BLUEPRINT_ASSET_PATHS, normalizeAssetPath, VITE_ASSET_URLS } from './blueprintAssetInventory.js'
+import { BLUEPRINT_GROUP_TYPE_ORDER } from './assets/blueprintTypeOrder.js'
 import {
   normalizeKeyPart,
   parseCanonicalAssetLookupKey,
   toCanonicalBlueprintLookupKey,
 } from './iconKey.js'
 
-const GROUP_NAME_BY_FILE_KEY = {
-  weapon: 'Weapons',
-  armor: 'Armor',
-  accessory: 'Accessories',
-  enchantment: 'Enchantments',
-}
-
-const ALL_BLUEPRINT_TYPES = [
-  'Sword',
-  'Axe',
-  'Dagger',
-  'Mace',
-  'Spear',
-  'Bow',
-  'Wand',
-  'Staff',
-  'Gun',
-  'Crossbow',
-  'Instrument',
-  'Dual Wield',
-  'Catalyst',
-  'Heavy Armor',
-  'Light Armor',
-  'Clothes',
-  'Helmet',
-  'Rogue Hat',
-  'Magician Hat',
-  'Gauntlets',
-  'Gloves',
-  'Heavy Footwear',
-  'Light Footwear',
-  'Herbal Medicine',
-  'Potion',
-  'Spell',
-  'Shield',
-  'Cloak',
-  'Ring',
-  'Amulet',
-  'Familiar',
-  'Aurasong',
-  'Quiver',
-  'Idol',
-  'Meal',
-  'Dessert',
-  'Element',
-  'Spirit',
-]
+const TYPES_BY_GROUP = new Map(
+  BLUEPRINT_GROUP_TYPE_ORDER.map(({ group, types }) => [group, new Set(types)])
+)
+const ALL_BLUEPRINT_TYPES = BLUEPRINT_GROUP_TYPE_ORDER.flatMap(({ types }) => types)
 
 const TYPE_CANONICAL_BY_KEY = new Map(
   ALL_BLUEPRINT_TYPES.map((type) => [normalizeKeyPart(type), type])
@@ -65,10 +23,10 @@ const TYPE_ALIAS_TO_CANONICAL = new Map([
   ['raiment', 'Clothes'],
 ])
 
-const WEAPON_TYPES = new Set(['Sword', 'Axe', 'Dagger', 'Mace', 'Spear', 'Bow', 'Wand', 'Staff', 'Gun', 'Crossbow', 'Instrument', 'Dual Wield', 'Catalyst'])
-const ARMOR_TYPES = new Set(['Heavy Armor', 'Light Armor', 'Clothes', 'Helmet', 'Rogue Hat', 'Magician Hat', 'Gauntlets', 'Gloves', 'Heavy Footwear', 'Light Footwear'])
-const ACCESSORY_TYPES = new Set(['Herbal Medicine', 'Potion', 'Spell', 'Shield', 'Cloak', 'Ring', 'Amulet', 'Familiar', 'Aurasong', 'Quiver', 'Idol', 'Meal', 'Dessert'])
-const ENCHANTMENT_TYPES = new Set(['Element', 'Spirit'])
+const WEAPON_TYPES = TYPES_BY_GROUP.get('Weapons')
+const ARMOR_TYPES = TYPES_BY_GROUP.get('Armor')
+const ACCESSORY_TYPES = TYPES_BY_GROUP.get('Accessories')
+const ENCHANTMENT_TYPES = TYPES_BY_GROUP.get('Enchantments')
 const TIERED_FALLBACK_MIN_SCORE = 0.55
 const TIERED_FALLBACK_MIN_MARGIN = 0.05
 
@@ -571,61 +529,4 @@ export function getBlueprintItemIconPath(item) {
 
   // Assets without a tier segment are mid-rename and are intentionally ignored.
   return ''
-}
-
-function getGroupIconName(group) {
-  switch (group) {
-    case 'Weapons':
-      return 'Swords'
-    case 'Armor':
-      return 'Shield'
-    case 'Accessories':
-      return 'Gem'
-    case 'Enchantments':
-      return 'Sparkles'
-    default:
-      return 'CircleDashed'
-  }
-}
-
-export function getTypeIconName(type, group) {
-  const haystack = `${type || ''}`.toLowerCase()
-
-  if (/sword/.test(haystack)) return 'Sword'
-  if (/axe/.test(haystack)) return 'Axe'
-  if (/dagger|mace|spear/.test(haystack)) return 'Swords'
-  if (/bow|crossbow/.test(haystack)) return 'BowArrow'
-  if (/gun/.test(haystack)) return 'Crosshair'
-  if (/wand/.test(haystack)) return 'Wand'
-  if (/staff|catalyst/.test(haystack)) return 'WandSparkles'
-  if (/instrument/.test(haystack)) return 'Music2'
-  if (/dual wield/.test(haystack)) return 'Swords'
-  if (/heavy armor|light armor/.test(haystack)) return 'Shield'
-  if (/clothes/.test(haystack)) return 'Shirt'
-  if (/helmet/.test(haystack)) return 'HardHat'
-  if (/rogue hat/.test(haystack)) return 'HatGlasses'
-  if (/magician hat/.test(haystack)) return 'Sparkles'
-  if (/gauntlets/.test(haystack)) return 'HandMetal'
-  if (/gloves/.test(haystack)) return 'Hand'
-  if (/heavy footwear|light footwear/.test(haystack)) return 'Footprints'
-  if (/herbal medicine/.test(haystack)) return 'Leaf'
-  if (/potion/.test(haystack)) return 'PillBottle'
-  if (/spell/.test(haystack)) return 'ScrollText'
-  if (/cloak/.test(haystack)) return 'Shirt'
-  if (/ring/.test(haystack)) return 'Gem'
-  if (/amulet/.test(haystack)) return 'Diamond'
-  if (/familiar/.test(haystack)) return 'CircleDashed'
-  if (/aurasong/.test(haystack)) return 'Music2'
-  if (/quiver/.test(haystack)) return 'Target'
-  if (/idol/.test(haystack)) return 'BadgeInfo'
-  if (/meal/.test(haystack)) return 'UtensilsCrossed'
-  if (/dessert/.test(haystack)) return 'CakeSlice'
-  if (/element/.test(haystack)) return 'Sparkles'
-  if (/spirit/.test(haystack)) return 'MoonStar'
-
-  return getGroupIconName(group)
-}
-
-export function getBlueprintItemIconName(item) {
-  return getTypeIconName(item?.classification?.type, item?.classification?.group || item?.classification?.category)
 }

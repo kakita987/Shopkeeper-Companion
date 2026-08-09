@@ -1,6 +1,10 @@
 {
   "name": "Shopkeeper Companion",
   "short_name": "Shopkeeper",
+  "description": "Track Shop Titans blueprints, inventory, upgrades, and collection progress.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
   "icons": [
     {
       "src": "/icons/web-app-manifest-192x192.png",

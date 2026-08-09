@@ -25,7 +25,8 @@ import { BLUEPRINT_GROUP_TYPE_ORDER } from './assets/blueprintTypeOrder.js'
 import { applyAurasongAmuletTypeMap, buildAurasongAmuletIconMapFromImport } from './assets/accessoryIconMap.js'
 import { RESOURCE_LABELS } from './resourceLabels.js'
 import { DEFAULT_SAVED_VIEW_CRITERIA, STARTER_VIEW_PRESETS, SAVED_FILTER_VIEWS_STORAGE_KEY, buildSavedViewsRows, getCollectionBookMatchDescription, hasActiveSavedViewFilters, loadSavedFilterViews, normalizeSavedViewCriteria, parseSavedViewsRows } from './savedViews.js'
-import { buildBlueprintSummary, buildDependencySummaryLine, getBlueprintVisuals, renderCollectionSection, renderInventorySection, renderLucideIcons, renderMaterialsSection, renderOverlaySectionCard, renderPreview, renderStatsCards, renderUpgradeSection } from './blueprintView.js'
+import { buildBlueprintSummary, buildDependencySummaryLine, getBlueprintVisuals, renderInventoryCollectionSection, renderLucideIcons, renderMaterialsSection, renderOverlaySectionCard, renderPreview, renderStatsCards, renderUpgradeSection } from './blueprintView.js'
+import { BLUEPRINT_DETAIL_LAYOUT_PRESETS, BLUEPRINT_DETAIL_LAYOUT_SETTINGS_KEY, BLUEPRINT_DETAIL_SECTIONS, getBlueprintDetailLayoutSections, loadBlueprintDetailLayout, moveCustomLayoutSection, parseBlueprintDetailLayoutSetting, resetCustomBlueprintDetailLayout, saveBlueprintDetailLayout, setCustomLayoutSectionVisibility } from './blueprintDetailLayouts.js'
 
 const DEFAULT_SPREADSHEET_URL = 'https://playshoptitans.com/spreadsheet'
 const FALLBACK_GOOGLE_SHEET_URL = import.meta.env.VITE_BLUEPRINT_SHEET_URL || 'https://docs.google.com/spreadsheets/d/1WLa7X8h3O0-aGKxeAlCL7bnN8-FhGd3t7pz2RCzSg8c/edit'
@@ -217,6 +218,9 @@ const topTabs = Array.from(document.querySelectorAll('.top-tab'))
 const viewPanels = Array.from(document.querySelectorAll('[data-view-panel]'))
 let trackedUpgradeKeys = loadTrackedUpgradeKeys()
 let hiddenStarterViewPresetIds = loadHiddenStarterViewPresetIds()
+let blueprintDetailLayout = loadBlueprintDetailLayout()
+let isBlueprintLayoutEditing = false
+let openBlueprintOverlayItem = null
 
 function activateView(viewName) {
   const normalizedViewName = viewName === 'saved-views' ? 'saved-views' : 'blueprints'
@@ -245,6 +249,7 @@ let savedViewCriteria = {
 let activeSavedViewPreset = 'custom'
 let savedViewDraftName = ''
 let isSavedViewFiltersPanelOpen = true
+let isCollectionBookFiltersOpen = true
 let pendingGoogleSyncWriteTimer = null
 let pendingGoogleSyncInitPromise = null
 let hasPendingBlueprintSchemaMigration = false
@@ -283,6 +288,11 @@ const { closeSettings } = initSettingsUi({
   onSizeChange: (nextSize) => applySizePreference(nextSize),
   onEscape: () => {
     if (blueprintOverlay.classList.contains('is-open')) {
+      if (isBlueprintLayoutEditing && openBlueprintOverlayItem) {
+        isBlueprintLayoutEditing = false
+        openBlueprintOverlay(openBlueprintOverlayItem)
+        return
+      }
       closeBlueprintOverlay()
     }
   },
@@ -1058,6 +1068,11 @@ function applyRemoteSyncState(remoteTables) {
     trackedUpgradeKeys = new Set(parseTrackedUpgradeRows(settings))
     localStorage.setItem(TRACKED_UPGRADES_STORAGE_KEY, JSON.stringify([...trackedUpgradeKeys]))
 
+    const remoteBlueprintDetailLayout = parseBlueprintDetailLayoutSetting(settings[BLUEPRINT_DETAIL_LAYOUT_SETTINGS_KEY])
+    if (remoteBlueprintDetailLayout) {
+      blueprintDetailLayout = saveBlueprintDetailLayout(remoteBlueprintDetailLayout)
+    }
+
     blueprintProgressByName = parseWorkbookBlueprintProgress(remoteTables.blueprintProgress, blueprintProgressByName)
     localStorage.setItem(BLUEPRINT_PROGRESS_STORAGE_KEY, JSON.stringify(blueprintProgressByName))
   } finally {
@@ -1134,6 +1149,7 @@ function buildSettingsRows() {
   return [
     ['tracked-upgrades', JSON.stringify([...trackedUpgradeKeys])],
     [HIDDEN_STARTER_VIEW_PRESETS_SETTINGS_KEY, JSON.stringify([...hiddenStarterViewPresetIds])],
+    [BLUEPRINT_DETAIL_LAYOUT_SETTINGS_KEY, JSON.stringify(blueprintDetailLayout)],
   ]
 }
 
@@ -1499,6 +1515,121 @@ function bindBlueprintOverlayInteractions(item) {
       persistBlueprintCollection(item.name, target.dataset.qualityKey, target.checked)
     })
   })
+
+  blueprintOverlayContent.querySelectorAll('[data-blueprint-layout-preset]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const nextPreset = button.dataset.blueprintLayoutPreset
+      if (nextPreset === blueprintDetailLayout.activePreset) {
+        return
+      }
+
+      blueprintDetailLayout = saveBlueprintDetailLayout({
+        ...blueprintDetailLayout,
+        activePreset: nextPreset,
+      })
+      isBlueprintLayoutEditing = false
+      scheduleGoogleSyncWrite()
+      openBlueprintOverlay(item)
+    })
+  })
+
+  blueprintOverlayContent.querySelector('[data-edit-blueprint-layout]')?.addEventListener('click', () => {
+    isBlueprintLayoutEditing = !isBlueprintLayoutEditing
+    openBlueprintOverlay(item)
+    if (isBlueprintLayoutEditing) {
+      window.requestAnimationFrame(() => blueprintOverlayContent.querySelector('[data-layout-section]')?.focus())
+    }
+  })
+
+  blueprintOverlayContent.querySelector('[data-reset-blueprint-layout]')?.addEventListener('click', () => {
+    blueprintDetailLayout = saveBlueprintDetailLayout(resetCustomBlueprintDetailLayout(blueprintDetailLayout))
+    scheduleGoogleSyncWrite()
+    openBlueprintOverlay(item)
+  })
+
+  const commitCustomLayout = (nextLayout, focusSectionId = '') => {
+    blueprintDetailLayout = saveBlueprintDetailLayout(nextLayout)
+    scheduleGoogleSyncWrite()
+    openBlueprintOverlay(item)
+    if (focusSectionId) {
+      window.requestAnimationFrame(() => {
+        blueprintOverlayContent.querySelector(`[data-layout-section="${focusSectionId}"]`)?.focus()
+      })
+    }
+  }
+
+  blueprintOverlayContent.querySelectorAll('[data-layout-move]').forEach((button) => {
+    button.addEventListener('click', () => {
+      commitCustomLayout(
+        moveCustomLayoutSection(blueprintDetailLayout, button.dataset.sectionId, button.dataset.layoutMove),
+        button.dataset.sectionId,
+      )
+    })
+  })
+
+  blueprintOverlayContent.querySelectorAll('[data-layout-visibility]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const sectionId = button.dataset.sectionId
+      const isVisible = button.dataset.layoutVisibility === 'show'
+      commitCustomLayout(setCustomLayoutSectionVisibility(blueprintDetailLayout, sectionId, isVisible), isVisible ? sectionId : '')
+    })
+  })
+
+  blueprintOverlayContent.querySelectorAll('[data-layout-section]').forEach((section) => {
+    section.addEventListener('keydown', (event) => {
+      const isSectionShortcutTarget = event.target === section || event.target.matches('[data-layout-drag-handle]')
+      if (!isBlueprintLayoutEditing || !isSectionShortcutTarget) {
+        return
+      }
+
+      const sectionId = section.dataset.layoutSection
+      if (event.shiftKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+        event.preventDefault()
+        commitCustomLayout(moveCustomLayoutSection(blueprintDetailLayout, sectionId, event.key === 'ArrowUp' ? 'up' : 'down'), sectionId)
+      } else if (!event.metaKey && !event.ctrlKey && event.key.toLowerCase() === 'h') {
+        event.preventDefault()
+        commitCustomLayout(setCustomLayoutSectionVisibility(blueprintDetailLayout, sectionId, false))
+      }
+    })
+
+    section.addEventListener('dragstart', (event) => {
+      if (!isBlueprintLayoutEditing) {
+        event.preventDefault()
+        return
+      }
+      event.dataTransfer?.setData('text/plain', section.dataset.layoutSection)
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = 'move'
+      }
+      section.classList.add('is-dragging')
+    })
+    section.addEventListener('dragend', () => section.classList.remove('is-dragging'))
+    section.addEventListener('dragover', (event) => {
+      if (isBlueprintLayoutEditing) {
+        event.preventDefault()
+        section.classList.add('is-drag-target')
+      }
+    })
+    section.addEventListener('dragleave', () => section.classList.remove('is-drag-target'))
+    section.addEventListener('drop', (event) => {
+      event.preventDefault()
+      section.classList.remove('is-drag-target')
+      const movedSectionId = event.dataTransfer?.getData('text/plain')
+      const targetSectionId = section.dataset.layoutSection
+      const order = [...blueprintDetailLayout.custom.order]
+      const movedIndex = order.indexOf(movedSectionId)
+      const targetIndex = order.indexOf(targetSectionId)
+      if (movedIndex < 0 || targetIndex < 0 || movedIndex === targetIndex) {
+        return
+      }
+      order.splice(movedIndex, 1)
+      order.splice(targetIndex, 0, movedSectionId)
+      commitCustomLayout({
+        ...blueprintDetailLayout,
+        custom: { ...blueprintDetailLayout.custom, order },
+      }, movedSectionId)
+    })
+  })
 }
 
 function openBlueprintOverlay(item) {
@@ -1515,7 +1646,6 @@ function openBlueprintOverlay(item) {
     materials: structuredData.materials || {},
   }
   const totalInventory = calculateTotalInventory(blueprintState)
-  const collectionStatus = getCollectionBookStatus(blueprintState)
   const tierValue = structuredData.meta?.tier ? String(structuredData.meta.tier) : '—'
   const unlockPrerequisite = structuredData.meta?.unlockPrerequisite ? structuredData.meta.unlockPrerequisite : '—'
   const overviewStats = buildOverviewStats(structuredData, {
@@ -1535,79 +1665,120 @@ function openBlueprintOverlay(item) {
     getBlueprintStageOptions,
     escapeHtml,
   })
-  const inventoryMarkup = renderInventorySection(progress, {
+  const inventoryCollectionMarkup = renderInventoryCollectionSection(progress, owned, {
     getQualityClass,
     escapeHtml,
   })
-  const collectionMarkup = renderCollectionSection(progress, owned, {
-    getQualityClass,
-    escapeHtml,
-  })
+
+  openBlueprintOverlayItem = item
+  const itemIconPath = getBlueprintItemIconPath(item)
+  const isCustomLayout = blueprintDetailLayout.activePreset === 'custom'
+  if (!isCustomLayout) {
+    isBlueprintLayoutEditing = false
+  }
+
+  const layoutControlsMarkup = `
+    <div class="blueprint-layout-toolbar" aria-label="Blueprint detail layout">
+      <div class="blueprint-layout-presets" role="group" aria-label="Layout preset">
+        ${BLUEPRINT_DETAIL_LAYOUT_PRESETS.map((preset) => `
+          <button class="blueprint-layout-preset ${blueprintDetailLayout.activePreset === preset.id ? 'is-active' : ''}" type="button" data-blueprint-layout-preset="${preset.id}" aria-pressed="${blueprintDetailLayout.activePreset === preset.id}">${preset.label}</button>
+        `).join('')}
+      </div>
+      ${isCustomLayout ? `<button class="blueprint-layout-edit" type="button" data-edit-blueprint-layout aria-pressed="${isBlueprintLayoutEditing}">${isBlueprintLayoutEditing ? 'Done editing' : 'Edit layout'}</button>` : ''}
+    </div>
+    ${isBlueprintLayoutEditing ? `
+      <div class="blueprint-layout-shortcuts" aria-label="Layout editing keyboard shortcuts">
+        <span><kbd>Shift</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd> Move</span>
+        <span><kbd>H</kbd> Hide</span>
+        <span><kbd>Esc</kbd> Done</span>
+      </div>
+    ` : ''}
+  `
 
   const headerMarkup = `
-    <div class="overlay-top-layout">
-      <div class="overlay-hero">
-        <div class="overlay-hero-background overlay-hero-symbol" aria-hidden="true">
-          <span class="icon-slot overlay-hero-icon">${getGroupIconPath(visuals.group) ? `<img src="${escapeHtml(getGroupIconPath(visuals.group))}" alt="" aria-hidden="true" />` : ''}</span>
+    <header class="blueprint-workbench-header">
+      <div class="blueprint-identity">
+        <div class="blueprint-identity-art" aria-hidden="true">
+          ${getGroupIconPath(visuals.group) ? `<img class="blueprint-identity-art-fallback" src="${escapeHtml(getGroupIconPath(visuals.group))}" alt="" />` : ''}
+          ${itemIconPath ? `<img src="${escapeHtml(itemIconPath)}" alt="" onerror="this.style.display='none'; this.onerror=null;" />` : ''}
         </div>
-        <div class="overlay-hero-content">
-          <div class="overlay-visual-strip" aria-hidden="true">
-            <div class="overlay-visual-tile overlay-visual-category">
-              <span class="icon-slot overlay-visual-icon">${getGroupIconPath(visuals.group) ? `<img src="${escapeHtml(getGroupIconPath(visuals.group))}" alt="" aria-hidden="true" />` : ''}</span>
-            </div>
-            <div class="overlay-visual-tile overlay-visual-item">
-              <span class="icon-slot overlay-item-icon">${getBlueprintItemIconPath(item) ? `<img src="${escapeHtml(getBlueprintItemIconPath(item))}" alt="" aria-hidden="true" onerror="this.style.display='none'; this.onerror=null;" />` : ''}</span>
-            </div>
+        <div class="overlay-title-block">
+          <p class="overlay-eyebrow">${escapeHtml(visuals.group)} / ${escapeHtml(visuals.type || 'Type')}</p>
+          <h3 id="blueprint-overlay-title" tabindex="-1">${escapeHtml(item.name)}</h3>
+          <div class="blueprint-status-line">
+            <span class="overlay-tier-badge">Tier ${escapeHtml(tierValue)}</span>
+            <span>${escapeHtml(unlockPrerequisite || 'No unlock requirement')}</span>
+            <span>${escapeHtml(totalInventory)} in inventory</span>
           </div>
-          <div class="overlay-title-block">
-            <p class="overlay-eyebrow">${escapeHtml(visuals.group)} / ${escapeHtml(visuals.type || 'Type')}</p>
-            <h3 id="blueprint-overlay-title">${escapeHtml(item.name)}</h3>
-            <div class="overlay-meta-row">
-              <span class="overlay-tier-badge">Tier ${escapeHtml(tierValue)}</span>
-              <span class="overlay-group-badge">${escapeHtml(visuals.group)}</span>
-            </div>
-          </div>
-          <label class="owned-toggle overlay-owned-toggle">
-            <input class="tracking-checkbox owned-checkbox" type="checkbox" data-blueprint-name="${escapeHtml(item.name)}" ${owned ? 'checked' : ''} />
-            <span>Owned</span>
-          </label>
         </div>
+        <label class="owned-toggle overlay-owned-toggle">
+          <input class="tracking-checkbox owned-checkbox" type="checkbox" data-blueprint-name="${escapeHtml(item.name)}" ${owned ? 'checked' : ''} />
+          <span>Owned</span>
+        </label>
       </div>
-    </div>
+      ${layoutControlsMarkup}
+    </header>
   `
 
-  const overviewCardsMarkup = `
-    <div class="overlay-top-panels">
-      ${renderOverlaySectionCard('Quick look', `<ul class="info-list">
-        <li><strong>Status</strong> ${owned ? 'Owned' : 'Not owned'}</li>
-        <li><strong>Total inventory</strong> ${escapeHtml(totalInventory)}</li>
-        <li><strong>Collection</strong> ${escapeHtml(collectionStatus || 'Not started')}</li>
-        <li><strong>Unlock requirement</strong> ${escapeHtml(unlockPrerequisite || '—')}</li>
-      </ul>`, {
-        cardClass: 'overlay-card-quick-look',
-      })}
-      ${renderOverlaySectionCard('Stats', `<div class="info-grid">${statsMarkup}</div>`, {
-        cardClass: 'overlay-card-stats',
-      })}
-      ${renderOverlaySectionCard('Materials', `<div class="material-grid">${materialsMarkup}</div>`, {
-        cardClass: 'overlay-card-materials',
-      })}
+  const sectionMarkupById = {
+    upgrades: renderOverlaySectionCard('Progress', `<div class="upgrade-grid">${upgradesMarkup}</div>`, {
+      hint: owned ? 'Unlocked' : 'Set Owned to edit',
+      cardClass: 'blueprint-workbench-section blueprint-workbench-section--upgrades',
+    }),
+    inventory: renderOverlaySectionCard('Inventory & Collection', inventoryCollectionMarkup, {
+      hint: owned ? 'Counts & qualities' : 'Counts',
+      cardClass: 'blueprint-workbench-section blueprint-workbench-section--inventory',
+    }),
+    materials: renderOverlaySectionCard('Materials', `<div class="material-grid">${materialsMarkup}</div>`, {
+      cardClass: 'blueprint-workbench-section blueprint-workbench-section--materials',
+    }),
+    stats: renderOverlaySectionCard('Specifications', `<div class="info-grid">${statsMarkup}</div>`, {
+      cardClass: 'blueprint-workbench-section blueprint-workbench-section--stats',
+    }),
+  }
+
+  const visibleSectionIds = getBlueprintDetailLayoutSections(blueprintDetailLayout)
+  const renderWorkbenchSection = (sectionId) => {
+    const section = BLUEPRINT_DETAIL_SECTIONS.find((entry) => entry.id === sectionId)
+    const sectionIndex = blueprintDetailLayout.custom.order.indexOf(sectionId)
+    const editorMarkup = isBlueprintLayoutEditing ? `
+      <div class="blueprint-layout-section-controls">
+        <button class="layout-drag-handle" type="button" data-layout-drag-handle aria-label="Drag ${section.label}. Shift plus Up or Down also moves this section." title="Drag to reorder · Shift + ↑/↓ to move">⋮⋮</button>
+        <button type="button" data-layout-move="up" data-section-id="${sectionId}" aria-label="Move ${section.label} up (Shift + Up)" title="Move up · Shift + ↑" ${sectionIndex === 0 ? 'disabled' : ''}>↑</button>
+        <button type="button" data-layout-move="down" data-section-id="${sectionId}" aria-label="Move ${section.label} down (Shift + Down)" title="Move down · Shift + ↓" ${sectionIndex === blueprintDetailLayout.custom.order.length - 1 ? 'disabled' : ''}>↓</button>
+        <button type="button" data-layout-visibility="hide" data-section-id="${sectionId}" aria-label="Hide ${section.label} (H)" title="Hide · H">Hide</button>
+      </div>
+    ` : ''
+
+    return `<section class="blueprint-layout-section ${isBlueprintLayoutEditing ? 'is-editable' : ''}" data-layout-section="${sectionId}" ${isBlueprintLayoutEditing ? 'tabindex="0" draggable="true"' : ''} aria-label="${section.label}">${editorMarkup}${sectionMarkupById[sectionId]}</section>`
+  }
+
+  const hiddenSectionsMarkup = isBlueprintLayoutEditing && blueprintDetailLayout.custom.hidden.length ? `
+    <aside class="blueprint-layout-hidden" aria-label="Hidden sections">
+      <strong>Hidden</strong>
+      ${blueprintDetailLayout.custom.hidden.map((sectionId) => {
+        const section = BLUEPRINT_DETAIL_SECTIONS.find((entry) => entry.id === sectionId)
+        return `<button type="button" data-layout-visibility="show" data-section-id="${sectionId}" title="Show ${section.label}">Show ${section.label}</button>`
+      }).join('')}
+    </aside>
+  ` : ''
+
+  const editorFooterMarkup = isBlueprintLayoutEditing ? `
+    <div class="blueprint-layout-editor-footer">
+      <span class="sr-only" aria-live="polite">Custom layout changes save automatically.</span>
+      <span>Changes save automatically.</span>
+      <button type="button" data-reset-blueprint-layout>Reset Custom</button>
     </div>
+  ` : ''
+
+  blueprintOverlayContent.innerHTML = `
+    ${headerMarkup}
+    <main class="blueprint-workbench ${isBlueprintLayoutEditing ? 'is-editing' : ''}">
+      ${visibleSectionIds.map(renderWorkbenchSection).join('')}
+    </main>
+    ${hiddenSectionsMarkup}
+    ${editorFooterMarkup}
   `
-
-  const detailCardsMarkup = [
-    renderOverlaySectionCard('Inventory', `<div class="inventory-grid">${inventoryMarkup}</div>`, {
-      hint: 'Counts',
-    }),
-    renderOverlaySectionCard('Unlockable upgrades', `<div class="upgrade-grid">${upgradesMarkup}</div>`, {
-      hint: owned ? 'Unlocked' : 'Check Owned to Unlock',
-    }),
-    renderOverlaySectionCard('Collection Book', `<div class="collection-grid">${collectionMarkup}</div>`, {
-      hint: owned ? 'Track qualities' : 'Mark blueprint as Owned first',
-    }),
-  ].join('')
-
-  blueprintOverlayContent.innerHTML = `${headerMarkup}${overviewCardsMarkup}${detailCardsMarkup}`
 
   renderLucideIcons(blueprintOverlayContent)
   bindBlueprintOverlayInteractions(item)
@@ -1702,35 +1873,41 @@ function renderSavedViews(items = []) {
                 ], savedViewCriteria.mastered)}
               </select>
             </label>
-            <fieldset class="saved-view-filter saved-view-filter-multiselect">
-              <legend>Collection Book</legend>
-              <div class="saved-view-filter saved-view-filter-collection-state">
-                <div class="saved-view-match-description">
-                  ${getCollectionBookMatchDescription(savedViewCriteria.collectionBookState)}
+            <details class="saved-view-collection-disclosure" ${isCollectionBookFiltersOpen ? 'open' : ''} data-collection-book-filters-panel>
+              <summary class="saved-view-collection-summary">
+                <span>Collection Book</span>
+                <span class="saved-view-collection-chevron" aria-hidden="true">▶</span>
+              </summary>
+              <fieldset class="saved-view-filter saved-view-filter-multiselect">
+                <legend class="sr-only">Collection Book filters</legend>
+                <div class="saved-view-filter saved-view-filter-collection-state">
+                  <div class="saved-view-match-description">
+                    ${getCollectionBookMatchDescription(savedViewCriteria.collectionBookState)}
+                  </div>
+                  <div class="saved-view-match-radios" role="radiogroup" aria-label="Collection Book match state">
+                    ${[
+                      ['completed', 'Completed', 'Completed checks finished qualities'],
+                      ['needed', 'Still Needed', 'Still Needed checks missing qualities'],
+                    ].map(([value, label]) => `
+                      <label class="saved-view-match-option">
+                        <input
+                          type="radio"
+                          name="collection-book-match"
+                          data-saved-filter="collectionBookState"
+                          value="${value}"
+                          ${savedViewCriteria.collectionBookState === value ? 'checked' : ''}
+                        />
+                        <span>${label}</span>
+                      </label>
+                    `).join('')}
+                  </div>
+                  <span>Select qualities to match</span>
                 </div>
-                <div class="saved-view-match-radios" role="radiogroup" aria-label="Collection Book match state">
-                  ${[
-                    ['completed', 'Completed', 'Completed checks finished qualities'],
-                    ['needed', 'Still Needed', 'Still Needed checks missing qualities'],
-                  ].map(([value, label]) => `
-                    <label class="saved-view-match-option">
-                      <input
-                        type="radio"
-                        name="collection-book-match"
-                        data-saved-filter="collectionBookState"
-                        value="${value}"
-                        ${savedViewCriteria.collectionBookState === value ? 'checked' : ''}
-                      />
-                      <span>${label}</span>
-                    </label>
-                  `).join('')}
+                <div class="collection-book-options">
+                  ${renderCollectionBookFilterOptions(savedViewCriteria.collectionBook)}
                 </div>
-                <span>Select qualities to match</span>
-              </div>
-              <div class="collection-book-options">
-                ${renderCollectionBookFilterOptions(savedViewCriteria.collectionBook)}
-              </div>
-            </fieldset>
+              </fieldset>
+            </details>
           </div>
           <form class="saved-view-save-row" data-save-view-form>
             <input type="text" maxlength="60" placeholder="View Name (e.g. Not Owned + Dependents)" value="${escapeHtml(savedViewDraftName)}" data-saved-view-name />
@@ -1851,8 +2028,11 @@ function renderSavedViewResults(items = [], dependencyIndex) {
           getBlueprintMaterials,
         })
         const dependencyText = buildDependencySummaryLine(summary)
-        const collectionText = summary.isCollectionComplete ? 'Collection Complete' : `Collection ${summary.collectionStatus || 'Not started'}`
         const ownershipText = summary.isOwned ? 'Owned' : 'Not Owned'
+        const highestNeededQuality = summary.highestCollectionBookNeededQuality
+        const collectionBadge = highestNeededQuality
+          ? `<span class="collection-quality-badge ${getQualityClass(formatQualityLabel(highestNeededQuality))}" title="Highest collection quality needed">Needs ${escapeHtml(formatQualityLabel(highestNeededQuality))}</span>`
+          : ''
 
         return `
           <li class="blueprint-item saved-view-item" data-blueprint-name="${escapeHtml(item.name)}">
@@ -1862,8 +2042,8 @@ function renderSavedViewResults(items = [], dependencyIndex) {
                 <span class="item-name">${escapeHtml(item.name)}</span>
               </div>
               <div class="saved-view-item-meta">
-                <small class="saved-view-item-meta-line">${escapeHtml(`${ownershipText} · Inventory Total: ${summary.totalInventory} · ${collectionText}`)}</small>
-                <small class="saved-view-item-meta-line">${escapeHtml(dependencyText)}</small>
+                <small class="saved-view-item-meta-line">${escapeHtml(`${ownershipText} · Inventory Total: ${summary.totalInventory}`)}${collectionBadge}</small>
+                ${dependencyText ? `<small class="saved-view-item-meta-line">${escapeHtml(dependencyText)}</small>` : ''}
               </div>
             </div>
           </li>
@@ -1950,6 +2130,11 @@ function bindSavedViewControls() {
   const filtersPanel = savedViewsContentEl.querySelector('[data-saved-view-filters-panel]')
   filtersPanel?.addEventListener('toggle', () => {
     isSavedViewFiltersPanelOpen = filtersPanel.open
+  })
+
+  const collectionBookPanel = savedViewsContentEl.querySelector('[data-collection-book-filters-panel]')
+  collectionBookPanel?.addEventListener('toggle', () => {
+    isCollectionBookFiltersOpen = collectionBookPanel.open
   })
 
   if (hasBoundSavedViewDelegates) {
@@ -2783,6 +2968,8 @@ function formatValue(value) {
 }
 
 function closeBlueprintOverlay() {
+  isBlueprintLayoutEditing = false
+  openBlueprintOverlayItem = null
   blueprintOverlay.classList.remove('is-open')
   blueprintOverlay.setAttribute('aria-hidden', 'true')
   document.body.classList.remove('blueprint-overlay-open')

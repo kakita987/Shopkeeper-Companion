@@ -5,8 +5,7 @@ import {
   buildBlueprintSummary,
   buildDependencySummaryLine,
   getBlueprintVisuals,
-  renderCollectionSection,
-  renderInventorySection,
+  renderInventoryCollectionSection,
   renderUpgradeSection,
 } from './blueprintView.js'
 
@@ -23,7 +22,7 @@ test('getBlueprintVisuals prefers classification data and falls back to structur
 })
 
 test('buildDependencySummaryLine summarizes dependency relationships', () => {
-  assert.equal(buildDependencySummaryLine({}), 'No dependency relation')
+  assert.equal(buildDependencySummaryLine({}), '')
   assert.equal(buildDependencySummaryLine({ isDependentOn: true }), 'Dependent on another blueprint')
   assert.equal(buildDependencySummaryLine({ isDependentOn: true, dependencyNames: ['Squire Sword'] }), 'Dependent on: Squire Sword')
   assert.equal(buildDependencySummaryLine({ isNeededFor: true, dependentNames: ['Alpha', 'Beta'] }), 'Needed for: Alpha, Beta')
@@ -83,6 +82,7 @@ test('buildBlueprintSummary combines progress, inventory, and dependency state',
   assert.equal(summary.hasSuperiorOrBetterInventory, true)
   assert.equal(summary.isCollectionComplete, true)
   assert.equal(summary.collectionStatus, '✅ Complete')
+  assert.equal(summary.highestCollectionBookNeededQuality, '')
 })
 
 test('renderUpgradeSection uses one selector for Milestones then Starforge options', () => {
@@ -129,25 +129,12 @@ test('renderUpgradeSection uses one selector for Milestones then Starforge optio
   assert.match(markup, /1\. Improve · ascension-one[\s\S]*2\. Transcendence · transcendence-one/)
 })
 
-test('renderInventorySection shows all quality labels including Normal', () => {
-  const markup = renderInventorySection(
-    { inventory: { normal: 1, superior: 2, flawless: 3, epic: 4, legendary: 5 } },
+test('renderInventoryCollectionSection aligns counts and collection checks by quality', () => {
+  const markup = renderInventoryCollectionSection(
     {
-      getQualityClass: (label) => `quality-${label.toLowerCase()}`,
-      escapeHtml: (value) => String(value),
+      inventory: { normal: 1, superior: 2, flawless: 3, epic: 4, legendary: 5 },
+      collectionBook: { superior: true, flawless: false, epic: true, legendary: false },
     },
-  )
-
-  assert.match(markup, /inventory-quality-label">Normal</)
-  assert.match(markup, /inventory-quality-label">Superior</)
-  assert.match(markup, /inventory-quality-label">Flawless</)
-  assert.match(markup, /inventory-quality-label">Epic</)
-  assert.match(markup, /inventory-quality-label">Legendary</)
-})
-
-test('renderCollectionSection shows collection quality labels', () => {
-  const markup = renderCollectionSection(
-    { collectionBook: { superior: true, flawless: false, epic: true, legendary: false } },
     true,
     {
       getQualityClass: (label) => `quality-${label.toLowerCase()}`,
@@ -155,8 +142,9 @@ test('renderCollectionSection shows collection quality labels', () => {
     },
   )
 
-  assert.match(markup, /inventory-quality-label">Superior</)
-  assert.match(markup, /inventory-quality-label">Flawless</)
-  assert.match(markup, /inventory-quality-label">Epic</)
-  assert.match(markup, /inventory-quality-label">Legendary</)
+  assert.equal((markup.match(/class="quality-input"/g) || []).length, 5)
+  assert.equal((markup.match(/class="collection-input"/g) || []).length, 4)
+  assert.match(markup, /Normal[\s\S]*Inventory only/)
+  assert.doesNotMatch(markup, /aria-label="Normal collection status"/)
+  assert.match(markup, /aria-label="Superior collection status"[^>]*checked/)
 })
