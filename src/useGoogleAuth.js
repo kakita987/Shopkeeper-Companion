@@ -2,6 +2,8 @@ const GOOGLE_IDENTITY_SCRIPT = 'https://accounts.google.com/gsi/client'
 const DRIVE_FILE_SCOPE = 'https://www.googleapis.com/auth/drive.file'
 const GOOGLE_AUTH_SCOPES = DRIVE_FILE_SCOPE
 const MISSING_CLIENT_ID_MESSAGE = 'Google sign-in is not configured for this deployment. Set VITE_GOOGLE_CLIENT_ID in your production environment.'
+const INVALID_CLIENT_ID_MESSAGE = 'Google sign-in is misconfigured. VITE_GOOGLE_CLIENT_ID must contain only a Web application client ID ending in .apps.googleusercontent.com. Do not include quotes or the variable name, then redeploy.'
+const GOOGLE_CLIENT_ID_PATTERN = /^\d+-[a-z0-9_-]+\.apps\.googleusercontent\.com$/i
 
 let gisScriptPromise = null
 
@@ -35,6 +37,12 @@ function loadGoogleIdentityScript() {
 }
 
 export function useGoogleAuth({ clientId }) {
+  const normalizedClientId = String(clientId || '').trim()
+  const clientIdError = !normalizedClientId
+    ? MISSING_CLIENT_ID_MESSAGE
+    : GOOGLE_CLIENT_ID_PATTERN.test(normalizedClientId)
+      ? null
+      : INVALID_CLIENT_ID_MESSAGE
   const listeners = new Set()
   let tokenClient = null
   let pendingSignIn = null
@@ -47,7 +55,7 @@ export function useGoogleAuth({ clientId }) {
     isReady: false,
     isAuthenticating: false,
     isAuthenticated: false,
-    clientIdMissing: !clientId,
+    clientIdMissing: Boolean(clientIdError),
     error: null,
   }
 
@@ -91,11 +99,11 @@ export function useGoogleAuth({ clientId }) {
     }
 
     initializePromise = (async () => {
-      if (!clientId) {
+      if (clientIdError) {
         updateState({
           isLoading: false,
           isReady: false,
-          error: MISSING_CLIENT_ID_MESSAGE,
+          error: clientIdError,
         })
         return
       }
@@ -105,7 +113,7 @@ export function useGoogleAuth({ clientId }) {
         await loadGoogleIdentityScript()
 
         tokenClient = window.google.accounts.oauth2.initTokenClient({
-          client_id: clientId,
+          client_id: normalizedClientId,
           scope: GOOGLE_AUTH_SCOPES,
           callback: (response) => {
             const currentRequest = pendingSignIn
@@ -155,7 +163,7 @@ export function useGoogleAuth({ clientId }) {
   async function signIn() {
     if (state.clientIdMissing || state.isAuthenticating) {
       if (state.clientIdMissing) {
-        updateState({ error: MISSING_CLIENT_ID_MESSAGE })
+        updateState({ error: clientIdError })
       }
       return null
     }
@@ -174,7 +182,7 @@ export function useGoogleAuth({ clientId }) {
 
   async function refreshAccessToken({ interactive = false } = {}) {
     if (state.clientIdMissing) {
-      updateState({ error: MISSING_CLIENT_ID_MESSAGE })
+      updateState({ error: clientIdError })
       return null
     }
 
