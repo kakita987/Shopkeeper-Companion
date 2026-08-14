@@ -1,78 +1,9 @@
 import { Axe, BadgeAlert, BadgeInfo, BowArrow, CakeSlice, CircleDashed, Crosshair, Diamond, Drumstick, Footprints, Gem, Hand, HandMetal, HardHat, HatGlasses, Leaf, MoonStar, Music2, PillBottle, Pizza, Salad, ScrollText, Shield, Shirt, Sparkles, Swords, Sword, Target, UtensilsCrossed, Wand, WandSparkles } from 'lucide'
 import { BLUEPRINT_ASSET_PATHS, normalizeAssetPath, VITE_ASSET_URLS } from './blueprintAssetInventory.js'
-import { BLUEPRINT_GROUP_TYPE_ORDER } from './assets/blueprintTypeOrder.js'
 import {
-  normalizeKeyPart,
   parseCanonicalAssetLookupKey,
   toCanonicalBlueprintLookupKey,
 } from './iconKey.js'
-
-const TYPES_BY_GROUP = new Map(
-  BLUEPRINT_GROUP_TYPE_ORDER.map(({ group, types }) => [group, new Set(types)])
-)
-const ALL_BLUEPRINT_TYPES = BLUEPRINT_GROUP_TYPE_ORDER.flatMap(({ types }) => types)
-
-const TYPE_CANONICAL_BY_KEY = new Map(
-  ALL_BLUEPRINT_TYPES.map((type) => [normalizeKeyPart(type), type])
-)
-
-const TYPE_ALIAS_TO_CANONICAL = new Map([
-  ['herbalmedicine', 'Herbal Medicine'],
-  ['cloth', 'Clothes'],
-  ['garment', 'Clothes'],
-  ['raiment', 'Clothes'],
-])
-
-const WEAPON_TYPES = TYPES_BY_GROUP.get('Weapons')
-const ARMOR_TYPES = TYPES_BY_GROUP.get('Armor')
-const ACCESSORY_TYPES = TYPES_BY_GROUP.get('Accessories')
-const ENCHANTMENT_TYPES = TYPES_BY_GROUP.get('Enchantments')
-const TIERED_FALLBACK_MIN_SCORE = 0.55
-const TIERED_FALLBACK_MIN_MARGIN = 0.05
-
-function resolveCanonicalType(type) {
-  const rawType = String(type || '').trim()
-  const normalizedType = normalizeKeyPart(rawType)
-  if (!normalizedType) {
-    return ''
-  }
-
-  const direct = TYPE_CANONICAL_BY_KEY.get(normalizedType)
-  if (direct) {
-    return direct
-  }
-
-  const alias = TYPE_ALIAS_TO_CANONICAL.get(normalizedType)
-  if (alias) {
-    return alias
-  }
-
-  if (normalizedType.includes('clothes') || normalizedType.includes('cloth')) {
-    return 'Clothes'
-  }
-
-  return rawType
-}
-
-function resolveCanonicalGroupForType(type, group) {
-  if (WEAPON_TYPES.has(type)) {
-    return 'Weapons'
-  }
-
-  if (ARMOR_TYPES.has(type)) {
-    return 'Armor'
-  }
-
-  if (ACCESSORY_TYPES.has(type)) {
-    return 'Accessories'
-  }
-
-  if (ENCHANTMENT_TYPES.has(type)) {
-    return 'Enchantments'
-  }
-
-  return String(group || '').trim()
-}
 
 export const LUCIDE_ICONS = {
   Axe,
@@ -150,6 +81,10 @@ function buildItemIconIndex() {
       return
     }
 
+    if (index.has(lookupKey)) {
+      throw new Error(`Duplicate blueprint asset key for ${index.get(lookupKey)} and ${relativePath}`)
+    }
+
     index.set(lookupKey, relativePath)
   })
 
@@ -157,259 +92,6 @@ function buildItemIconIndex() {
 }
 
 const ITEM_ICON_INDEX = buildItemIconIndex()
-
-function buildTieredItemIconByTypeTierIndex() {
-  const index = new Map()
-
-  BLUEPRINT_ASSET_PATHS.forEach((relativePath) => {
-    const lookupKey = parseCanonicalAssetLookupKey(relativePath)
-    if (!lookupKey) {
-      return
-    }
-
-    const parts = lookupKey.split('::')
-    if (parts.length !== 4) {
-      return
-    }
-
-    const [groupSegment, typeSegment, tierSegment, nameSegment] = parts
-    if (!groupSegment || !typeSegment || !tierSegment || !nameSegment) {
-      return
-    }
-
-    const tierNumber = Number(tierSegment)
-    if (!Number.isInteger(tierNumber) || tierNumber < 0) {
-      return
-    }
-
-    const indexKey = `${groupSegment}::${typeSegment}::${tierNumber}`
-    const existing = index.get(indexKey) || []
-    existing.push({
-      relativePath,
-      nameSegment,
-    })
-    index.set(indexKey, existing)
-  })
-
-  return index
-}
-
-const TIERED_ITEM_ICON_BY_TYPE_TIER_INDEX = buildTieredItemIconByTypeTierIndex()
-
-function buildNameLookupCandidates(name) {
-  const raw = String(name || '').trim()
-  if (!raw) {
-    return []
-  }
-
-  const variants = [
-    raw,
-    raw.replace(/['’]s\b/gi, ''),
-    raw.replace(/\bof\b/gi, ''),
-  ]
-
-  return [...new Set(variants.map((value) => normalizeKeyPart(value)).filter(Boolean))]
-}
-
-function buildBigrams(value) {
-  const text = String(value || '')
-  if (text.length < 2) {
-    return new Set([text])
-  }
-
-  const grams = new Set()
-  for (let index = 0; index < text.length - 1; index += 1) {
-    grams.add(text.slice(index, index + 2))
-  }
-
-  return grams
-}
-
-function similarityScore(left, right) {
-  const a = String(left || '')
-  const b = String(right || '')
-  if (!a || !b) {
-    return 0
-  }
-
-  if (a === b) {
-    return 1
-  }
-
-  const bigramsA = buildBigrams(a)
-  const bigramsB = buildBigrams(b)
-  let shared = 0
-  bigramsA.forEach((gram) => {
-    if (bigramsB.has(gram)) {
-      shared += 1
-    }
-  })
-
-  return (2 * shared) / (bigramsA.size + bigramsB.size)
-}
-
-function getTieredFallbackPath(group, type, tier, name) {
-  if (!group || !type || tier === null) {
-    return ''
-  }
-
-  const keyWithPlaceholderName = toCanonicalBlueprintLookupKey(group, type, tier, '__placeholder__')
-  if (!keyWithPlaceholderName) {
-    return ''
-  }
-
-  const baseSegments = keyWithPlaceholderName.split('::')
-  if (baseSegments.length !== 4) {
-    return ''
-  }
-
-  const tierIndexKey = baseSegments.slice(0, 3).join('::')
-  const candidates = TIERED_ITEM_ICON_BY_TYPE_TIER_INDEX.get(tierIndexKey) || []
-  if (!candidates.length) {
-    return ''
-  }
-
-  if (candidates.length === 1) {
-    return candidates[0].relativePath
-  }
-
-  const nameCandidates = buildNameLookupCandidates(name)
-  if (!nameCandidates.length) {
-    return ''
-  }
-
-  for (const candidateName of nameCandidates) {
-    const exact = candidates.find((entry) => entry.nameSegment === candidateName)
-    if (exact) {
-      return exact.relativePath
-    }
-  }
-
-  let best = null
-  let secondBest = null
-
-  candidates.forEach((entry) => {
-    const score = Math.max(...nameCandidates.map((candidateName) => similarityScore(candidateName, entry.nameSegment)))
-    const scored = { entry, score }
-    if (!best || score > best.score) {
-      secondBest = best
-      best = scored
-      return
-    }
-
-    if (!secondBest || score > secondBest.score) {
-      secondBest = scored
-    }
-  })
-
-  if (!best) {
-    return ''
-  }
-
-  const margin = secondBest ? best.score - secondBest.score : best.score
-  if (best.score < TIERED_FALLBACK_MIN_SCORE || margin < TIERED_FALLBACK_MIN_MARGIN) {
-    return ''
-  }
-
-  return best.entry.relativePath
-}
-
-function getGroupTypeSet(group) {
-  if (group === 'Armor') {
-    return ARMOR_TYPES
-  }
-
-  if (group === 'Accessories') {
-    return ACCESSORY_TYPES
-  }
-
-  if (group === 'Weapons') {
-    return WEAPON_TYPES
-  }
-
-  return null
-}
-
-function getBestGroupTierFallbackPath(group, tier, name) {
-  const typeSet = getGroupTypeSet(group)
-  if (!typeSet || tier === null) {
-    return ''
-  }
-
-  const nameCandidates = buildNameLookupCandidates(name)
-  if (!nameCandidates.length) {
-    return ''
-  }
-
-  let best = null
-  let secondBest = null
-
-  typeSet.forEach((candidateType) => {
-    const keyWithPlaceholderName = toCanonicalBlueprintLookupKey(group, candidateType, tier, '__placeholder__')
-    if (!keyWithPlaceholderName) {
-      return
-    }
-
-    const tierIndexKey = keyWithPlaceholderName.split('::').slice(0, 3).join('::')
-    const candidates = TIERED_ITEM_ICON_BY_TYPE_TIER_INDEX.get(tierIndexKey) || []
-    if (!candidates.length) {
-      return
-    }
-
-    if (candidates.length === 1) {
-      const scored = { path: candidates[0].relativePath, score: 1 }
-      if (!best || scored.score > best.score) {
-        secondBest = best
-        best = scored
-      } else if (!secondBest || scored.score > secondBest.score) {
-        secondBest = scored
-      }
-      return
-    }
-
-    candidates.forEach((entry) => {
-      const score = Math.max(...nameCandidates.map((candidateName) => similarityScore(candidateName, entry.nameSegment)))
-      const scored = {
-        path: entry.relativePath,
-        score,
-      }
-      if (!best || score > best.score) {
-        secondBest = best
-        best = scored
-        return
-      }
-
-      if (!secondBest || score > secondBest.score) {
-        secondBest = scored
-      }
-    })
-  })
-
-  if (!best) {
-    return ''
-  }
-
-  const margin = secondBest ? best.score - secondBest.score : best.score
-  if (best.score < TIERED_FALLBACK_MIN_SCORE || margin < TIERED_FALLBACK_MIN_MARGIN) {
-    return ''
-  }
-
-  return best.path
-}
-
-function isGenericAccessoryType(type) {
-  const normalizedType = normalizeKeyPart(type)
-  return normalizedType === 'accessory' || normalizedType === 'accessories'
-}
-
-function isGenericArmorType(type) {
-  const normalizedType = normalizeKeyPart(type)
-  return normalizedType === 'armor' || normalizedType === 'armors' || normalizedType === 'armour' || normalizedType === 'armours'
-}
-
-function getAccessoryGenericTypeFallbackPath(tier, name) {
-  return getBestGroupTierFallbackPath('Accessories', tier, name)
-}
 
 const GROUP_ICON_PATHS = {
   Weapons: assetUrl('./assets/Weapon/weapon_group.png'),
@@ -432,16 +114,18 @@ const TYPE_ICON_PATHS = {
   Instrument: assetUrl('./assets/Weapon/weapon_instrument_type.png'),
   'Dual Wield': assetUrl('./assets/Weapon/weapon_dualwield_type.png'),
   Catalyst: assetUrl('./assets/Weapon/weapon_catalyst_type.png'),
-  'Heavy Armor': assetUrl('./assets/Armor/armor_armorheavy_type.png'),
-  'Light Armor': assetUrl('./assets/Armor/armor_armorlight_type.png'),
+  Scythe: assetUrl('./assets/Weapon/weapon_scythe_type.png'),
+  'Heavy Armor': assetUrl('./assets/Armor/armor_heavy_armor_type.png'),
+  'Light Armor': assetUrl('./assets/Armor/armor_light_armor_type.png'),
   Clothes: assetUrl('./assets/Armor/armor_clothes_type.png'),
   Helmet: assetUrl('./assets/Armor/armor_helmet_type.png'),
-  'Rogue Hat': assetUrl('./assets/Armor/armor_roguehat_type.png'),
-  'Magician Hat': assetUrl('./assets/Armor/armor_hat_type.png'),
+  'Rogue Hat': assetUrl('./assets/Armor/armor_rogue_hat_type.png'),
+  'Magician Hat': assetUrl('./assets/Armor/armor_magician_hat_type.png'),
+  Mask: assetUrl('./assets/Armor/armor_mask_type.png'),
   Gauntlets: assetUrl('./assets/Armor/armor_gauntlets_type.png'),
   Gloves: assetUrl('./assets/Armor/armor_gloves_type.png'),
-  'Heavy Footwear': assetUrl('./assets/Armor/armor_boots_type.png'),
-  'Light Footwear': assetUrl('./assets/Armor/armor_shoes_type.png'),
+  'Heavy Footwear': assetUrl('./assets/Armor/armor_heavy_footwear_type.png'),
+  'Light Footwear': assetUrl('./assets/Armor/armor_light_footwear_type.png'),
   'Herbal Medicine': assetUrl('./assets/Accessory/accessory_herbalmedicine_type.png'),
   Potion: assetUrl('./assets/Accessory/accessory_potion_type.png'),
   Spell: assetUrl('./assets/Accessory/accessory_scrolls_type.png'),
@@ -450,8 +134,8 @@ const TYPE_ICON_PATHS = {
   Ring: assetUrl('./assets/Accessory/accessory_ring_type.png'),
   Amulet: assetUrl('./assets/Accessory/accessory_amulet_type.png'),
   Familiar: assetUrl('./assets/Accessory/accessory_familiar_type.png'),
-  Aurasong: assetUrl('./assets/Weapon/weapon_aurasong_type.png'),
-  Quiver: assetUrl('./assets/Weapon/weapon_quiver_type.png'),
+  Aurasong: assetUrl('./assets/Accessory/accessory_aurasong_type.png'),
+  Quiver: assetUrl('./assets/Accessory/weapon_quiver_type.png'),
   Idol: assetUrl('./assets/Accessory/accessory_idol_type.png'),
   Meal: assetUrl('./assets/Accessory/accessory_meal_type.png'),
   Dessert: assetUrl('./assets/Accessory/accessory_dessert_type.png'),
@@ -468,39 +152,18 @@ export function getTypeIconPath(type) {
 }
 
 export function getBlueprintItemIconPath(item) {
-  const mappedRelativePath = String(item?.iconMapping?.itemIconRelativePath || '').trim()
-  if (mappedRelativePath) {
-    const mappedNormalizedPath = normalizeAssetPath(mappedRelativePath)
-    if (mappedNormalizedPath && VITE_ASSET_URLS.has(mappedNormalizedPath)) {
-      return assetUrl(mappedNormalizedPath)
-    }
-
-    // Some generated mapping rows may lag behind renamed filenames.
-    // Re-resolve by canonical key against the runtime asset index first.
-    const mappedLookupKey = parseCanonicalAssetLookupKey(mappedNormalizedPath)
-    if (mappedLookupKey) {
-      const remappedPath = ITEM_ICON_INDEX.get(mappedLookupKey)
-      if (remappedPath) {
-        return assetUrl(remappedPath)
-      }
-    }
-    // Do not return a stale/broken mapped path; continue to name/type matching.
-  }
-
-  const rawGroup = String(item?.classification?.group || '').trim()
-  const rawType = String(item?.classification?.type || '').trim()
-  const type = resolveCanonicalType(rawType)
-  const group = resolveCanonicalGroupForType(type, rawGroup)
+  const group = String(item?.classification?.group || '').trim()
+  const type = String(item?.classification?.type || '').trim()
   const tier = getBlueprintTier(item)
   const name = String(item?.name || '').trim()
 
   if (!group || !type || tier === null || !name) {
-    return ''
+    return getTypeIconPath(type)
   }
 
   const key = toCanonicalBlueprintLookupKey(group, type, tier, name)
   if (!key) {
-    return ''
+    return getTypeIconPath(type)
   }
 
   const match = ITEM_ICON_INDEX.get(key)
@@ -508,25 +171,5 @@ export function getBlueprintItemIconPath(item) {
     return assetUrl(match)
   }
 
-  const tieredFallback = getTieredFallbackPath(group, type, tier, name)
-  if (tieredFallback) {
-    return assetUrl(tieredFallback)
-  }
-
-  if (group === 'Accessories' && isGenericAccessoryType(rawType)) {
-    const inferredAccessoryPath = getAccessoryGenericTypeFallbackPath(tier, name)
-    if (inferredAccessoryPath) {
-      return assetUrl(inferredAccessoryPath)
-    }
-  }
-
-  if (group === 'Armor' && isGenericArmorType(rawType)) {
-    const inferredArmorPath = getBestGroupTierFallbackPath('Armor', tier, name)
-    if (inferredArmorPath) {
-      return assetUrl(inferredArmorPath)
-    }
-  }
-
-  // Assets without a tier segment are mid-rename and are intentionally ignored.
-  return ''
+  return getTypeIconPath(type)
 }

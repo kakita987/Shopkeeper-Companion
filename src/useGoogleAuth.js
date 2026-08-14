@@ -39,7 +39,6 @@ export function useGoogleAuth({ clientId }) {
   let tokenClient = null
   let pendingSignIn = null
   let pendingTokenRequest = null
-  let pendingSilentRestore = null
   let initializePromise = null
 
   const state = {
@@ -83,35 +82,6 @@ export function useGoogleAuth({ clientId }) {
       return await pendingTokenRequest
     } finally {
       pendingTokenRequest = null
-    }
-  }
-
-  async function silentlyRestoreSession() {
-    if (pendingSilentRestore) {
-      return pendingSilentRestore
-    }
-
-    pendingSilentRestore = (async () => {
-      if (!tokenClient || state.isAuthenticated) {
-        return null
-      }
-
-      try {
-        return await requestToken({ prompt: '', suppressErrors: true })
-      } catch {
-        updateState({
-          isAuthenticated: false,
-          accessToken: null,
-          error: null,
-        })
-        return null
-      }
-    })()
-
-    try {
-      return await pendingSilentRestore
-    } finally {
-      pendingSilentRestore = null
     }
   }
 
@@ -163,8 +133,6 @@ export function useGoogleAuth({ clientId }) {
             pendingSignIn = null
           },
         })
-
-        await silentlyRestoreSession()
 
         updateState({
           isLoading: false,

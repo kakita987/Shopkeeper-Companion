@@ -22,7 +22,6 @@ import { escapeHtml, cleanText, toInventoryCount } from './textUtils.js'
 import { getBlueprintItemIconPath, getGroupIconPath, getTypeIconPath } from './blueprintIcons.js'
 import { buildBlueprintItems, convertBlueprintRowToObject } from './blueprintParsing.js'
 import { BLUEPRINT_GROUP_TYPE_ORDER } from './assets/blueprintTypeOrder.js'
-import { applyAurasongAmuletTypeMap, buildAurasongAmuletIconMapFromImport } from './assets/accessoryIconMap.js'
 import { RESOURCE_LABELS } from './resourceLabels.js'
 import { DEFAULT_SAVED_VIEW_CRITERIA, STARTER_VIEW_PRESETS, SAVED_FILTER_VIEWS_STORAGE_KEY, buildSavedViewsRows, getCollectionBookMatchDescription, hasActiveSavedViewFilters, loadSavedFilterViews, normalizeSavedViewCriteria, parseSavedViewsRows } from './savedViews.js'
 import { buildBlueprintSummary, buildDependencySummaryLine, getBlueprintVisuals, renderInventoryCollectionSection, renderLucideIcons, renderMaterialsSection, renderOverlaySectionCard, renderPreview, renderStatsCards, renderUpgradeSection } from './blueprintView.js'
@@ -249,7 +248,6 @@ let savedViewCriteria = {
 let activeSavedViewPreset = 'custom'
 let savedViewDraftName = ''
 let isSavedViewFiltersPanelOpen = true
-let isCollectionBookFiltersOpen = true
 let pendingGoogleSyncWriteTimer = null
 let pendingGoogleSyncInitPromise = null
 let hasPendingBlueprintSchemaMigration = false
@@ -1264,11 +1262,7 @@ async function importBlueprintData() {
 
     updateStatus('Downloading blueprints…')
     const { headers, rows, structuredBlueprints } = await importGoogleSheet(exportUrl)
-    const aurasongAmuletMapRows = buildAurasongAmuletIconMapFromImport(headers, rows, structuredBlueprints)
-    allBlueprintItems = applyAurasongAmuletTypeMap(
-      buildBlueprintItems(headers, rows, structuredBlueprints),
-      aurasongAmuletMapRows,
-    )
+    allBlueprintItems = buildBlueprintItems(headers, rows, structuredBlueprints)
     if (isSuspiciousBlueprintDataset(allBlueprintItems)) {
       throw new Error('The blueprint import looked incomplete (items classified as Unknown). Please import again in a moment.')
     }
@@ -1309,11 +1303,7 @@ async function initializeBlueprintDataFromCache() {
   }
 
   const { headers = [], rows = [], structuredBlueprints = [] } = cached
-  const aurasongAmuletMapRows = buildAurasongAmuletIconMapFromImport(headers, rows, structuredBlueprints)
-  allBlueprintItems = applyAurasongAmuletTypeMap(
-    buildBlueprintItems(headers, rows, structuredBlueprints),
-    aurasongAmuletMapRows,
-  )
+  allBlueprintItems = buildBlueprintItems(headers, rows, structuredBlueprints)
   if (isSuspiciousBlueprintDataset(allBlueprintItems)) {
     await removeItem(BLUEPRINT_CACHE_STORAGE_KEY)
     allBlueprintItems = []
@@ -1646,6 +1636,7 @@ function openBlueprintOverlay(item) {
     materials: structuredData.materials || {},
   }
   const totalInventory = calculateTotalInventory(blueprintState)
+  const collectionStatus = getCollectionBookStatus(blueprintState)
   const tierValue = structuredData.meta?.tier ? String(structuredData.meta.tier) : '—'
   const unlockPrerequisite = structuredData.meta?.unlockPrerequisite ? structuredData.meta.unlockPrerequisite : '—'
   const overviewStats = buildOverviewStats(structuredData, {
@@ -1709,6 +1700,7 @@ function openBlueprintOverlay(item) {
             <span class="overlay-tier-badge">Tier ${escapeHtml(tierValue)}</span>
             <span>${escapeHtml(unlockPrerequisite || 'No unlock requirement')}</span>
             <span>${escapeHtml(totalInventory)} in inventory</span>
+            <span>${escapeHtml(collectionStatus || 'Collection not started')}</span>
           </div>
         </div>
         <label class="owned-toggle overlay-owned-toggle">
@@ -1873,41 +1865,35 @@ function renderSavedViews(items = []) {
                 ], savedViewCriteria.mastered)}
               </select>
             </label>
-            <details class="saved-view-collection-disclosure" ${isCollectionBookFiltersOpen ? 'open' : ''} data-collection-book-filters-panel>
-              <summary class="saved-view-collection-summary">
-                <span>Collection Book</span>
-                <span class="saved-view-collection-chevron" aria-hidden="true">▶</span>
-              </summary>
-              <fieldset class="saved-view-filter saved-view-filter-multiselect">
-                <legend class="sr-only">Collection Book filters</legend>
-                <div class="saved-view-filter saved-view-filter-collection-state">
-                  <div class="saved-view-match-description">
-                    ${getCollectionBookMatchDescription(savedViewCriteria.collectionBookState)}
-                  </div>
-                  <div class="saved-view-match-radios" role="radiogroup" aria-label="Collection Book match state">
-                    ${[
-                      ['completed', 'Completed', 'Completed checks finished qualities'],
-                      ['needed', 'Still Needed', 'Still Needed checks missing qualities'],
-                    ].map(([value, label]) => `
-                      <label class="saved-view-match-option">
-                        <input
-                          type="radio"
-                          name="collection-book-match"
-                          data-saved-filter="collectionBookState"
-                          value="${value}"
-                          ${savedViewCriteria.collectionBookState === value ? 'checked' : ''}
-                        />
-                        <span>${label}</span>
-                      </label>
-                    `).join('')}
-                  </div>
-                  <span>Select qualities to match</span>
+            <fieldset class="saved-view-filter saved-view-filter-multiselect">
+              <legend>Collection Book</legend>
+              <div class="saved-view-filter saved-view-filter-collection-state">
+                <div class="saved-view-match-description">
+                  ${getCollectionBookMatchDescription(savedViewCriteria.collectionBookState)}
                 </div>
-                <div class="collection-book-options">
-                  ${renderCollectionBookFilterOptions(savedViewCriteria.collectionBook)}
+                <div class="saved-view-match-radios" role="radiogroup" aria-label="Collection Book match state">
+                  ${[
+                    ['completed', 'Completed', 'Completed checks finished qualities'],
+                    ['needed', 'Still Needed', 'Still Needed checks missing qualities'],
+                  ].map(([value, label]) => `
+                    <label class="saved-view-match-option">
+                      <input
+                        type="radio"
+                        name="collection-book-match"
+                        data-saved-filter="collectionBookState"
+                        value="${value}"
+                        ${savedViewCriteria.collectionBookState === value ? 'checked' : ''}
+                      />
+                      <span>${label}</span>
+                    </label>
+                  `).join('')}
                 </div>
-              </fieldset>
-            </details>
+                <span>Select qualities to match</span>
+              </div>
+              <div class="collection-book-options">
+                ${renderCollectionBookFilterOptions(savedViewCriteria.collectionBook)}
+              </div>
+            </fieldset>
           </div>
           <form class="saved-view-save-row" data-save-view-form>
             <input type="text" maxlength="60" placeholder="View Name (e.g. Not Owned + Dependents)" value="${escapeHtml(savedViewDraftName)}" data-saved-view-name />
@@ -2028,11 +2014,8 @@ function renderSavedViewResults(items = [], dependencyIndex) {
           getBlueprintMaterials,
         })
         const dependencyText = buildDependencySummaryLine(summary)
+        const collectionText = summary.isCollectionComplete ? 'Collection Complete' : `Collection ${summary.collectionStatus || 'Not started'}`
         const ownershipText = summary.isOwned ? 'Owned' : 'Not Owned'
-        const highestNeededQuality = summary.highestCollectionBookNeededQuality
-        const collectionBadge = highestNeededQuality
-          ? `<span class="collection-quality-badge ${getQualityClass(formatQualityLabel(highestNeededQuality))}" title="Highest collection quality needed">Needs ${escapeHtml(formatQualityLabel(highestNeededQuality))}</span>`
-          : ''
 
         return `
           <li class="blueprint-item saved-view-item" data-blueprint-name="${escapeHtml(item.name)}">
@@ -2042,7 +2025,7 @@ function renderSavedViewResults(items = [], dependencyIndex) {
                 <span class="item-name">${escapeHtml(item.name)}</span>
               </div>
               <div class="saved-view-item-meta">
-                <small class="saved-view-item-meta-line">${escapeHtml(`${ownershipText} · Inventory Total: ${summary.totalInventory}`)}${collectionBadge}</small>
+                <small class="saved-view-item-meta-line">${escapeHtml(`${ownershipText} · Inventory Total: ${summary.totalInventory} · ${collectionText}`)}</small>
                 ${dependencyText ? `<small class="saved-view-item-meta-line">${escapeHtml(dependencyText)}</small>` : ''}
               </div>
             </div>
@@ -2130,11 +2113,6 @@ function bindSavedViewControls() {
   const filtersPanel = savedViewsContentEl.querySelector('[data-saved-view-filters-panel]')
   filtersPanel?.addEventListener('toggle', () => {
     isSavedViewFiltersPanelOpen = filtersPanel.open
-  })
-
-  const collectionBookPanel = savedViewsContentEl.querySelector('[data-collection-book-filters-panel]')
-  collectionBookPanel?.addEventListener('toggle', () => {
-    isCollectionBookFiltersOpen = collectionBookPanel.open
   })
 
   if (hasBoundSavedViewDelegates) {

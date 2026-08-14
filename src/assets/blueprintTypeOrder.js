@@ -3,11 +3,11 @@
 export const BLUEPRINT_GROUP_TYPE_ORDER = [
   {
     group: 'Weapons',
-    types: ['Sword', 'Axe', 'Dagger', 'Mace', 'Spear', 'Bow', 'Wand', 'Staff', 'Gun', 'Crossbow', 'Instrument', 'Dual Wield', 'Catalyst'],
+    types: ['Sword', 'Axe', 'Dagger', 'Mace', 'Spear', 'Bow', 'Wand', 'Staff', 'Gun', 'Crossbow', 'Instrument', 'Dual Wield', 'Catalyst', 'Scythe'],
   },
   {
     group: 'Armor',
-    types: ['Heavy Armor', 'Light Armor', 'Clothes', 'Helmet', 'Rogue Hat', 'Magician Hat', 'Gauntlets', 'Gloves', 'Heavy Footwear', 'Light Footwear'],
+    types: ['Heavy Armor', 'Light Armor', 'Clothes', 'Helmet', 'Rogue Hat', 'Magician Hat','Mask', 'Gauntlets', 'Gloves', 'Heavy Footwear', 'Light Footwear'],
   },
   {
     group: 'Accessories',

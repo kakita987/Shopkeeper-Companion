@@ -104,79 +104,15 @@ test('renderSignInButton creates a plain consent button without the profile scop
   }
 })
 
-test('useGoogleAuth silently restores a session on startup when Google returns a token', async () => {
+test('useGoogleAuth becomes ready without requesting a token on startup', async () => {
   const originalWindow = globalThis.window
   const originalDocument = globalThis.document
 
   const prompts = []
   let oauthCallback = null
-  const tokenQueue = [{ access_token: 'restored-token' }]
-
   const tokenClient = {
     requestAccessToken({ prompt }) {
       prompts.push(prompt)
-      const response = tokenQueue.shift() || { error: 'login_required' }
-      queueMicrotask(() => {
-        oauthCallback?.(response)
-      })
-    },
-  }
-
-  globalThis.window = {
-    google: {
-      accounts: {
-        oauth2: {
-          initTokenClient: (config) => {
-            oauthCallback = config.callback
-            return tokenClient
-          },
-        },
-      },
-    },
-  }
-
-  globalThis.document = createDocumentMock()
-
-  try {
-    const auth = useGoogleAuth({ clientId: 'client-id' })
-    const becameReady = await waitFor(() => auth.getState().isReady)
-    assert.equal(becameReady, true)
-
-    const state = auth.getState()
-    assert.equal(state.isReady, true)
-    assert.equal(state.isAuthenticated, true)
-    assert.equal(state.accessToken, 'restored-token')
-    assert.deepEqual(prompts, [''])
-  } finally {
-    if (originalWindow === undefined) {
-      delete globalThis.window
-    } else {
-      globalThis.window = originalWindow
-    }
-
-    if (originalDocument === undefined) {
-      delete globalThis.document
-    } else {
-      globalThis.document = originalDocument
-    }
-  }
-})
-
-test('useGoogleAuth remains signed out without surfacing an error when silent restore fails', async () => {
-  const originalWindow = globalThis.window
-  const originalDocument = globalThis.document
-
-  const prompts = []
-  let oauthCallback = null
-  const tokenQueue = [{ error: 'login_required' }]
-
-  const tokenClient = {
-    requestAccessToken({ prompt }) {
-      prompts.push(prompt)
-      const response = tokenQueue.shift() || { error: 'login_required' }
-      queueMicrotask(() => {
-        oauthCallback?.(response)
-      })
     },
   }
 
@@ -204,8 +140,7 @@ test('useGoogleAuth remains signed out without surfacing an error when silent re
     assert.equal(state.isReady, true)
     assert.equal(state.isAuthenticated, false)
     assert.equal(state.accessToken, null)
-    assert.equal(state.error, null)
-    assert.deepEqual(prompts, [''])
+    assert.deepEqual(prompts, [])
   } finally {
     if (originalWindow === undefined) {
       delete globalThis.window
@@ -221,14 +156,74 @@ test('useGoogleAuth remains signed out without surfacing an error when silent re
   }
 })
 
-test('refreshAccessToken falls back to interactive mode after silent refresh fails', async () => {
+test('signIn requests consent after initialization', async () => {
+  const originalWindow = globalThis.window
+  const originalDocument = globalThis.document
+
+  const prompts = []
+  let oauthCallback = null
+  const tokenQueue = [{ access_token: 'signed-in-token' }]
+
+  const tokenClient = {
+    requestAccessToken({ prompt }) {
+      prompts.push(prompt)
+      const response = tokenQueue.shift() || { error: 'login_required' }
+      queueMicrotask(() => {
+        oauthCallback?.(response)
+      })
+    },
+  }
+
+  globalThis.window = {
+    google: {
+      accounts: {
+        oauth2: {
+          initTokenClient: (config) => {
+            oauthCallback = config.callback
+            return tokenClient
+          },
+        },
+      },
+    },
+  }
+
+  globalThis.document = createDocumentMock()
+
+  try {
+    const auth = useGoogleAuth({ clientId: 'client-id' })
+    const becameReady = await waitFor(() => auth.getState().isReady)
+    assert.equal(becameReady, true)
+
+    const accessToken = await auth.signIn()
+    const state = auth.getState()
+    assert.equal(state.isReady, true)
+    assert.equal(state.isAuthenticated, true)
+    assert.equal(state.accessToken, 'signed-in-token')
+    assert.equal(state.error, null)
+    assert.equal(accessToken, 'signed-in-token')
+    assert.deepEqual(prompts, ['consent'])
+  } finally {
+    if (originalWindow === undefined) {
+      delete globalThis.window
+    } else {
+      globalThis.window = originalWindow
+    }
+
+    if (originalDocument === undefined) {
+      delete globalThis.document
+    } else {
+      globalThis.document = originalDocument
+    }
+  }
+})
+
+test('refreshAccessToken requests consent in interactive mode', async () => {
   const originalWindow = globalThis.window
   const originalDocument = globalThis.document
 
   const prompts = []
   let oauthCallback = null
   const tokenQueue = [
-    { error: 'login_required' },
     { access_token: 'interactive-token' },
   ]
 
@@ -264,7 +259,7 @@ test('refreshAccessToken falls back to interactive mode after silent refresh fai
 
     const interactiveToken = await auth.refreshAccessToken({ interactive: true })
     assert.equal(interactiveToken, 'interactive-token')
-    assert.deepEqual(prompts, ['', 'consent'])
+    assert.deepEqual(prompts, ['consent'])
   } finally {
     if (originalWindow === undefined) {
       delete globalThis.window
