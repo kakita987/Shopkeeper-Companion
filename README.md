@@ -33,7 +33,7 @@ Client variables are compiled into the browser bundle and must use the `VITE_` p
 | `GITHUB_ISSUE_ASSET_PATH` | Repository directory for support attachments. |
 | `GITHUB_ISSUE_ASSET_BRANCH` | Branch receiving support attachments. |
 
-`VITE_GOOGLE_DRIVE_API_KEY` is still accepted as a compatibility fallback. New deployments should use `VITE_GOOGLE_API_KEY`.
+In Vercel, add `VITE_GOOGLE_CLIENT_ID` and `VITE_GOOGLE_API_KEY` to the Production environment. Enter only each value, without quotes or a `VITE_GOOGLE_CLIENT_ID=`/`VITE_GOOGLE_API_KEY=` prefix. Because Vite compiles these variables into the browser bundle, redeploy after adding or changing them; an existing deployment does not receive environment variable changes retroactively.
 
 ## Entry Points
 
