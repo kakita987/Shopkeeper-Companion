@@ -5,8 +5,20 @@ const GROUP_KEY_BY_NAME = {
   Enchantments: 'enchantment',
 }
 
+const GROUP_KEY_BY_ASSET_FOLDER = {
+  Weapon: 'weapon',
+  Armor: 'armor',
+  Accessory: 'accessory',
+  Enchantment: 'enchantment',
+}
+
 export function normalizeKeyPart(value) {
-  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '')
+  return String(value || '')
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
 }
 
 export function toCanonicalBlueprintLookupKey(group, type, tier, name) {
@@ -28,33 +40,24 @@ export function parseCanonicalAssetIdentity(relativePath) {
     return null
   }
 
-  const fileName = normalizedPath.split('/').pop() || ''
-  const tieredMatch = fileName.match(/^([a-z0-9_-]+)_t(\d+)_([a-z0-9_-]+)\.(?:png|jpe?g|gif|webp|svg)$/i)
-  const untieredMatch = fileName.match(/^([a-z0-9_-]+)_([a-z0-9_-]+)\.(?:png|jpe?g|gif|webp|svg)$/i)
-
-  const match = tieredMatch || untieredMatch
+  const pathSegments = normalizedPath.split('/').filter(Boolean)
+  const fileName = pathSegments.at(-1) || ''
+  const groupSegment = GROUP_KEY_BY_ASSET_FOLDER[pathSegments.at(-2)] || ''
+  const match = fileName.match(/^([a-z0-9_-]+)_t(\d+)_([a-z0-9_-]+)\.(?:png|jpe?g|gif|webp|svg)$/i)
   if (!match) {
     return null
   }
 
-  const prefix = match[1] || ''
-  const tier = tieredMatch ? Number(match[2]) : null
-  const nameSegment = tieredMatch ? (match[3] || '') : (match[2] || '')
+  const rawTypeSegment = match[1].toLowerCase()
+  const typeSegment = normalizeKeyPart(rawTypeSegment)
+  const tier = Number(match[2])
+  const normalizedName = normalizeKeyPart(match[3])
 
-  if (tier !== null && (!Number.isInteger(tier) || tier < 0)) {
+  if (!Number.isInteger(tier) || tier < 0) {
     return null
   }
 
-  const prefixTokens = prefix.split('_').filter(Boolean)
-  if (prefixTokens.length < 2) {
-    return null
-  }
-
-  const groupSegment = normalizeKeyPart(prefixTokens[0])
-  const typeSegment = normalizeKeyPart(prefixTokens.slice(1).join('_'))
-  const normalizedName = normalizeKeyPart(nameSegment)
-
-  if (!groupSegment || !typeSegment || !normalizedName) {
+  if (!groupSegment || rawTypeSegment.startsWith(`${groupSegment}_`) || !typeSegment || !normalizedName) {
     return null
   }
 
@@ -68,7 +71,7 @@ export function parseCanonicalAssetIdentity(relativePath) {
 
 export function parseCanonicalAssetLookupKey(relativePath) {
   const parsed = parseCanonicalAssetIdentity(relativePath)
-  if (!parsed || parsed.tier === null) {
+  if (!parsed) {
     return ''
   }
 
