@@ -20,7 +20,7 @@ npm run preview
 
 ## Configuration
 
-Client variables are compiled into the browser bundle and must use the `VITE_` prefix. Do not put secrets in them. 
+Client variables are compiled into the browser bundle and must use the `VITE_` prefix. Do not put secrets in them.
 
 | Variable | Purpose |
 | --- | --- |
