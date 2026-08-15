@@ -26,11 +26,14 @@ import { RESOURCE_LABELS } from './resourceLabels.js'
 import { DEFAULT_SAVED_VIEW_CRITERIA, STARTER_VIEW_PRESETS, SAVED_FILTER_VIEWS_STORAGE_KEY, buildSavedViewsRows, getCollectionBookMatchDescription, hasActiveSavedViewFilters, loadSavedFilterViews, normalizeSavedViewCriteria, parseSavedViewsRows } from './savedViews.js'
 import { buildBlueprintSummary, buildDependencySummaryLine, getBlueprintVisuals, renderInventoryCollectionSection, renderLucideIcons, renderMaterialsSection, renderOverlaySectionCard, renderPreview, renderStatsCards, renderUpgradeSection } from './blueprintView.js'
 import { BLUEPRINT_DETAIL_LAYOUT_PRESETS, BLUEPRINT_DETAIL_LAYOUT_SETTINGS_KEY, BLUEPRINT_DETAIL_SECTIONS, getBlueprintDetailLayoutSections, loadBlueprintDetailLayout, moveCustomLayoutSection, parseBlueprintDetailLayoutSetting, resetCustomBlueprintDetailLayout, saveBlueprintDetailLayout, setCustomLayoutSectionVisibility } from './blueprintDetailLayouts.js'
+import { exportBlueprintProgressCsvText, importBlueprintProgressCsvText } from './blueprintCsv.js'
 
 const DEFAULT_SPREADSHEET_URL = 'https://playshoptitans.com/spreadsheet'
 const FALLBACK_GOOGLE_SHEET_URL = import.meta.env.VITE_BLUEPRINT_SHEET_URL || 'https://docs.google.com/spreadsheets/d/1WLa7X8h3O0-aGKxeAlCL7bnN8-FhGd3t7pz2RCzSg8c/edit'
 const apiKey = import.meta.env.VITE_GOOGLE_API_KEY
 const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
+const GOOGLE_SYNC_TEMPORARILY_DISABLED = true
+const GOOGLE_SYNC_DISABLED_MESSAGE = 'Google Sync is temporarily disabled while we resolve a Google API configuration issue. Your progress remains stored locally.'
 
 const GROUP_DEFINITIONS = BLUEPRINT_GROUP_TYPE_ORDER
 const GROUP_ORDER_INDEX = new Map(
@@ -147,13 +150,18 @@ app.innerHTML = `
         </section>
 
         <section class="settings-section">
-          <h3>Sync your progress with Google Sheets</h3>
+          <h3>Save your progress</h3>
+          <p class="settings-copy">Your progress is saved in this browser. Download a fresh CSV copy anytime for safekeeping or bulk editing, then upload the edited CSV to apply your changes.</p>
+          <div id="progress-backup" class="progress-backup"></div>
+          <p class="settings-copy"><a class="inline-link" href="/bulk-edit.html" target="_blank" rel="noopener noreferrer">Read the backup and bulk edit guide</a></p>
+        </section>
+
+        <section class="settings-section">
+          <h3>Google Sync</h3>
           <div id="google-auth" class="google-auth"></div>
           <details class="attribution-details advanced-sync-details">
-            <summary><span class="advanced-sync-toggle-icon" aria-hidden="true">▶</span> Why Google Sheets?</summary>
-            <p class="settings-copy">Your progress is stored in a Google Sheet named <strong>Shopkeeper Companion User Data</strong> in your Drive, so it's always yours and easy to back up or inspect.</p>
-            <p class="settings-copy">As a bonus, you can edit values directly in the sheet, then hit <strong>Sync Now</strong> to bring those changes into the app.</p>
-            <p class="settings-copy"><a class="inline-link" href="/bulk-edit.html" target="_blank" rel="noopener noreferrer">Read the full Google Sync guide</a></p>
+            <summary><span class="advanced-sync-toggle-icon" aria-hidden="true">▶</span> About Google Sync</summary>
+            <p class="settings-copy">Google Sync is an optional convenience that can keep your progress in a Google Sheet in your Drive. CSV saving above remains available whether or not Google Sync is connected.</p>
           </details>
         </section>
 
@@ -211,6 +219,7 @@ const blueprintVersionEl = document.querySelector('#blueprint-version')
 const kofiSupportButtonEl = document.querySelector('#kofi-support-button')
 const blueprintOverlay = document.querySelector('#blueprint-overlay')
 const blueprintOverlayContent = document.querySelector('#blueprint-overlay-content')
+const progressBackupContainer = document.querySelector('#progress-backup')
 const googleAuthContainer = document.querySelector('#google-auth')
 const desktopAdBannerEl = document.querySelector('#desktop-ad-banner')
 const mobileAdBannerEl = document.querySelector('#mobile-ad-banner')
@@ -338,7 +347,10 @@ form.addEventListener('submit', async (event) => {
 
 async function init() {
   await initializeBlueprintDataFromCache()
-  await hydrateGoogleSyncSpreadsheetId()
+  initializeCsvBackupUi()
+  if (!GOOGLE_SYNC_TEMPORARILY_DISABLED) {
+    await hydrateGoogleSyncSpreadsheetId()
+  }
   initializeGoogleAuthUi()
 }
 
@@ -349,12 +361,86 @@ function initializeGoogleAuthUi() {
     return
   }
 
+  if (GOOGLE_SYNC_TEMPORARILY_DISABLED) {
+    renderGoogleSyncDisabledUi()
+    return
+  }
+
   renderGoogleAuthUi(googleAuth.getState())
   void handleGoogleAuthStateChange(googleAuth.getState())
 
   googleAuth.subscribe((state) => {
     renderGoogleAuthUi(state)
     void handleGoogleAuthStateChange(state)
+  })
+}
+
+function renderGoogleSyncDisabledUi() {
+  googleAuthContainer.innerHTML = `
+    <div class="google-sync-disabled" tabindex="0" title="${escapeHtml(GOOGLE_SYNC_DISABLED_MESSAGE)}" aria-label="${escapeHtml(GOOGLE_SYNC_DISABLED_MESSAGE)}">
+      <button type="button" class="auth-button" disabled>Google Sync temporarily disabled</button>
+      <p class="settings-copy sync-caption">CSV saving and bulk editing remain available above while Google Sync is unavailable.</p>
+    </div>
+  `
+}
+
+function initializeCsvBackupUi() {
+  if (!progressBackupContainer) {
+    return
+  }
+
+  progressBackupContainer.innerHTML = `
+    <div class="progress-backup-actions">
+      <button type="button" class="auth-button" data-backup-action="download">Download progress CSV</button>
+      <label class="auth-button auth-button-secondary progress-backup-upload">
+        Upload edited CSV
+        <input type="file" accept=".csv,text/csv" data-backup-input aria-label="Upload edited CSV" />
+      </label>
+    </div>
+    <p class="settings-copy sync-caption" data-backup-status aria-live="polite"></p>
+  `
+
+  bindCsvBackupActions(progressBackupContainer)
+}
+
+function bindCsvBackupActions(container) {
+  const downloadButton = container.querySelector('[data-backup-action="download"]')
+  const uploadInput = container.querySelector('[data-backup-input]')
+  const statusElement = container.querySelector('[data-backup-status]')
+
+  downloadButton?.addEventListener('click', () => {
+    const csvText = exportBlueprintProgressCsvText(allBlueprintItems, blueprintProgressByName)
+    const dateStamp = new Date().toISOString().slice(0, 10)
+    const objectUrl = URL.createObjectURL(new Blob([csvText], { type: 'text/csv;charset=utf-8' }))
+    const downloadLink = document.createElement('a')
+    downloadLink.href = objectUrl
+    downloadLink.download = `shopkeeper-companion-backup-${dateStamp}.csv`
+    downloadLink.click()
+    URL.revokeObjectURL(objectUrl)
+
+    statusElement.textContent = `Saved a CSV snapshot with ${allBlueprintItems.length} blueprint rows.`
+    statusElement.classList.remove('sync-error')
+  })
+
+  uploadInput?.addEventListener('change', async () => {
+    const selectedFile = uploadInput.files?.[0]
+    if (!selectedFile) {
+      return
+    }
+
+    try {
+      const { progress, rowCount } = importBlueprintProgressCsvText(await selectedFile.text(), blueprintProgressByName)
+      blueprintProgressByName = progress
+      localStorage.setItem(BLUEPRINT_PROGRESS_STORAGE_KEY, JSON.stringify(blueprintProgressByName))
+      renderSavedViews(allBlueprintItems)
+      statusElement.textContent = `Applied progress from ${rowCount} blueprint rows.`
+      statusElement.classList.remove('sync-error')
+    } catch (error) {
+      statusElement.textContent = error?.message || 'Unable to import this CSV backup.'
+      statusElement.classList.add('sync-error')
+    } finally {
+      uploadInput.value = ''
+    }
   })
 }
 

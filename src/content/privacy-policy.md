@@ -4,7 +4,7 @@
 
 Shopkeeper Companion is a free, local-first web tool for **Shop Titans** players.
 
-The short version: your player progress stays on your device unless you enable Google Sync. Limited page-view analytics and support-request processing use third-party services as described below.
+The short version: your player progress stays on your device unless you enable Google Sync. CSV backups are created and read locally. Limited page-view analytics and support-request processing use third-party services as described below.
 
 ## How Your Data Works
 
@@ -14,6 +14,12 @@ Shopkeeper Companion is designed to keep your data under your control.
 - **Your Data Stays Yours:** Your settings and player progress data are stored on your device unless you choose to enable Google synchronization.
 - **No Developer Database:** Shopkeeper Companion does not hold a server-side database of your activity or player data.
 - **No Fingerprinting:** Shopkeeper Companion does not fingerprint your device or build an advertising profile from your player data.
+
+## CSV Backup and Import
+
+Shopkeeper Companion can create a CSV copy of your blueprint progress for backup and bulk editing. The CSV is generated in your browser and downloaded directly to your device. When you upload an edited CSV, it is read in your browser and applied to local progress data.
+
+CSV files are not sent to Shopkeeper Companion, its developer, or another external service. You control where downloaded files are stored and whether you open them with a third-party spreadsheet application.
 
 ## Google Synchronization
 

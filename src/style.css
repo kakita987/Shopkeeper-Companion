@@ -2278,6 +2278,52 @@ body.theme-dark .size-slider::-moz-range-thumb,
   min-height: 42px;
 }
 
+.google-sync-disabled {
+  display: grid;
+  gap: 8px;
+  max-width: 560px;
+  cursor: help;
+}
+
+.google-sync-disabled:focus-visible,
+.progress-backup-upload:focus-within {
+  outline: 3px solid rgba(15, 118, 110, 0.4);
+  outline-offset: 3px;
+}
+
+.progress-backup-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.google-auth .google-sync-disabled .auth-button:disabled {
+  opacity: 1;
+  background: #667085;
+  color: #ffffff !important;
+}
+
+.progress-backup .progress-backup-actions .auth-button {
+  color: #ffffff !important;
+}
+
+.progress-backup-upload {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.progress-backup-upload input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .auth-controls {
   display: flex;
   align-items: center;
