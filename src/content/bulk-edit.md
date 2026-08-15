@@ -1,76 +1,56 @@
-# Google Sync Documentation
+# Backup & Bulk Edit Guide
 
-## Overview
-Google Sync creates a private Google Sheet in your Google Drive that acts as a backup and advanced editing tool.
+## Save Your Progress
 
-The app remains the primary experience. Most users can use Shopkeeper Companion normally without editing the sheet.
+Shopkeeper Companion stores your progress in your browser. The standard way to keep a portable copy is to download a progress CSV from **Save your progress** in Settings.
 
-### Connecting Google Sync
+Each download creates a fresh snapshot. It does not update an older file automatically, so keep the latest copy somewhere safe if you want an up-to-date backup.
 
-1. Open the Settings panel in Shopkeeper Companion.
-2. Select Sign In with Google.
-3. In the window that pops up, sign in to your Google account.
-4. Allow Shopkeeper Companion to create a private data sheet in your Google Drive.
+The CSV contains blueprint progress only. Saved Views, theme, font, and other app settings are not included.
 
-Your sheet will be created automatically and will appear in Google Drive as:
-    Shopkeeper Companion User Data
+## Download a CSV
 
-## How Sync Works
-- Changes made in the app can be synced to your Google Sheet.
-- Changes made in the Google Sheet can be loaded back into the app.
-- Blueprint records are matched by Blueprint Name, not row order.
-- You can reorder rows without breaking sync.
+1. Open Settings.
+2. Find **Save your progress**.
+3. Select **Download progress CSV**.
+4. Store the downloaded file wherever you keep your backups.
 
-## Using Your Google Sheet
+You can open the CSV in Google Sheets, Excel, Numbers, LibreOffice, or another spreadsheet editor.
+
+## Bulk Edit Progress
+
+Each row represents one blueprint. Blueprint records are matched by `Blueprint Name`, not row position, so rows can be reordered without changing which blueprint receives the progress.
 
 ### Important Rules
-- Do not rename tabs.
-- Do not change column headers.
-- Blueprint names must remain unchanged because they identify records during sync.
-- Empty unused rows and columns are not required.
 
-### Opening Your Sheet
+- Keep the header row unchanged.
+- Keep each `Blueprint Name` unchanged.
+- Use whole numbers for inventory counts.
+- Use `TRUE` or `FALSE` for `Owned`, `Starforge`, and Collection fields.
+- `Milestones` accepts 0–10: Milestones 1–5 followed by Starforge 1–5.
+- `Improve` accepts 0–6: Improve 1–3 followed by Transcendence 1–3.
+- The `Group`, `Type`, and `Tier` columns identify blueprints for readability; progress is still matched by `Blueprint Name`.
 
-After connecting, use the Google Sync controls in Settings to open the linked sheet. You can also use Google Picker to select an existing Shopkeeper Companion sheet or choose where a new sheet is created.
+## Upload an Edited CSV
 
-## Google Sheet Tabs
+1. Save your spreadsheet edits as a CSV file.
+2. Open Settings in Shopkeeper Companion.
+3. Under **Save your progress**, select **Upload edited CSV**.
+4. Choose the edited file.
 
-### ReadMe
-- Instructions and sync information.
+Recognized rows are applied to the progress stored in your browser. Rows not included in the CSV keep their existing progress.
 
-### Blueprint Tabs
-- Blueprint information and your personal progress data.
-- Each row represents one blueprint.
-- Inventory counts use whole numbers.
-- `Owned`, `Starforge`, and Collection Book fields use TRUE/FALSE values.
-- `Milestones` stores progress from 0–10: Milestones 1–5 followed by Starforge 1–5.
-- `Improve` stores progress from 0–6: Improve 1–3 followed by Transcendence 1–3.
+After importing, download a new CSV if you want a fresh backup containing the applied changes.
 
-### Saved Views
-- Stores saved filter and search configurations.
+## Google Sync
 
-### Settings
-- Stores app preferences such as theme and font settings.
+Google Sync is an optional convenience for two-way synchronization with a Google Sheet in your Drive. It is separate from CSV saving and is currently unavailable while an API configuration issue is resolved.
 
-## Editing Your Google Sheet
-
-The app is the primary way to manage your companion data. The Google Sheet is an optional tool for backups and bulk editing.
-
-To make bulk changes:
-1. Open Shopkeeper Companion User Data in Google Drive.
-2. Edit the values you want to change.
-3. Wait for Google Sheets to show that the changes are saved.
-4. Return to Shopkeeper Companion.
-5. Open Settings.
-6. Select Sync Now.
-
-Your changes will be imported into the app.
-
-## Backup and Data Safety
-Your Google Sheet is stored in your own Google Drive. It provides a backup of your companion progress and allows advanced spreadsheet editing when needed.
+CSV download and upload remain available without signing in to Google.
 
 ## Troubleshooting
 
-- If the Picker does not open, allow popups for the site and confirm the deployment has a Google API key configured.
-- If rows do not update, restore the original tab names, column headers, and Blueprint Name values.
-- If a sheet was moved or replaced, use Picker in Settings to link the correct spreadsheet and sync again.
+- If an upload is rejected, confirm the file is a CSV and includes the `Blueprint Name` header.
+- If a row does not update, restore its original `Blueprint Name` and the original progress column headers.
+- If a value does not apply, use a whole number or `TRUE`/`FALSE` as described above.
+- If you imported the wrong file, upload a previous CSV backup to restore the progress values it contains.

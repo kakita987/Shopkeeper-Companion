@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  buildBlueprintProgressCsvRows,
   buildSpreadsheetCreationPromptMessage,
   buildWorkbookPayload,
   getGoogleSyncErrorMessage,
@@ -13,6 +14,23 @@ import {
   shouldWipeSpreadsheetId,
   writeSyncTables,
 } from './googleSheetSync.js'
+
+test('buildBlueprintProgressCsvRows creates one flat grouped progress table', () => {
+  const { headers, rows } = buildBlueprintProgressCsvRows([
+    {
+      name: 'Test Sword',
+      classification: { group: 'Weapons', type: 'Sword' },
+      structuredData: { meta: { type: 'Sword', tier: 1 } },
+    },
+  ], {
+    'Test Sword': { owned: true },
+  })
+
+  assert.deepEqual(headers.slice(0, 4), ['Group', 'Blueprint Name', 'Type', 'Tier'])
+  assert.equal(rows[0][0], 'Weapons')
+  assert.equal(rows[0][1], 'Test Sword')
+  assert.equal(rows[0][headers.indexOf('Owned')], 'TRUE')
+})
 
 test('buildWorkbookPayload creates the requested sheet order and initializes blueprint progress defaults', () => {
   const payload = buildWorkbookPayload({

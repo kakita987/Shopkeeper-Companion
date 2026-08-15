@@ -534,6 +534,16 @@ function buildBlueprintWorkbookRows(blueprintItems = [], blueprintProgressByName
   return buildWorkbookSheetRows(headers, rows)
 }
 
+export function buildBlueprintProgressCsvRows(blueprintItems = [], blueprintProgressByName = {}) {
+  const headers = ['Group', ...getBlueprintHeaders()]
+  const rows = sortBlueprintItemsForWorkbook(blueprintItems).map((item) => {
+    const group = item?.classification?.group || item?.classification?.category || ''
+    return [group, ...buildBlueprintRow(item, blueprintProgressByName?.[item?.name] || {})]
+  })
+
+  return { headers, rows }
+}
+
 function buildWorkbookPayload(options = {}) {
   const settingsRows = Array.isArray(options?.settingsRows) ? options.settingsRows : []
   const savedViewRows = Array.isArray(options?.savedViewRows) ? options.savedViewRows : []

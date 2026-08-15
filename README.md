@@ -43,7 +43,7 @@ Vite builds five pages:
 | --- | --- | --- |
 | `index.html` | `src/main.js` | Blueprint browser, progress tracking, Saved Views, settings, and sync orchestration. |
 | `about.html` | `src/about.js` | Renders `src/content/about.md` through the shared docs-page shell. |
-| `bulk-edit.html` | `src/bulkEdit.js` | Renders Google Sync documentation through the shared docs-page shell. |
+| `bulk-edit.html` | `src/bulkEdit.js` | Renders CSV backup, bulk-edit, and optional Google Sync documentation through the shared docs-page shell. |
 | `privacy.html` | `src/privacy.js` | Renders the privacy policy through the shared docs-page shell. |
 | `support.html` | `src/support.js` | Validates and submits support tickets. |
 

@@ -16,7 +16,7 @@ The app allows players to:
 - Browse and search blueprint information
 - Track ownership and mastery progress
 - Create custom filtered views
-- Sync their information with Google Sheets
+- Save and bulk edit their progress with portable CSV files
 
 ### Community Driven
 
