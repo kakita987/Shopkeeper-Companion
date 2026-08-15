@@ -237,41 +237,6 @@ export function renderUpgradeSection(upgrades = {}, blueprintName = '', progress
   return `<div class="upgrade-groups-grid">${markup.join('')}</div>`
 }
 
-export function renderInventorySection(progress = {}, { qualityLabels = ['Normal', 'Superior', 'Flawless', 'Epic', 'Legendary'], getQualityClass, escapeHtml: escapeMarkup } = {}) {
-  return qualityLabels.map((label) => {
-    const key = label.toLowerCase()
-    const value = progress.inventory?.[key] ?? 0
-    const qualityClass = getQualityClass(label)
-    return `
-      <label class="inventory-field inventory-color-only ${qualityClass}" title="${escapeMarkup(label)}">
-        <span class="inventory-quality-label">${escapeMarkup(label)}</span>
-        <input class="quality-input" aria-label="${escapeMarkup(label)} quality inventory" type="number" min="0" step="1" value="${value}" data-quality-key="${escapeMarkup(key)}" />
-      </label>
-    `
-  }).join('')
-}
-
-export function renderCollectionSection(progress = {}, isOwned = false, { getQualityClass, escapeHtml: escapeMarkup } = {}) {
-  const qualities = ['superior', 'flawless', 'epic', 'legendary']
-  const collectionValues = progress.collectionBook || {}
-
-  return `
-    <div class="collection-notice">${isOwned ? 'Checked = complete in your collection book.' : 'Set Owned to enable this section.'}</div>
-    <div class="inventory-grid">
-      ${qualities.map((key) => {
-        const label = key.charAt(0).toUpperCase() + key.slice(1)
-        const qualityClass = getQualityClass(label)
-        return `
-          <label class="inventory-field collection-toggle-field ${qualityClass}" title="${escapeMarkup(label)}">
-            <span class="inventory-quality-label">${escapeMarkup(label)}</span>
-            <input class="collection-input" aria-label="${escapeMarkup(label)} collection status" type="checkbox" data-quality-key="${escapeMarkup(key)}" ${collectionValues[key] ? 'checked' : ''} ${isOwned ? '' : 'disabled'} />
-          </label>
-        `
-      }).join('')}
-    </div>
-  `
-}
-
 export function renderInventoryCollectionSection(progress = {}, isOwned = false, { qualityLabels = ['Normal', 'Superior', 'Flawless', 'Epic', 'Legendary'], getQualityClass, escapeHtml: escapeMarkup } = {}) {
   const collectionValues = progress.collectionBook || {}
 

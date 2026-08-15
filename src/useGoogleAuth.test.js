@@ -158,17 +158,17 @@ test('useGoogleAuth becomes ready without requesting a token on startup', async 
   }
 })
 
-test('useGoogleAuth rejects a malformed deployment client ID before initializing GIS', async () => {
+test('useGoogleAuth passes a configured client ID to Google Identity Services', async () => {
   const originalWindow = globalThis.window
   const originalDocument = globalThis.document
-  let initializeCalls = 0
+  let receivedClientId = null
 
   globalThis.window = {
     google: {
       accounts: {
         oauth2: {
-          initTokenClient: () => {
-            initializeCalls += 1
+          initTokenClient: (config) => {
+            receivedClientId = config.client_id
             return {}
           },
         },
@@ -178,14 +178,16 @@ test('useGoogleAuth rejects a malformed deployment client ID before initializing
   globalThis.document = createDocumentMock()
 
   try {
-    const auth = useGoogleAuth({ clientId: `VITE_GOOGLE_CLIENT_ID=${VALID_CLIENT_ID}` })
-    await flushMicrotasks()
+    const configuredClientId = 'configured-by-vercel'
+    const auth = useGoogleAuth({ clientId: configuredClientId })
+    const becameReady = await waitFor(() => auth.getState().isReady)
 
     const state = auth.getState()
-    assert.equal(state.isReady, false)
-    assert.equal(state.clientIdMissing, true)
-    assert.match(state.error, /must contain only a Web application client ID/)
-    assert.equal(initializeCalls, 0)
+    assert.equal(becameReady, true)
+    assert.equal(state.isReady, true)
+    assert.equal(state.clientIdMissing, false)
+    assert.equal(state.error, null)
+    assert.equal(receivedClientId, configuredClientId)
   } finally {
     if (originalWindow === undefined) {
       delete globalThis.window
