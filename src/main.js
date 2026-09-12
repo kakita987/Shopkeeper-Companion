@@ -67,7 +67,7 @@ app.innerHTML = `
     <header class="app-header">
       <div class="hero-copy">
         <h1 class="hero-title">
-          <span class="hero-title-text">Shopkeeper Companion</span>
+          <a class="site-title-link hero-title-text" href="/" aria-label="Go to the start guide">Shopkeeper Companion</a>
           <span class="hero-title-split" aria-hidden="true">
             <span>Shopkeeper</span>
             <span>Companion</span>
@@ -108,6 +108,16 @@ app.innerHTML = `
       </div>
     </div>
 
+    <footer class="site-footer-links" aria-label="Legal and project links">
+      <a class="site-footer-link" href="/support.html">Support</a>
+      <span class="site-footer-separator" aria-hidden="true">•</span>
+      <a class="site-footer-link" href="/about.html">About</a>
+      <span class="site-footer-separator" aria-hidden="true">•</span>
+      <a class="site-footer-link" href="/">Guide</a>
+      <span class="site-footer-separator" aria-hidden="true">•</span>
+      <a class="site-footer-link" href="/privacy.html">Privacy Policy</a>
+    </footer>
+
     <aside id="settings-panel" class="settings-panel" aria-hidden="true">
       <div class="settings-card">
         <div class="settings-header">
@@ -115,15 +125,7 @@ app.innerHTML = `
           <button id="close-settings" class="close-settings" type="button" aria-label="Close settings">×</button>
         </div>
 
-        <section class="settings-section">
-          <form id="import-form" class="import-form compact-form">
-            <button type="submit">Import Blueprints</button>
-            <p id="blueprint-version" class="settings-copy blueprint-version"></p>
-          </form>
-          <p class="settings-copy">Bring in the latest blueprint library from the developer spreadsheet whenever it needs a refresh.</p>
-        </section>
-
-        <section class="settings-section settings-section--inline">
+        <section class="settings-section settings-section--inline" data-settings-section="theme">
           <h3>Theme</h3>
           <div class="theme-options">
             <label><input type="radio" name="theme" value="light" /> Light</label>
@@ -132,7 +134,7 @@ app.innerHTML = `
           </div>
         </section>
 
-        <section class="settings-section settings-section--inline">
+        <section class="settings-section settings-section--inline" data-settings-section="font">
           <h3>Font</h3>
           <select id="font-select" class="font-select" aria-label="Font style">
             <option value="default">Aesthetic (Default)</option>
@@ -141,7 +143,7 @@ app.innerHTML = `
           </select>
         </section>
 
-        <section class="settings-section settings-section--inline">
+        <section class="settings-section settings-section--inline" data-settings-section="size">
           <h3><label for="size-slider">Size</label></h3>
           <div class="size-slider-control">
             <input id="size-slider" class="size-slider" type="range" min="0" max="2" step="1" value="1" aria-valuetext="Medium" />
@@ -149,7 +151,15 @@ app.innerHTML = `
           </div>
         </section>
 
-        <section class="settings-section">
+        <section class="settings-section" data-settings-section="import">
+          <form id="import-form" class="import-form compact-form">
+            <button type="submit">Import Blueprints</button>
+            <p id="blueprint-version" class="settings-copy blueprint-version"></p>
+          </form>
+          <p class="settings-copy">Bring in the latest blueprint library from the developer spreadsheet whenever it needs a refresh.</p>
+        </section>
+
+        <section class="settings-section" data-settings-section="save-progress">
           <h3>Save your progress</h3>
           <p class="settings-copy">Your progress is saved in this browser. Download a fresh CSV copy anytime for safekeeping or bulk editing, then upload the edited CSV to apply your changes.</p>
           <div id="progress-backup" class="progress-backup"></div>
@@ -172,7 +182,7 @@ app.innerHTML = `
           </a>
         </section>
 
-        <section class="settings-section">
+        <section class="settings-section" data-settings-section="attribution">
           <h3>Attribution</h3>
           <details class="attribution-details">
             <summary>Icons</summary>
@@ -185,7 +195,6 @@ app.innerHTML = `
         </section>
       </div>
     </aside>
-    </main>
 
     <aside class="desktop-ad-rail" aria-label="Sponsored content">
       <div id="desktop-ad-banner"></div>
@@ -195,14 +204,6 @@ app.innerHTML = `
   <div class="mobile-ad-rail" aria-label="Sponsored content">
     <div id="mobile-ad-banner"></div>
   </div>
-
-  <footer class="site-footer-links" aria-label="Legal and project links">
-    <a class="site-footer-link" href="/support.html">Support</a>
-    <span class="site-footer-separator" aria-hidden="true">•</span>
-    <a class="site-footer-link" href="/about.html">About</a>
-    <span class="site-footer-separator" aria-hidden="true">•</span>
-    <a class="site-footer-link" href="/privacy.html">Privacy Policy</a>
-  </footer>
 `
 
 const form = document.querySelector('#import-form')
@@ -1413,15 +1414,17 @@ async function initializeBlueprintDataFromCache() {
   updateStatus('', 'info')
 }
 
-async function saveBlueprintCache(payload) {
-  const safePayload = {
+function normalizeBlueprintCachePayload(payload) {
+  return {
     headers: Array.isArray(payload?.headers) ? payload.headers : [],
     rows: Array.isArray(payload?.rows) ? payload.rows : [],
     structuredBlueprints: Array.isArray(payload?.structuredBlueprints) ? payload.structuredBlueprints : [],
     versionLabel: typeof payload?.versionLabel === 'string' ? payload.versionLabel : '',
   }
+}
 
-  await setItem(BLUEPRINT_CACHE_STORAGE_KEY, safePayload)
+async function saveBlueprintCache(payload) {
+  await setItem(BLUEPRINT_CACHE_STORAGE_KEY, normalizeBlueprintCachePayload(payload))
 }
 
 function renderBlueprintVersionLabel(versionLabel) {
@@ -1492,26 +1495,28 @@ function extractSpreadsheetVersionLabel(title) {
 async function loadBlueprintCache() {
   try {
     const cached = await getItem(BLUEPRINT_CACHE_STORAGE_KEY)
-    if (!cached || typeof cached !== 'object') {
-      // Check legacy localStorage cache
-      const legacy = JSON.parse(localStorage.getItem(BLUEPRINT_CACHE_STORAGE_KEY) || 'null')
-      if (legacy) {
-        localStorage.removeItem(BLUEPRINT_CACHE_STORAGE_KEY)
-        await saveBlueprintCache(legacy)
-        return legacy
+    if (cached && typeof cached === 'object') {
+      const normalized = normalizeBlueprintCachePayload(cached)
+      if (!Array.isArray(normalized.headers) || !Array.isArray(normalized.structuredBlueprints)) {
+        return null
       }
-      return null
+
+      if ('rows' in cached && !Array.isArray(cached.rows)) {
+        return null
+      }
+
+      return normalized
     }
 
-    if (!Array.isArray(cached.headers) || !Array.isArray(cached.structuredBlueprints)) {
-      return null
+    const legacy = JSON.parse(localStorage.getItem(BLUEPRINT_CACHE_STORAGE_KEY) || 'null')
+    if (legacy && typeof legacy === 'object') {
+      localStorage.removeItem(BLUEPRINT_CACHE_STORAGE_KEY)
+      const migrated = normalizeBlueprintCachePayload(legacy)
+      await saveBlueprintCache(migrated)
+      return migrated
     }
 
-    if ('rows' in cached && !Array.isArray(cached.rows)) {
-      return null
-    }
-
-    return cached
+    return null
   } catch (error) {
     console.warn('Unable to read blueprint cache.', error)
     return null

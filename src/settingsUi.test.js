@@ -4,6 +4,7 @@ import {
   applySizePreference,
   getStoredSizePreference,
   initSettingsUi,
+  sortSettingsSections,
 } from './settingsUi.js'
 
 function installPreferenceGlobals(storedValues = {}) {
@@ -189,6 +190,22 @@ test('size slider ignores input on the already committed stop', () => {
   } finally {
     globals.restore()
   }
+})
+
+test('settings sections are sorted into the canonical order', () => {
+  const sections = [
+    { dataset: { settingsSection: 'save-progress' }, textContent: 'Save your progress' },
+    { dataset: { settingsSection: 'theme' }, textContent: 'Theme' },
+    { dataset: { settingsSection: 'attribution' }, textContent: 'Attribution' },
+    { dataset: { settingsSection: 'import' }, textContent: 'Import Blueprints' },
+    { dataset: { settingsSection: 'font' }, textContent: 'Font' },
+    { dataset: { settingsSection: 'size' }, textContent: 'Size' },
+  ]
+
+  assert.deepEqual(
+    sortSettingsSections(sections).map((section) => section.dataset.settingsSection),
+    ['theme', 'font', 'size', 'import', 'save-progress', 'attribution']
+  )
 })
 
 test('size slider keyboard controls select discrete sizes', () => {

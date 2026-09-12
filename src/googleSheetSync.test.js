@@ -14,6 +14,12 @@ import {
   shouldWipeSpreadsheetId,
   writeSyncTables,
 } from './googleSheetSync.js'
+import { migrateLegacyBlueprintSchemaInPlace as migrateLegacyBlueprintSchemaCompat } from './legacyBlueprintMigration.js'
+
+test('legacy migration logic is available from the dedicated compatibility module', async () => {
+  assert.equal(typeof migrateLegacyBlueprintSchemaCompat, 'function')
+  assert.equal(typeof migrateLegacyBlueprintSchemaCompat, typeof migrateLegacyBlueprintSchemaInPlace)
+})
 
 test('buildBlueprintProgressCsvRows creates one flat grouped progress table', () => {
   const { headers, rows } = buildBlueprintProgressCsvRows([

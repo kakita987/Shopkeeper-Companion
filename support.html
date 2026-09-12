@@ -16,7 +16,7 @@
         <main class="importer-shell">
           <header class="app-header">
             <div class="hero-copy">
-              <h1>Shopkeeper Companion</h1>
+              <h1><a class="site-title-link" href="/" aria-label="Go to the start guide">Shopkeeper Companion</a></h1>
             </div>
 
             <nav class="top-tabs" aria-label="Primary">
@@ -40,6 +40,8 @@
             <span class="site-footer-separator" aria-hidden="true">•</span>
             <a class="site-footer-link" href="/about.html">About</a>
             <span class="site-footer-separator" aria-hidden="true">•</span>
+            <a class="site-footer-link" href="/">Guide</a>
+            <span class="site-footer-separator" aria-hidden="true">•</span>
             <a class="site-footer-link" href="/privacy.html">Privacy Policy</a>
           </footer>
         </main>
@@ -53,7 +55,7 @@
           <button id="close-settings" class="close-settings" type="button" aria-label="Close settings">×</button>
         </div>
 
-        <section class="settings-section settings-section--inline">
+        <section class="settings-section settings-section--inline" data-settings-section="theme">
           <h3>Theme</h3>
           <div class="theme-options">
             <label><input type="radio" name="theme" value="light" /> Light</label>
@@ -62,7 +64,7 @@
           </div>
         </section>
 
-        <section class="settings-section settings-section--inline">
+        <section class="settings-section settings-section--inline" data-settings-section="font">
           <h3>Font</h3>
           <select id="font-select" class="font-select" aria-label="Font style">
             <option value="default">Aesthetic (Default)</option>
@@ -71,7 +73,7 @@
           </select>
         </section>
 
-        <section class="settings-section settings-section--inline">
+        <section class="settings-section settings-section--inline" data-settings-section="size">
           <h3><label for="size-slider">Size</label></h3>
           <div class="size-slider-control">
             <input id="size-slider" class="size-slider" type="range" min="0" max="2" step="1" value="1" aria-valuetext="Medium" />
