@@ -196,6 +196,7 @@ test('settings sections are sorted into the canonical order', () => {
   const sections = [
     { dataset: { settingsSection: 'save-progress' }, textContent: 'Save your progress' },
     { dataset: { settingsSection: 'theme' }, textContent: 'Theme' },
+    { dataset: { settingsSection: 'support' }, textContent: 'Support' },
     { dataset: { settingsSection: 'attribution' }, textContent: 'Attribution' },
     { dataset: { settingsSection: 'import' }, textContent: 'Import Blueprints' },
     { dataset: { settingsSection: 'font' }, textContent: 'Font' },
@@ -204,7 +205,7 @@ test('settings sections are sorted into the canonical order', () => {
 
   assert.deepEqual(
     sortSettingsSections(sections).map((section) => section.dataset.settingsSection),
-    ['theme', 'font', 'size', 'import', 'save-progress', 'attribution']
+    ['theme', 'font', 'size', 'import', 'save-progress', 'support', 'attribution']
   )
 })
 

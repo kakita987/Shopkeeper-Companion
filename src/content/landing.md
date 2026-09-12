@@ -1,4 +1,4 @@
-# Welcome to Shopkeeper Companion
+# Welcome!
 
 Shop Titans expects you to keep track of a lot of information yourself. Your Collection Book, inventory, unlocked blueprints, and crafting goals can all matter when deciding what to do next, but that information isn't always where you need it. **Shopkeeper Companion helps you keep track of your progress and find the blueprints that matter to you.**
 
@@ -40,10 +40,61 @@ Saved Views are useful for recurring goals, such as tracking unfinished mastery 
 
 **For veteran players:** If you already have a lot of progress in Shop Titans, you can update many blueprints at once using a spreadsheet.
 
-1. Download your CSV from Shopkeeper Companion.
-2. Open the CSV in a spreadsheet app such as Excel, Numbers, or Google Sheets.
-3. Edit your progress.
-4. Export or save the edited file in **CSV format.** Your spreadsheet app may use its own format by default, so select **CSV** as the file format.
-5. Return to Shopkeeper Companion and upload the edited CSV.
+### Quick workflow
 
-This can be much faster than updating your progress one blueprint at a time.
+1. Download your CSV from Shopkeeper Companion.
+2. Open it in Excel, Numbers, Google Sheets, or another spreadsheet app.
+3. Edit your progress.
+4. Save the file as **CSV**.
+5. Upload the edited CSV back into Shopkeeper Companion.
+
+**Why this is useful:** It is much faster than updating each blueprint one at a time.
+
+## Back Up and Bulk Edit Your Progress
+
+> **Best practice:** Keep a backup CSV before any large edit, transfer, or rebuild of your progress.
+
+### 1) Download a backup CSV
+
+1. Open **Settings**.
+2. Go to **Save your progress**.
+3. Select **Download progress CSV**.
+4. Save it somewhere safe.
+
+> **Note:** A new download creates a fresh snapshot. It does not overwrite an older copy automatically.
+>
+> **CSV contents:** Blueprint progress only. It does not include Saved Views, theme settings, or other app preferences.
+
+### 2) Edit many blueprints in a spreadsheet
+
+Open the CSV in a spreadsheet app. Each row is one blueprint, and rows are matched by **Blueprint Name** rather than their position in the file.
+
+**Important rules:**
+
+- Keep the header row unchanged.
+- Keep each **Blueprint Name** exactly the same.
+- Use whole numbers for inventory counts.
+- Use `TRUE` or `FALSE` for `Owned`, `Starforge`, and collection fields.
+- Use `Milestones` between 0 and 10.
+- Use `Improve` between 0 and 6.
+- Keep `Group`, `Type`, and `Tier` readable for reference.
+
+> **Tip:** These columns help you identify rows, but your progress is still applied by **Blueprint Name**.
+
+### 3) Upload the edited file
+
+1. Save the spreadsheet file as **CSV**.
+2. Open **Settings** in Shopkeeper Companion.
+3. Under **Save your progress**, select **Upload edited CSV**.
+4. Choose the file you edited.
+
+**Result:** Any recognized rows are applied to your saved progress. Rows left out keep their existing values.
+
+### When to use this
+
+- Before a big play session or reset plan
+- During a large collection or crafting project
+- Anytime you want to update many blueprints at once
+- Any time you want a portable backup you can restore later
+
+**Fast rule:** Download a CSV, edit it, save it as CSV, then upload it back.

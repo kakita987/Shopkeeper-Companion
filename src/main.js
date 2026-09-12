@@ -109,13 +109,13 @@ app.innerHTML = `
     </div>
 
     <footer class="site-footer-links" aria-label="Legal and project links">
-      <a class="site-footer-link" href="/support.html">Support</a>
-      <span class="site-footer-separator" aria-hidden="true">•</span>
       <a class="site-footer-link" href="/about.html">About</a>
       <span class="site-footer-separator" aria-hidden="true">•</span>
       <a class="site-footer-link" href="/">Guide</a>
       <span class="site-footer-separator" aria-hidden="true">•</span>
       <a class="site-footer-link" href="/privacy.html">Privacy Policy</a>
+      <span class="site-footer-separator" aria-hidden="true">•</span>
+      <a class="site-footer-link" href="/support.html">GitHub</a>
     </footer>
 
     <aside id="settings-panel" class="settings-panel" aria-hidden="true">
@@ -163,19 +163,9 @@ app.innerHTML = `
           <h3>Save your progress</h3>
           <p class="settings-copy">Your progress is saved in this browser. Download a fresh CSV copy anytime for safekeeping or bulk editing, then upload the edited CSV to apply your changes.</p>
           <div id="progress-backup" class="progress-backup"></div>
-          <p class="settings-copy"><a class="inline-link" href="/bulk-edit.html" target="_blank" rel="noopener noreferrer">Read the backup and bulk edit guide</a></p>
         </section>
 
-        <section class="settings-section">
-          <h3>Google Sync</h3>
-          <div id="google-auth" class="google-auth"></div>
-          <details class="attribution-details advanced-sync-details">
-            <summary><span class="advanced-sync-toggle-icon" aria-hidden="true">▶</span> About Google Sync</summary>
-            <p class="settings-copy">Google Sync is an optional convenience that can keep your progress in a Google Sheet in your Drive. CSV saving above remains available whether or not Google Sync is connected.</p>
-          </details>
-        </section>
-
-        <section class="settings-section">
+        <section class="settings-section" data-settings-section="support">
           <a id="kofi-support-button" class="kofi-support-button kofi-link-button" href="https://ko-fi.com/shopkeepercompanion" target="_blank" rel="noopener noreferrer">
             <img class="kofi-link-icon" src="https://storage.ko-fi.com/cdn/cup-border.png" alt="" aria-hidden="true" />
             <span class="kofi-link-text" data-kofi-button-text>Support on Ko-fi</span>

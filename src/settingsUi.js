@@ -8,7 +8,8 @@ const SETTINGS_SECTION_ORDER = {
   size: 2,
   import: 3,
   'save-progress': 4,
-  attribution: 5,
+  support: 5,
+  attribution: 6,
 }
 
 export function sortSettingsSections(sections = []) {

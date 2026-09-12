@@ -2648,6 +2648,94 @@ h2 {
   letter-spacing: 0.02em;
 }
 
+#content-markdown {
+  display: grid;
+  gap: 18px;
+  font-size: 16px;
+}
+
+#content-markdown h2,
+#content-markdown h3,
+#content-markdown h4,
+#content-markdown h5,
+#content-markdown h6 {
+  margin: 0;
+  color: #2b1d12;
+  font-family: var(--font-accent);
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+
+#content-markdown h2 {
+  font-size: clamp(2rem, 2.7vw, 2.5rem);
+  padding-top: 10px;
+  border-top: 1px solid rgba(129, 93, 57, 0.25);
+}
+
+#content-markdown h3 {
+  font-size: clamp(1.35rem, 1.8vw, 1.6rem);
+  color: #4b3418;
+}
+
+#content-markdown h4,
+#content-markdown h5,
+#content-markdown h6 {
+  font-size: 1.05rem;
+  color: #4b3418;
+}
+
+#content-markdown p,
+#content-markdown li,
+#content-markdown strong,
+#content-markdown a {
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+#content-markdown p,
+#content-markdown ul,
+#content-markdown ol,
+#content-markdown blockquote {
+  margin: 0;
+}
+
+#content-markdown ul,
+#content-markdown ol {
+  padding-left: 1.4rem;
+  display: grid;
+  gap: 8px;
+}
+
+#content-markdown blockquote {
+  margin: 4px 0;
+  padding: 12px 14px 12px 18px;
+  border-left: 4px solid #b98a4b;
+  background: rgba(255, 248, 238, 0.72);
+  border-radius: 12px;
+  color: #3d2d1e;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24);
+}
+
+body.theme-dark #content-markdown h2,
+body.theme-dark #content-markdown h3,
+body.theme-dark #content-markdown h4,
+body.theme-dark #content-markdown h5,
+body.theme-dark #content-markdown h6,
+:root[data-theme='dark'] #content-markdown h2,
+:root[data-theme='dark'] #content-markdown h3,
+:root[data-theme='dark'] #content-markdown h4,
+:root[data-theme='dark'] #content-markdown h5,
+:root[data-theme='dark'] #content-markdown h6 {
+  color: #f8fafc;
+}
+
+body.theme-dark #content-markdown blockquote,
+:root[data-theme='dark'] #content-markdown blockquote {
+  background: rgba(51, 65, 85, 0.7);
+  border-left-color: #fbbf24;
+  color: #e2e8f0;
+}
+
 body.theme-dark h1,
 body.theme-dark h2,
 :root[data-theme='dark'] h1,
