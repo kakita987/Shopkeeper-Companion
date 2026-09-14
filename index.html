@@ -11,7 +11,78 @@
     <title>Shopkeeper Companion</title>
   </head>
   <body>
-    <div id="app"></div>
-    <script type="module" src="/src/main.js"></script>
+    <div id="app">
+      <div class="app-layout">
+        <main class="importer-shell">
+          <header class="app-header">
+            <div class="hero-copy">
+              <h1><a class="site-title-link" href="/" aria-label="Go to the start guide">Shopkeeper Companion</a></h1>
+            </div>
+
+            <nav class="top-tabs" aria-label="Primary">
+              <a class="top-tab" href="/#blueprints" data-view="blueprints">Blueprints</a>
+              <a class="top-tab" href="/#saved-views" data-view="saved-views">Saved Views</a>
+            </nav>
+
+            <button id="settings-toggle" class="settings-toggle" type="button" aria-label="Open settings" aria-expanded="false" aria-controls="settings-panel">⚙</button>
+          </header>
+
+          <div class="view-shell">
+            <article class="panel preview-panel privacy-panel">
+              <div id="content-markdown"></div>
+            </article>
+          </div>
+
+          <div id="docs-ad-banner" class="docs-ad-banner"></div>
+
+          <footer class="site-footer-links" aria-label="Legal and project links">
+            <a class="site-footer-link" href="/about.html">About</a>
+            <span class="site-footer-separator" aria-hidden="true">•</span>
+            <a class="site-footer-link" href="/">Guide</a>
+            <span class="site-footer-separator" aria-hidden="true">•</span>
+            <a class="site-footer-link" href="/privacy.html">Privacy Policy</a>
+            <span class="site-footer-separator" aria-hidden="true">•</span>
+            <a class="site-footer-link" href="/support.html">GitHub</a>
+          </footer>
+        </main>
+      </div>
+    </div>
+
+    <aside id="settings-panel" class="settings-panel" aria-hidden="true">
+      <div class="settings-card">
+        <div class="settings-header">
+          <h2 class="settings-title">Settings</h2>
+          <button id="close-settings" class="close-settings" type="button" aria-label="Close settings">×</button>
+        </div>
+
+        <section class="settings-section settings-section--inline" data-settings-section="theme">
+          <h3>Theme</h3>
+          <div class="theme-options">
+            <label><input type="radio" name="theme" value="light" /> Light</label>
+            <label><input type="radio" name="theme" value="dark" /> Dark</label>
+            <label><input type="radio" name="theme" value="device" checked /> Device</label>
+          </div>
+        </section>
+
+        <section class="settings-section settings-section--inline" data-settings-section="font">
+          <h3>Font</h3>
+          <select id="font-select" class="font-select" aria-label="Font style">
+            <option value="default">Aesthetic (Default)</option>
+            <option value="sans">Century Gothic</option>
+            <option value="serif">Times New Roman</option>
+          </select>
+        </section>
+
+        <section class="settings-section settings-section--inline" data-settings-section="size">
+          <h3><label for="size-slider">Size</label></h3>
+          <div class="size-slider-control">
+            <input id="size-slider" class="size-slider" type="range" min="0" max="2" step="1" value="1" aria-valuetext="Medium" />
+            <span class="size-slider-ticks" aria-hidden="true"></span>
+          </div>
+        </section>
+      </div>
+    </aside>
+
+    <script type="module" src="/src/landing.js"></script>
   </body>
 </html>

@@ -2,6 +2,23 @@ const THEME_PREFERENCE_STORAGE_KEY = 'shopkeeper-theme'
 const FONT_PREFERENCE_STORAGE_KEY = 'shopkeeper-font-preference'
 const SIZE_PREFERENCE_STORAGE_KEY = 'shopkeeper-size-preference'
 const SIZE_PREFERENCES = ['small', 'medium', 'large']
+const SETTINGS_SECTION_ORDER = {
+  theme: 0,
+  font: 1,
+  size: 2,
+  import: 3,
+  'save-progress': 4,
+  support: 5,
+  attribution: 6,
+}
+
+export function sortSettingsSections(sections = []) {
+  return [...sections].sort((left, right) => {
+    const leftOrder = SETTINGS_SECTION_ORDER[left?.dataset?.settingsSection] ?? Number.MAX_SAFE_INTEGER
+    const rightOrder = SETTINGS_SECTION_ORDER[right?.dataset?.settingsSection] ?? Number.MAX_SAFE_INTEGER
+    return leftOrder - rightOrder
+  })
+}
 
 function getSizeIndex(sizePreference) {
   const sizeIndex = SIZE_PREFERENCES.indexOf(sizePreference)
@@ -36,6 +53,18 @@ export function initSettingsUi({
   onEscape,
 } = {}) {
   const settingsCard = settingsPanel ? settingsPanel.querySelector('.settings-card') : null
+
+  if (settingsCard) {
+    const sections = Array.from(settingsCard.querySelectorAll('.settings-section'))
+    sections.forEach((section) => {
+      const key = section.dataset.settingsSection || section.querySelector('h3')?.textContent?.trim().toLowerCase().replace(/[^a-z]+/g, '-') || ''
+      if (key) {
+        section.dataset.settingsSection = key
+      }
+    })
+
+    sortSettingsSections(sections).forEach((section) => settingsCard.appendChild(section))
+  }
 
   // Shifts the card so the close button lands exactly where the gear icon is on screen.
   function alignCardWithToggle() {

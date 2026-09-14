@@ -60,9 +60,20 @@ export function renderMarkdown(markdown) {
 
     const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)$/)
     if (headingMatch) {
-      const level = Math.min(6, headingMatch[1].length + 1)
+      const level = Math.min(6, headingMatch[1].length)
       html.push(`<h${level}>${renderInlineMarkdown(headingMatch[2])}</h${level}>`)
       index += 1
+      continue
+    }
+
+    if (/^>/.test(trimmed)) {
+      const quoteLines = []
+      while (index < lines.length && /^>/.test(lines[index].trim())) {
+        quoteLines.push(lines[index].trim().replace(/^>\s?/, ''))
+        index += 1
+      }
+
+      html.push(`<blockquote>${renderInlineMarkdown(quoteLines.join(' '))}</blockquote>`)
       continue
     }
 
