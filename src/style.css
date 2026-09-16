@@ -13,16 +13,16 @@
   --site-footer-bottom-space: 6px;
   --site-footer-reserved-space: calc(var(--site-footer-top-space) + var(--site-footer-height) + var(--site-footer-bottom-space));
   --blueprint-grid-columns: 4;
-  --blueprint-card-min-width: 207px;
-  --blueprint-card-min-height: 158px;
-  --blueprint-card-aspect-ratio: 1.15;
+  --blueprint-card-min-width: 205px;
+  --blueprint-card-min-height: 150px;
+  --blueprint-card-aspect-ratio: 1.08;
   --blueprint-card-padding-top: 6px;
   --blueprint-card-padding-inline: 6px;
   --blueprint-card-padding-bottom: 4px;
-  --blueprint-card-content-gap: 8px;
-  --blueprint-card-icon-size: 4.5rem;
-  --blueprint-card-title-size: 1.15rem;
-  --blueprint-card-title-max-width: 175px;
+  --blueprint-card-content-gap: 6px;
+  --blueprint-card-icon-size: clamp(2.4rem, 3.3vw, 3.7rem);
+  --blueprint-card-title-size: clamp(0.82rem, 1.35vw, 1.02rem);
+  --blueprint-card-title-max-width: clamp(5.3rem, 15vw, 8.4rem);
   font-size: 118.75%;
   font-family: var(--font-body);
   line-height: 1.5;
@@ -36,90 +36,90 @@
 
 :root[data-size-preference='small'] {
   --blueprint-grid-columns: 5;
-  --blueprint-card-min-width: 176px;
-  --blueprint-card-min-height: 150px;
-  --blueprint-card-aspect-ratio: 1.12;
+  --blueprint-card-min-width: 170px;
+  --blueprint-card-min-height: 142px;
+  --blueprint-card-aspect-ratio: 1.08;
   --blueprint-card-padding-top: 5px;
   --blueprint-card-padding-inline: 5px;
   --blueprint-card-padding-bottom: 3px;
-  --blueprint-card-content-gap: 6px;
-  --blueprint-card-icon-size: 3.5rem;
-  --blueprint-card-title-size: 1rem;
-  --blueprint-card-title-max-width: 130px;
+  --blueprint-card-content-gap: 5px;
+  --blueprint-card-icon-size: clamp(2.1rem, 3vw, 3.2rem);
+  --blueprint-card-title-size: clamp(0.72rem, 1.18vw, 0.96rem);
+  --blueprint-card-title-max-width: clamp(4.8rem, 13vw, 7.2rem);
   font-size: 100%;
 }
 
 :root[data-size-preference='medium'] {
   --blueprint-grid-columns: 4;
-  --blueprint-card-min-width: 196px;
-  --blueprint-card-min-height: 170px;
-  --blueprint-card-aspect-ratio: 1.15;
+  --blueprint-card-min-width: 188px;
+  --blueprint-card-min-height: 160px;
+  --blueprint-card-aspect-ratio: 1.08;
   --blueprint-card-padding-top: 6px;
   --blueprint-card-padding-inline: 6px;
   --blueprint-card-padding-bottom: 4px;
-  --blueprint-card-content-gap: 8px;
-  --blueprint-card-icon-size: 4.5rem;
-  --blueprint-card-title-size: 1.15rem;
-  --blueprint-card-title-max-width: 175px;
+  --blueprint-card-content-gap: 6px;
+  --blueprint-card-icon-size: clamp(2.5rem, 3.5vw, 3.8rem);
+  --blueprint-card-title-size: clamp(0.8rem, 1.32vw, 1.02rem);
+  --blueprint-card-title-max-width: clamp(5.5rem, 15vw, 8.8rem);
   font-size: 118.75%;
 }
 
 :root[data-size-preference='large'] {
   --blueprint-grid-columns: 3;
-  --blueprint-card-min-width: 220px;
-  --blueprint-card-min-height: 196px;
-  --blueprint-card-aspect-ratio: 1.1;
+  --blueprint-card-min-width: 210px;
+  --blueprint-card-min-height: 182px;
+  --blueprint-card-aspect-ratio: 1.06;
   --blueprint-card-padding-top: 8px;
   --blueprint-card-padding-inline: 8px;
   --blueprint-card-padding-bottom: 5px;
-  --blueprint-card-content-gap: 12px;
-  --blueprint-card-icon-size: 5.5rem;
-  --blueprint-card-title-size: 1.3rem;
-  --blueprint-card-title-max-width: 230px;
+  --blueprint-card-content-gap: 8px;
+  --blueprint-card-icon-size: clamp(2.9rem, 4.2vw, 4.4rem);
+  --blueprint-card-title-size: clamp(0.9rem, 1.55vw, 1.1rem);
+  --blueprint-card-title-max-width: clamp(6.5rem, 19vw, 10.6rem);
   font-size: 137.5%;
 }
 
 @media (max-width: 860px) {
   :root[data-size-preference='large'] {
     --blueprint-grid-columns: 2;
-    --blueprint-card-min-width: 180px;
-    --blueprint-card-min-height: 172px;
-    --blueprint-card-aspect-ratio: 1.08;
+    --blueprint-card-min-width: 170px;
+    --blueprint-card-min-height: 160px;
+    --blueprint-card-aspect-ratio: 1.06;
     --blueprint-card-padding-top: 7px;
     --blueprint-card-padding-inline: 7px;
     --blueprint-card-padding-bottom: 5px;
-    --blueprint-card-content-gap: 10px;
-    --blueprint-card-icon-size: 4.4rem;
-    --blueprint-card-title-size: 1.1rem;
-    --blueprint-card-title-max-width: 150px;
+    --blueprint-card-content-gap: 7px;
+    --blueprint-card-icon-size: 3.9rem;
+    --blueprint-card-title-size: 1rem;
+    --blueprint-card-title-max-width: 136px;
   }
 
   :root[data-size-preference='medium'] {
     --blueprint-grid-columns: 3;
-    --blueprint-card-min-width: 180px;
-    --blueprint-card-min-height: 155px;
-    --blueprint-card-aspect-ratio: 1.15;
+    --blueprint-card-min-width: 170px;
+    --blueprint-card-min-height: 150px;
+    --blueprint-card-aspect-ratio: 1.08;
     --blueprint-card-padding-top: 6px;
     --blueprint-card-padding-inline: 6px;
     --blueprint-card-padding-bottom: 4px;
-    --blueprint-card-content-gap: 7px;
-    --blueprint-card-icon-size: 3.9rem;
-    --blueprint-card-title-size: 1rem;
-    --blueprint-card-title-max-width: 140px;
+    --blueprint-card-content-gap: 6px;
+    --blueprint-card-icon-size: 3.5rem;
+    --blueprint-card-title-size: 0.96rem;
+    --blueprint-card-title-max-width: 132px;
   }
 
   :root[data-size-preference='small'] {
     --blueprint-grid-columns: 3;
-    --blueprint-card-min-width: 150px;
-    --blueprint-card-min-height: 138px;
-    --blueprint-card-aspect-ratio: 1.1;
+    --blueprint-card-min-width: 145px;
+    --blueprint-card-min-height: 132px;
+    --blueprint-card-aspect-ratio: 1.08;
     --blueprint-card-padding-top: 5px;
     --blueprint-card-padding-inline: 5px;
     --blueprint-card-padding-bottom: 3px;
-    --blueprint-card-content-gap: 6px;
+    --blueprint-card-content-gap: 5px;
     --blueprint-card-icon-size: 3.1rem;
-    --blueprint-card-title-size: 0.92rem;
-    --blueprint-card-title-max-width: 110px;
+    --blueprint-card-title-size: 0.88rem;
+    --blueprint-card-title-max-width: 108px;
   }
 }
 
@@ -135,31 +135,31 @@
 
   :root[data-size-preference='large'] {
     --blueprint-grid-columns: 2;
-    --blueprint-card-min-width: 150px;
-    --blueprint-card-min-height: 150px;
-    --blueprint-card-aspect-ratio: 1.06;
-    --blueprint-card-icon-size: 3.8rem;
-    --blueprint-card-title-size: 1rem;
-    --blueprint-card-title-max-width: 120px;
+    --blueprint-card-min-width: 145px;
+    --blueprint-card-min-height: 138px;
+    --blueprint-card-aspect-ratio: 1.04;
+    --blueprint-card-icon-size: 3.35rem;
+    --blueprint-card-title-size: 0.94rem;
+    --blueprint-card-title-max-width: 118px;
   }
 
   :root[data-size-preference='medium'] {
     --blueprint-grid-columns: 2;
-    --blueprint-card-min-width: 150px;
-    --blueprint-card-min-height: 140px;
-    --blueprint-card-aspect-ratio: 1.12;
-    --blueprint-card-icon-size: 3.5rem;
-    --blueprint-card-title-size: 0.95rem;
-    --blueprint-card-title-max-width: 120px;
+    --blueprint-card-min-width: 145px;
+    --blueprint-card-min-height: 136px;
+    --blueprint-card-aspect-ratio: 1.06;
+    --blueprint-card-icon-size: 3.2rem;
+    --blueprint-card-title-size: 0.9rem;
+    --blueprint-card-title-max-width: 116px;
   }
 
   :root[data-size-preference='small'] {
     --blueprint-grid-columns: 2;
-    --blueprint-card-min-width: 130px;
-    --blueprint-card-min-height: 120px;
-    --blueprint-card-aspect-ratio: 1.1;
-    --blueprint-card-icon-size: 3rem;
-    --blueprint-card-title-size: 0.87rem;
+    --blueprint-card-min-width: 125px;
+    --blueprint-card-min-height: 116px;
+    --blueprint-card-aspect-ratio: 1.06;
+    --blueprint-card-icon-size: 2.8rem;
+    --blueprint-card-title-size: 0.84rem;
     --blueprint-card-title-max-width: 98px;
   }
 }
@@ -184,27 +184,27 @@
     --blueprint-card-padding-inline: 8px;
     --blueprint-card-padding-bottom: 6px;
     --blueprint-card-content-gap: 8px;
-    --blueprint-card-icon-size: 3.4rem;
-    --blueprint-card-title-size: 1rem;
-    --blueprint-card-title-max-width: 180px;
+    --blueprint-card-icon-size: 3.7rem;
+    --blueprint-card-title-size: 1.06rem;
+    --blueprint-card-title-max-width: 190px;
   }
 
   :root[data-size-preference='medium'] {
     --blueprint-grid-columns: 2;
     --blueprint-card-min-width: 126px;
     --blueprint-card-min-height: 112px;
-    --blueprint-card-icon-size: 3rem;
-    --blueprint-card-title-size: 0.9rem;
-    --blueprint-card-title-max-width: 100px;
+    --blueprint-card-icon-size: 3.2rem;
+    --blueprint-card-title-size: 0.96rem;
+    --blueprint-card-title-max-width: 108px;
   }
 
   :root[data-size-preference='small'] {
     --blueprint-grid-columns: 2;
     --blueprint-card-min-width: 120px;
     --blueprint-card-min-height: 100px;
-    --blueprint-card-icon-size: 2.7rem;
-    --blueprint-card-title-size: 0.8rem;
-    --blueprint-card-title-max-width: 88px;
+    --blueprint-card-icon-size: 2.9rem;
+    --blueprint-card-title-size: 0.86rem;
+    --blueprint-card-title-max-width: 96px;
   }
 }
 
@@ -2009,6 +2009,8 @@ body.theme-dark .inventory-field input,
   flex: 1;
   align-items: center;
   text-align: center;
+  width: 100%;
+  justify-content: center;
 }
 
 .item-title-row {
@@ -2019,13 +2021,17 @@ body.theme-dark .inventory-field input,
   gap: var(--blueprint-card-content-gap);
   margin-bottom: 0;
   width: 100%;
+  flex: 1;
+  min-height: 0;
 }
 
 .item-name {
   font-weight: 700;
   font-size: var(--blueprint-card-title-size);
-  line-height: 1.1;
+  line-height: 1.08;
+  letter-spacing: -0.01em;
   text-align: center;
+  max-width: 100%;
 }
 
 .blueprint-type > .blueprint-items > .blueprint-item:not(.saved-view-item) .item-name {
@@ -2038,6 +2044,22 @@ body.theme-dark .inventory-field input,
   top: var(--blueprint-card-padding-top);
   right: var(--blueprint-card-padding-inline);
   z-index: 1;
+}
+
+.blueprint-item {
+  container-type: size;
+}
+
+.blueprint-item .item-card-icon {
+  width: min(100%, 32cqh);
+  height: min(100%, 32cqh);
+  max-width: 32cqh;
+  max-height: 32cqh;
+}
+
+.blueprint-type > .blueprint-items > .blueprint-item:not(.saved-view-item) .item-name {
+  font-size: clamp(0.86rem, 9cqh, 1.35rem);
+  max-width: min(70cqw, 11rem);
 }
 
 .settings-card {
@@ -2942,8 +2964,11 @@ body.theme-light .blueprint-type > summary .group-summary-icon img,
 }
 
 .item-card-icon {
-  width: var(--blueprint-card-icon-size);
-  height: var(--blueprint-card-icon-size);
+  width: min(100%, var(--blueprint-card-icon-size));
+  height: min(100%, var(--blueprint-card-icon-size));
+  max-width: var(--blueprint-card-icon-size);
+  max-height: var(--blueprint-card-icon-size);
+  aspect-ratio: 1;
   flex-shrink: 0;
   margin-right: 0;
 }
